@@ -48,3 +48,17 @@ The Link Scanner module is now fully implemented. This feature allows users to i
    - VirusTotal API for detailed file/URL analysis.
    - PhishTank API for crowdsourced phishing detection.
  - The results from all three sources are returned and displayed in a clean, formatted JSON view on the frontend.
+
+   ***
+#### 15-06-2025
+I have successfully implemented the Threat Score Aggregator module. This new feature enhances the project’s cybersecurity capabilities by aggregating threat intelligence from multiple external APIs to assess the risk associated with a domain or IP address.
+![image](https://github.com/user-attachments/assets/8f84f099-308f-43b2-bd5c-d90fb0c1e9ad)
+######  How it Works: 
+ - The user inputs a domain or IP address in the frontend React app.
+ - The input is sent to the backend FastAPI server.
+ - The backend queries three key cybersecurity services:
+   - VirusTotal API: Provides analysis of domain reputation and detects malicious activity.
+   - AbuseIPDB API: Offers insights on IP address abuse history and confidence scores.
+   - Shodan API: Retrieves detailed information about the IP’s open ports, services, and vulnerabilities.
+ - The backend processes and aggregates this data, classifying the overall risk level (High, Medium, or Low).
+ - The frontend displays the detailed report and risk classification in a user-friendly format.
