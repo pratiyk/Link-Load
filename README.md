@@ -1,4 +1,4 @@
-![image](https://github.com/user-attachments/assets/9d4afee0-9d16-4440-8f81-c8e43a5837fb)﻿# Link&Load
+# Link&Load
 ## Lock, stock, and two smoking bad URLs.
 A modular cybersecurity platform for scanning malicious links, monitoring threats, and integrating secure-by-design practices in applications.
 Link & Load helps developers, analysts, and small businesses stay ahead of cyber threats by offering a security-first, plug-and-play system that integrates:
