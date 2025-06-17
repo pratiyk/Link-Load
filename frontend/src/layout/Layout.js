@@ -8,13 +8,14 @@ export default function Layout({ children }) {
   const navItems = [
     { name: "Link Scanner", path: "/link-scanner" },
     { name: "Threat Scanner", path: "/threat-scanner" },
+    { name: "Vulnerability Scanner", path: "/vulnerability-scanner" }, // Added this
   ];
 
   return (
     <div className="flex min-h-screen bg-gray-100">
       {/* Sidebar */}
       <div className="w-64 bg-white border-r p-4">
-        <h1 className="text-2xl font-bold mb-6">Link & Load</h1>
+        <h1 className="text-2xl font-bold mb-6">Link&Load</h1>
         <ul className="space-y-3">
           {navItems.map((item) => (
             <li key={item.path}>

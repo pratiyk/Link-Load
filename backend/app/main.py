@@ -1,25 +1,29 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# Importing both API route modules
-from app.api import link_scanner, threat_scanner
+# Import your API route modules - adjust import paths if needed
+from app.api import link_scanner, threat_scanner, vulnerability_scanner
 
-app = FastAPI()
+app = FastAPI(title="Link & Load API")
 
-# CORS settings: allow React dev server (localhost:3000) to access this backend
+# Allow React frontend origin for cross-origin requests
+origins = [
+    "http://localhost:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Update if you use Vite (usually 5173)
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Register both routers
-app.include_router(link_scanner.router)
-app.include_router(threat_scanner.router)
+# Include your routers with "/api" prefix
+app.include_router(link_scanner.router, prefix="/api")
+app.include_router(threat_scanner.router, prefix="/api")
+app.include_router(vulnerability_scanner.router, prefix="/api")
 
-# Root test route
 @app.get("/")
-def read_root():
+async def root():
     return {"message": "Link & Load API is running"}
