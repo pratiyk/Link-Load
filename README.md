@@ -1,11 +1,7 @@
 # Link&Load
 ## Lock, stock, and two smoking bad URLs.
 A modular cybersecurity platform for scanning malicious links, monitoring threats, and integrating secure-by-design practices in applications.
-Link & Load helps developers, analysts, and small businesses stay ahead of cyber threats by offering a security-first, plug-and-play system that integrates:
-- Malicious URL detection
-- Threat intelligence aggregation
-- Secure API-first architecture
-- Audit-friendly reporting (coming soon)
+Link & Load is an open-source cybersecurity platform that scans suspicious URLs, analyzes threat intelligence from multiple sources, detects vulnerabilities in software packages, and automates remediation recommendations. Built with a modern, scalable architecture (React + FastAPI), the project integrates real-world cybersecurity tools and APIs, empowering users with proactive defense, real-time insights, and secure compliance-ready features. The suite is designed for use by security teams, researchers, and organizations seeking enterprise-grade security automation.
 
 ### Use Cases:
 - Scan suspicious links before opening (Phishing & Malware Prevention)
@@ -15,9 +11,17 @@ Link & Load helps developers, analysts, and small businesses stay ahead of cyber
 - Security layer for customer-facing apps
 
 ### Core features:
-- URL reputation checker (API integration)
-- Basic header security scanner
-- Vulnerability dashboard
+- Link Scanner (detects bad links)
+- Threat Intel (shows IP/domain behavior)
+- Vulnerability Scanner (checks libraries)
+
+### Future Scope:
+- Automated Vulnerability Assessment & Remediation (Next Module) (Continuously scans installed packages on servers or containers and suggests or applies security patches.)
+- Dark Web Monitoring (Monitors paste sites, leak databases, and darknet forums for sensitive info leaks.)
+- Attack Surface Mapping (Identifies all public-facing assets (subdomains, open ports, services))
+- Role-Based Access Control (RBAC) & Secure Audit Logs (mplements user-level security, role segregation, and immutable logs.)
+- Compliance Reporting Dashboard (Helps organizations meet compliance (GDPR, ISO, HIPAA) by summarizing security posture.)
+- Static & Dynamic Malware Analysis (Accepts uploaded files for sandbox-based behavioral analysis and static inspection.)
 
 ### Setup & Usage:
 ```
