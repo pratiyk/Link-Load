@@ -14,10 +14,10 @@ Link & Load is an open-source cybersecurity platform that scans suspicious URLs,
 - Link Scanner (detects bad links)
 - Threat Intel (shows IP/domain behavior)
 - Vulnerability Scanner (checks libraries)
+- Automated Vulnerability Assessment & Remediation (Continuously scans installed packages on servers or containers and suggests or applies security patches.)
 
 ### Future Scope:
-- Automated Vulnerability Assessment & Remediation (Next Module) (Continuously scans installed packages on servers or containers and suggests or applies security patches.)
-- Dark Web Monitoring (Monitors paste sites, leak databases, and darknet forums for sensitive info leaks.)
+- Dark Web Monitoring (Next Module) (Monitors paste sites, leak databases, and darknet forums for sensitive info leaks.)
 - Attack Surface Mapping (Identifies all public-facing assets (subdomains, open ports, services))
 - Role-Based Access Control (RBAC) & Secure Audit Logs (mplements user-level security, role segregation, and immutable logs.)
 - Compliance Reporting Dashboard (Helps organizations meet compliance (GDPR, ISO, HIPAA) by summarizing security posture.)
