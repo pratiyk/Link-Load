@@ -14,10 +14,10 @@ Link & Load is an open-source cybersecurity platform that scans suspicious URLs,
 - Link Scanner (detects bad links)
 - Threat Intel (shows IP/domain behavior)
 - Vulnerability Scanner (checks libraries)
+- Automated Vulnerability Assessment & Remediation (Continuously scans installed packages on servers or containers and suggests or applies security patches.)
 
 ### Future Scope:
-- Automated Vulnerability Assessment & Remediation (Next Module) (Continuously scans installed packages on servers or containers and suggests or applies security patches.)
-- Dark Web Monitoring (Monitors paste sites, leak databases, and darknet forums for sensitive info leaks.)
+- Dark Web Monitoring (Next Module) (Monitors paste sites, leak databases, and darknet forums for sensitive info leaks.)
 - Attack Surface Mapping (Identifies all public-facing assets (subdomains, open ports, services))
 - Role-Based Access Control (RBAC) & Secure Audit Logs (mplements user-level security, role segregation, and immutable logs.)
 - Compliance Reporting Dashboard (Helps organizations meet compliance (GDPR, ISO, HIPAA) by summarizing security posture.)
@@ -80,6 +80,22 @@ The Vulnerability Scanner module is now fully implemented, providing a seamless 
 - The backend processes and merges results from both sources, formatting details like vulnerability ID, summary, severity, affected versions, and data source.
 - The aggregated vulnerability data is returned to the frontend.
 - The frontend displays a user-friendly list of vulnerabilities, including severity and affected versions, with loading and error handling.
+
+***
+#### 20-06-2025
+I have successfully completed the Remediation Module of the Link & Load cybersecurity platform. The Remediation Module takes the output from the Vulnerability Scanner and classifies each vulnerability into Low, Medium, High, or Critical risk levels based on CVSS severity scores, generates actionable fix commands tailored to each software ecosystem (e.g., pip, npm, cargo, go, etc.) and automatically determines whether each issue is fixable via upgrade or requires manual review.
+![image](https://github.com/user-attachments/assets/21a90afb-d81b-4f8a-b481-6ad655938028)
+######  How it Works:
+- It accepts a list of vulnerabilities (ID, package, ecosystem, and severity) passed from the Vulnerability Scanner module.
+- Each vulnerability is categorized into: Low, Medium, High, or Critical based on CVSS scores.
+- Uses the package ecosystem to generate appropriate update commands:
+   - PyPI: pip install --upgrade <package>
+   - npm: npm update <package>
+   - Go: go get -u <package>
+   - RubyGems, crates.io, etc.
+- A detailed UI displays each vulnerability
+-  Download the remediation strategy as a .txt file and a .sh shell script with all commands for batch execution.
+
 
 
 
