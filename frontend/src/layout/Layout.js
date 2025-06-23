@@ -1,11 +1,7 @@
+// src/layout/Layout.js
 import React from "react";
-import { Link, useLocation } from "react-router-dom";
-import {
-  ScanSearch,
-  ShieldCheck,
-  Bug,
-  Wrench,
-} from "lucide-react";
+import { NavLink, useLocation } from "react-router-dom";
+import { ScanSearch, ShieldCheck, Bug, Wrench } from "lucide-react";
 
 export default function Layout({ children }) {
   const location = useLocation();
@@ -17,39 +13,52 @@ export default function Layout({ children }) {
     { name: "Remediation", path: "/remediation", icon: Wrench },
   ];
 
-  const renderNav = () => (
-    <ul className="space-y-2 mt-4">
-      {navItems.map((item) => {
-        const isActive = location.pathname === item.path;
-        return (
-          <li key={item.path}>
-            <Link
-              to={item.path}
-              className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors font-medium ${
-                isActive
-                  ? "bg-blue-600 text-white shadow"
-                  : "text-gray-700 hover:bg-blue-100"
-              }`}
-            >
-              <item.icon className="w-5 h-5" />
-              {item.name}
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
-  );
-
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      {/* Sidebar */}
-      <aside className="w-full md:w-64 bg-white border-r px-6 py-6 md:py-8 shadow-sm z-10">
-        <h1 className="text-2xl font-extrabold text-blue-700 mb-6">Link&Load</h1>
-        {renderNav()}
-      </aside>
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      {/* Top Navigation Bar */}
+      <header className="bg-white border-b border-gray-200 px-6 py-3 shadow-sm sticky top-0 z-50">
+        <div className="flex items-center justify-between max-w-7xl mx-auto">
+          <div className="flex items-center">
+            {/* Logo Section - Replace with your actual logo */}
+            <div className="flex items-center">
+              
+              <h1 className="text-xl font-bold text-gray-900 hidden md:block">Link&Load</h1>
+            </div>
+            
+            <nav className="hidden md:flex space-x-1 ml-8">
+              {navItems.map((item) => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  className={({ isActive }) =>
+                    `flex items-center px-4 py-2 rounded-lg transition-colors ${
+                      isActive
+                        ? "bg-gray-100 text-purple-700 font-medium"
+                        : "text-gray-700 hover:bg-gray-50"
+                    }`
+                  }
+                >
+                  <item.icon className="w-5 h-5 mr-2" />
+                  {item.name}
+                </NavLink>
+              ))}
+            </nav>
+          </div>
+          
+          <div className="md:hidden">
+            <button className="text-gray-500">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </header>
 
       {/* Main Content */}
-      <main className="flex-1 p-6 md:p-8 overflow-y-auto">{children}</main>
+      <main className="flex-1 p-6 md:p-8 max-w-7xl mx-auto w-full">
+        {children}
+      </main>
     </div>
   );
 }

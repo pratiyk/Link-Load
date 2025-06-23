@@ -1,3 +1,4 @@
+// src/pages/LinkScanner.js
 import React, { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { scanLink } from "../services/linkScanner";
@@ -17,35 +18,49 @@ export default function LinkScanner() {
   };
 
   return (
-    <div className="p-6 max-w-xl mx-auto">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <input
-          type="text"
-          className="w-full border p-2 rounded"
-          placeholder="Enter a link to scan"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-        />
-        <button
-          type="submit"
-          className="bg-blue-500 text-white px-4 py-2 rounded"
-        >
-          Scan Link
-        </button>
-      </form>
+    <div className="max-w-xl mx-auto">
+      <h2 className="section-title">Link Scanner</h2>
+      
+      <div className="card">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <input
+            type="text"
+            className="input-field"
+            placeholder="https://example.com"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+          />
+          <button
+            type="submit"
+            className="btn btn-primary w-full"
+          >
+            Scan Link
+          </button>
+        </form>
+      </div>
 
-      {mutation.isLoading && <p className="text-yellow-500">Scanning...</p>}
+      {mutation.isLoading && (
+        <div className="card mt-6 text-center py-8">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Scanning link for threats...</p>
+        </div>
+      )}
 
       {mutation.error && (
-        <p className="text-red-500">
-          Error: {mutation.error.message || "Something went wrong"}
-        </p>
+        <div className="card mt-6 bg-red-50 border-l-4 border-red-500 p-4">
+          <p className="text-red-700">
+            Error: {mutation.error.message || "Something went wrong"}
+          </p>
+        </div>
       )}
 
       {mutation.data && (
-        <pre className="bg-gray-100 p-4 mt-4 rounded overflow-x-auto text-sm">
-          {JSON.stringify(mutation.data, null, 2)}
-        </pre>
+        <div className="card mt-6">
+          <h3 className="font-semibold text-lg mb-3 text-gray-800">Scan Results</h3>
+          <pre className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm">
+            {JSON.stringify(mutation.data, null, 2)}
+          </pre>
+        </div>
       )}
     </div>
   );
