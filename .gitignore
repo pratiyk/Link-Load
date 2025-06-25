@@ -561,6 +561,5 @@ pnpm-lock.yaml
 Pipfile.lock
 poetry.lock
 
-# ========================
-# END OF .gitignore
-# ========================
+C:\prateek\projects\linkload\backend\data
+.csv
