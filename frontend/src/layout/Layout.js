@@ -1,7 +1,6 @@
-// src/layout/Layout.js
 import React from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { ScanSearch, ShieldCheck, Bug, Wrench } from "lucide-react";
+import { ScanSearch, ShieldCheck, Bug, Wrench, Eye } from "lucide-react";
 
 export default function Layout({ children }) {
   const location = useLocation();
@@ -11,6 +10,7 @@ export default function Layout({ children }) {
     { name: "Threat Scanner", path: "/threat-scanner", icon: ShieldCheck },
     { name: "Vulnerability Scanner", path: "/vulnerability-scanner", icon: Bug },
     { name: "Remediation", path: "/remediation", icon: Wrench },
+    { name: "Dark Web Scanner", path: "/darkweb-scanner", icon: Eye },
   ];
 
   return (
@@ -19,12 +19,14 @@ export default function Layout({ children }) {
       <header className="bg-white border-b border-gray-200 px-6 py-3 shadow-sm sticky top-0 z-50">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="flex items-center">
-            {/* Logo Section - Replace with your actual logo */}
+            {/* Logo */}
             <div className="flex items-center">
-              
-              <h1 className="text-xl font-bold text-gray-900 hidden md:block">Link&Load</h1>
+              <h1 className="text-xl font-bold text-gray-900 hidden md:block">
+                Link&Load
+              </h1>
             </div>
-            
+
+            {/* Desktop Navigation */}
             <nav className="hidden md:flex space-x-1 ml-8">
               {navItems.map((item) => (
                 <NavLink
@@ -44,11 +46,23 @@ export default function Layout({ children }) {
               ))}
             </nav>
           </div>
-          
+
+          {/* Mobile Hamburger Placeholder (non-functional) */}
           <div className="md:hidden">
-            <button className="text-gray-500">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            <button className="text-gray-500 cursor-not-allowed opacity-50" disabled>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
               </svg>
             </button>
           </div>
