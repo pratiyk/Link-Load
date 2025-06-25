@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # Import your API route modules - adjust import paths if needed
-from app.api import link_scanner, threat_scanner, vulnerability_scanner, remediation
+from app.api import link_scanner, threat_scanner, vulnerability_scanner, remediation, darkweb_scanner
 
 app = FastAPI(title="Link & Load API")
 
@@ -24,6 +24,7 @@ app.include_router(link_scanner.router, prefix="/api")
 app.include_router(threat_scanner.router, prefix="/api")
 app.include_router(vulnerability_scanner.router, prefix="/api")
 app.include_router(remediation.router, prefix="/api")
+app.include_router(darkweb_scanner.router, prefix="/api")
 
 @app.get("/")
 async def root():
