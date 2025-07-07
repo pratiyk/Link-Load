@@ -7,8 +7,7 @@ import ThreatScanner from "./pages/ThreatScanner";
 import VulnerabilityScanner from "./pages/VulnerabilityScanner";
 import Remediation from "./pages/Remediation";
 import DarkWebMonitor from "./pages/DarkWebScanner";
-
-// Import the global CSS
+import PhishingDetector from "./pages/PhishingDetector"; 
 import "./index.css";
 
 function App() {
@@ -19,47 +18,27 @@ function App() {
 
         <Route
           path="/link-scanner"
-          element={
-            <Layout>
-              <LinkScanner />
-            </Layout>
-          }
+          element={<Layout><LinkScanner /></Layout>}
         />
-
         <Route
           path="/threat-scanner"
-          element={
-            <Layout>
-              <ThreatScanner />
-            </Layout>
-          }
+          element={<Layout><ThreatScanner /></Layout>}
         />
-
         <Route
           path="/vulnerability-scanner"
-          element={
-            <Layout>
-              <VulnerabilityScanner />
-            </Layout>
-          }
+          element={<Layout><VulnerabilityScanner /></Layout>}
         />
-
         <Route
           path="/remediation"
-          element={
-            <Layout>
-              <Remediation />
-            </Layout>
-          }
+          element={<Layout><Remediation /></Layout>}
         />
-
         <Route
           path="/darkweb-scanner"
-          element={
-            <Layout>
-              <DarkWebMonitor />
-            </Layout>
-          }
+          element={<Layout><DarkWebMonitor /></Layout>}
+        />
+        <Route
+          path="/phishing-detector"
+          element={<Layout><PhishingDetector /></Layout>} 
         />
       </Routes>
     </Router>

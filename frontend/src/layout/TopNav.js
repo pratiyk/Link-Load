@@ -1,13 +1,6 @@
-// src/layout/TopNav.js
 import React from "react";
 import { NavLink } from "react-router-dom";
-import {
-  ScanSearch,
-  ShieldCheck,
-  Bug,
-  Wrench,
-  Eye, // 👈 New icon for Dark Web Monitor
-} from "lucide-react";
+import { ScanSearch, ShieldCheck, Bug, Wrench, Eye, ShieldQuestion } from "lucide-react"; // 👈 NEW
 
 export default function TopNav() {
   const navItems = [
@@ -15,7 +8,8 @@ export default function TopNav() {
     { name: "Threat Scanner", path: "/threat-scanner", icon: ShieldCheck },
     { name: "Vulnerability Scanner", path: "/vulnerability-scanner", icon: Bug },
     { name: "Remediation", path: "/remediation", icon: Wrench },
-    { name: "Dark Web Scanner", path: "/darkweb-scanner", icon: Eye }, // 👈 Add this line
+    { name: "Dark Web Scanner", path: "/darkweb-scanner", icon: Eye },
+    { name: "Phishing Detector", path: "/phishing-detector", icon: ShieldQuestion }, // 👈 NEW
   ];
 
   return (
@@ -27,7 +21,6 @@ export default function TopNav() {
           </div>
           <h1 className="text-xl font-bold text-gray-900">Link&Load</h1>
         </div>
-
         <nav className="hidden md:flex space-x-1">
           {navItems.map((item) => (
             <NavLink
@@ -46,23 +39,10 @@ export default function TopNav() {
             </NavLink>
           ))}
         </nav>
-
         <div className="md:hidden">
-          {/* Mobile menu button (optional enhancement) */}
           <button className="text-gray-500">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-6 w-6"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 6h16M4 12h16M4 18h16"
-              />
+            <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16"/>
             </svg>
           </button>
         </div>
