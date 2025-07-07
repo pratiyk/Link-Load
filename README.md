@@ -96,6 +96,12 @@ I have successfully completed the Remediation Module of the Link & Load cybersec
 - A detailed UI displays each vulnerability
 -  Download the remediation strategy as a .txt file and a .sh shell script with all commands for batch execution.
 
+*** 
+### 07-07-2025
+This module uses a trained LightGBM machine learning model to predict whether a given URL is likely to be a phishing link.
+It extracts key URL-based features (e.g., length, subdomains, use of IP address, special characters, DNS resolution, etc.) to analyze risk and returns a probability score and label.
+![image](https://github.com/user-attachments/assets/4eeb5650-762b-4a44-8cb9-104941df888d)
+
 
 
 
