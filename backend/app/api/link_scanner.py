@@ -1,33 +1,39 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import httpx
 import os
+import base64
 from dotenv import load_dotenv
 
 load_dotenv()
 
 router = APIRouter()
 
-# Load API keys from environment
 VT_API_KEY = os.getenv("VT_API_KEY")
 GSB_API_KEY = os.getenv("GSB_API_KEY")
-PHISHTANK_URL = "https://data.phishtank.com/data/online-valid.json"  # simple JSON feed
+PHISHTANK_URL = "https://data.phishtank.com/data/online-valid.json"
 
 class ScanRequest(BaseModel):
     url: str
 
-@router.post("/api/scan-url")
+def encode_url_for_vt(url: str) -> str:
+    url_bytes = url.encode('utf-8')
+    b64_bytes = base64.urlsafe_b64encode(url_bytes)
+    b64_str = b64_bytes.decode('utf-8').strip('=')
+    return b64_str
+
+@router.post("/scan-url")
 async def scan_url(data: ScanRequest):
     url = data.url
     result = {
         "url": url,
         "safe": True,
         "confidence": 100,
-        "source": []
+        "sources": []
     }
 
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=15) as client:
             # 1. Google Safe Browsing
             gsb_payload = {
                 "client": {"clientId": "linkandload", "clientVersion": "1.0"},
@@ -46,38 +52,45 @@ async def scan_url(data: ScanRequest):
             if gsb_data.get("matches"):
                 result["safe"] = False
                 result["confidence"] = 90
-                result["source"].append("Google Safe Browsing")
+                result["sources"].append("Google Safe Browsing")
 
             # 2. VirusTotal
-            vt_res = await client.get(
-                f"https://www.virustotal.com/api/v3/urls",
+            vt_submit = await client.post(
+                "https://www.virustotal.com/api/v3/urls",
                 headers={"x-apikey": VT_API_KEY},
-                params={"url": url}
+                data={"url": url}
             )
-            if vt_res.status_code == 200:
-                vt_id = vt_res.json()["data"]["id"]
+            if vt_submit.status_code == 200:
+                # Use base64-encoded URL for GET request
+                encoded_url = encode_url_for_vt(url)
                 vt_report = await client.get(
-                    f"https://www.virustotal.com/api/v3/urls/{vt_id}",
+                    f"https://www.virustotal.com/api/v3/urls/{encoded_url}",
                     headers={"x-apikey": VT_API_KEY}
                 )
-                stats = vt_report.json()["data"]["attributes"]["last_analysis_stats"]
-                if stats["malicious"] > 0:
-                    result["safe"] = False
-                    result["confidence"] = max(result["confidence"], 95)
-                    result["source"].append("VirusTotal")
-
-            # 3. PhishTank (optional open database check)
-            phish_data = await client.get(PHISHTANK_URL)
-            if phish_data.status_code == 200:
-                for entry in phish_data.json():
-                    if entry.get("url") == url:
+                if vt_report.status_code == 200:
+                    stats = vt_report.json()["data"]["attributes"]["last_analysis_stats"]
+                    if stats.get("malicious", 0) > 0:
                         result["safe"] = False
-                        result["confidence"] = 98
-                        result["source"].append("PhishTank")
-                        break
+                        result["confidence"] = max(result["confidence"], 95)
+                        result["sources"].append("VirusTotal")
+
+            # 3. PhishTank
+            phish_res = await client.get(PHISHTANK_URL)
+            if phish_res.status_code == 200:
+                try:
+                    phish_list = phish_res.json()
+                    for entry in phish_list:
+                        if entry.get("url") == url:
+                            result["safe"] = False
+                            result["confidence"] = 98
+                            result["sources"].append("PhishTank")
+                            break
+                except Exception:
+                    pass
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    result["source"] = ", ".join(result["source"]) or "All sources clear"
+    if not result["sources"]:
+        result["sources"] = ["All sources clear"]
     return result

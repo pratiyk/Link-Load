@@ -7,7 +7,7 @@ from app.api import (
     vulnerability_scanner,
     remediation,
     darkweb_scanner,
-    phishing_detector
+    phishing_detector,
 )
 
 app = FastAPI(title="Link & Load API")
@@ -24,7 +24,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register routes
+# Register routers with /api prefix
 app.include_router(link_scanner.router, prefix="/api")
 app.include_router(threat_scanner.router, prefix="/api")
 app.include_router(vulnerability_scanner.router, prefix="/api")

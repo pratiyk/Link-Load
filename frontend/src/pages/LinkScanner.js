@@ -1,4 +1,3 @@
-// src/pages/LinkScanner.js
 import React, { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { scanLink } from "../services/linkScanner";
@@ -13,14 +12,13 @@ export default function LinkScanner() {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (url.trim()) {
-      mutation.mutate(url);
+      mutation.mutate({ url }); // Pass as object!
     }
   };
 
   return (
     <div className="max-w-xl mx-auto">
       <h2 className="section-title">Link Scanner</h2>
-      
       <div className="card">
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
@@ -33,6 +31,7 @@ export default function LinkScanner() {
           <button
             type="submit"
             className="btn btn-primary w-full"
+            disabled={mutation.isLoading}
           >
             Scan Link
           </button>
@@ -49,7 +48,7 @@ export default function LinkScanner() {
       {mutation.error && (
         <div className="card mt-6 bg-red-50 border-l-4 border-red-500 p-4">
           <p className="text-red-700">
-            Error: {mutation.error.message || "Something went wrong"}
+            Error: {mutation.error.response?.data?.detail || mutation.error.message || "Something went wrong"}
           </p>
         </div>
       )}
