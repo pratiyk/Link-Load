@@ -22,7 +22,7 @@ Link & Load is an open-source cybersecurity platform that scans suspicious URLs,
 - Role-Based Access Control (RBAC) & Secure Audit Logs (mplements user-level security, role segregation, and immutable logs.)
 - Compliance Reporting Dashboard (Helps organizations meet compliance (GDPR, ISO, HIPAA) by summarizing security posture.)
 - Static & Dynamic Malware Analysis (Accepts uploaded files for sandbox-based behavioral analysis and static inspection.)
-
+- Smart Contract Auditing & Crypto Compliance
 ### Setup & Usage:
 ```
 # Clone
