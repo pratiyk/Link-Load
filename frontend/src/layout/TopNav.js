@@ -1,51 +1,91 @@
+// src/layout/TopNav.js
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { ScanSearch, ShieldCheck, Bug, Wrench, Eye, ShieldQuestion } from "lucide-react"; // 👈 NEW
+import {
+  ScanSearch,
+  ShieldCheck,
+  Bug,
+  Wrench,
+  Eye,
+  ShieldQuestion,
+  Map
+} from "lucide-react";
+
+const NAV_BG = "#FFFFFF";
+const NAV_BORDER = "#D1D1D6";
+const TEXT = "#1C1C1E";
+const ACCENT = "#478504ff";
 
 export default function TopNav() {
   const navItems = [
     { name: "Link Scanner", path: "/link-scanner", icon: ScanSearch },
     { name: "Threat Scanner", path: "/threat-scanner", icon: ShieldCheck },
-    { name: "Vulnerability Scanner", path: "/vulnerability-scanner", icon: Bug },
+    { name: "Vulnerability", path: "/vulnerability-scanner", icon: Bug },
     { name: "Remediation", path: "/remediation", icon: Wrench },
-    { name: "Dark Web Scanner", path: "/darkweb-scanner", icon: Eye },
-    { name: "Phishing Detector", path: "/phishing-detector", icon: ShieldQuestion }, // 👈 NEW
+    { name: "Dark Web", path: "/darkweb-scanner", icon: Eye },
+    { name: "Phishing", path: "/phishing-detector", icon: ShieldQuestion },
+    { name: "Attack Surface", path: "/attack-surface", icon: Map },
   ];
 
   return (
-    <header className="bg-white border-b border-gray-200 px-6 py-3">
-      <div className="flex items-center justify-between max-w-7xl mx-auto">
-        <div className="flex items-center">
-          <div className="bg-gradient-to-r from-purple-600 to-green-500 w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-xl mr-4">
-            L&L
+    <header
+      style={{ background: NAV_BG, borderBottom: `1px solid ${NAV_BORDER}` }}
+      className="sticky top-0 z-50"
+    >
+      <div className="max-w-6xl mx-auto flex items-center justify-between px-4 py-2">
+        {/* Logo */}
+        <div className="flex items-center space-x-2">
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold"
+            style={{ background: ACCENT }}
+          >
+            
           </div>
-          <h1 className="text-xl font-bold text-gray-900">Link&Load</h1>
+          <span className="text-lg font-medium" style={{ color: TEXT }}>
+            <h1>Link&Load</h1>
+          </span>
         </div>
-        <nav className="hidden md:flex space-x-1">
-          {navItems.map((item) => (
+
+        {/* Nav */}
+        <nav className="hidden md:flex space-x-6">
+          {navItems.map(({ name, path, icon: Icon }) => (
             <NavLink
-              key={item.path}
-              to={item.path}
+              key={path}
+              to={path}
               className={({ isActive }) =>
-                `flex items-center px-4 py-2 rounded-lg transition-colors ${
+                `flex items-center space-x-1 text-sm font-medium transition-colors ${
                   isActive
-                    ? "bg-gray-100 text-purple-700 font-medium"
-                    : "text-gray-700 hover:bg-gray-50"
+                    ? "border-b-2 pb-1"
+                    : "opacity-70 hover:opacity-100"
                 }`
               }
+              style={({ isActive }) => ({
+                color: isActive ? ACCENT : TEXT,
+                borderColor: isActive ? ACCENT : "transparent"
+              })}
             >
-              <item.icon className="w-5 h-5 mr-2" />
-              {item.name}
+              <Icon className="w-5 h-5" />
+              <span>{name}</span>
             </NavLink>
           ))}
         </nav>
-        <div className="md:hidden">
-          <button className="text-gray-500">
-            <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16"/>
-            </svg>
-          </button>
-        </div>
+
+        {/* Mobile menu placeholder */}
+        <button className="md:hidden p-2">
+          <svg
+            className="w-6 h-6"
+            fill="none"
+            stroke={TEXT}
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 6h16M4 12h16M4 18h16"
+            />
+          </svg>
+        </button>
       </div>
     </header>
   );
