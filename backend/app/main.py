@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
+from app.api.link_scanner import router as link_scanner_router
 from app.api import (
     link_scanner,
     threat_scanner,
