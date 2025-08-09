@@ -2,31 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Typography */
+/* Custom styles */
 body {
   @apply bg-canvas text-text-main antialiased;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
-               Roboto, Helvetica, Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  margin: 0;
+  line-height: 1.5;
 }
 
-h1,h2,h3,h4 {
+h1, h2, h3, h4 {
   @apply font-medium text-text-main;
+  margin-top: 0;
+  margin-bottom: 0.5em;
 }
 
-/* Card primitive */
 .card {
   @apply bg-card shadow-card rounded-md p-8;
 }
 
-/* Button primitives */
 .btn-primary {
-  @apply inline-flex items-center justify-center px-5 py-3 rounded-md
-         bg-brand-blue text-white text-sm font-medium transition
-         hover:bg-brand-blue-hover disabled:bg-border-sub disabled:cursor-not-allowed;
+  @apply inline-flex items-center justify-center px-5 py-3 rounded-md bg-brand-blue text-white text-sm font-medium transition hover:bg-brand-blue-hover;
+}
+
+.btn-primary:disabled {
+  @apply bg-border-sub cursor-not-allowed;
 }
 
 .btn-outline {
-  @apply inline-flex items-center justify-center px-5 py-3 rounded-md
-         border border-border-sub text-text-main text-sm font-medium transition
-         hover:border-brand-blue hover:text-brand-blue;
+  @apply inline-flex items-center justify-center px-5 py-3 rounded-md border border-border-sub text-text-main text-sm font-medium transition hover:border-brand-blue hover:text-brand-blue;
 }

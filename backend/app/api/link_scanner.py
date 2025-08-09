@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 import httpx
@@ -101,7 +102,7 @@ async def get_cached_result(url: str):
 async def scan_url(req: ScanRequest, request: Request):
     """Scan a URL using multiple threat intelligence sources."""
     url = req.url.strip()
-    logging.info(f"🔍 Scanning URL: {url}")
+    logging.info(f"Scanning URL: {url}")
 
     # Check cache
     cached = await get_cached_result(url)
@@ -169,7 +170,7 @@ async def scan_url(req: ScanRequest, request: Request):
 
     # Persist
     await store_scan_result(url, result, request)
-    logging.info(f"✅ Scan result: {json.dumps(result)}")
+    logging.info(f"Scan result: {json.dumps(result)}")
     return result
 
 @router.get("/scan-history")
