@@ -105,3 +105,7 @@ It extracts key URL-based features (e.g., length, subdomains, use of IP address,
 ### 26-07-2025
 Attack Surface Module: It is designed to automatically discover, enumerate, and assess all externally exposed digital assets belonging to an organization (such as domains, subdomains, IP addresses, open ports, and internet-facing services). Its core purpose is to identify potential entry points that attackers might exploit, giving security teams visibility and actionable insight into possible weaknesses.
 <img width="1218" height="740" alt="image" src="https://github.com/user-attachments/assets/bbd1f09d-efc0-4d40-a919-d1db8f72aa1a" />
+
+### 10-08-2025
+![alt text](image-1.png)
+The webpage's theme and look and feel have been updated, and Supabase integration for the Link Scanner Module has been completed.
