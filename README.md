@@ -1,112 +1,267 @@
-# Link&Load
-## Lock, stock, and two smoking bad URLs.
-A modular cybersecurity platform for scanning malicious links, monitoring threats, and integrating secure-by-design practices in applications.
-Link & Load is an open-source cybersecurity platform that scans suspicious URLs, analyzes threat intelligence from multiple sources, detects vulnerabilities in software packages, and automates remediation recommendations. Built with a modern, scalable architecture (React + FastAPI), the project integrates real-world cybersecurity tools and APIs, empowering users with proactive defense, real-time insights, and secure compliance-ready features. The suite is designed for use by security teams, researchers, and organizations seeking enterprise-grade security automation.
+# Link&Load Security Platform
 
-### Use Cases:
-- Scan suspicious links before opening (Phishing & Malware Prevention)
-- Integrate into internal tools for link safety assurance
-- Cyber awareness training for non-technical teams
-- Lightweight toolkit for Red/Blue team ops (e.g., during CTFs)
-- Security layer for customer-facing apps
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/pratiyk/Link-Load)
+[![Python](https://img.shields.io/badge/python-3.9+-green.svg)](https://python.org)
+[![React](https://img.shields.io/badge/react-18+-blue.svg)](https://reactjs.org)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-### Core features:
-- Link Scanner (detects bad links)
-- Threat Intel (shows IP/domain behavior)
-- Vulnerability Scanner (checks libraries)
-- Automated Vulnerability Assessment & Remediation (Continuously scans installed packages on servers or containers and suggests or applies security patches.)
+Link&Load is a comprehensive cybersecurity scanning platform designed to help organizations identify, assess, and remediate security vulnerabilities across their digital infrastructure. The platform provides automated security testing capabilities including OWASP Top 10 vulnerability detection, malicious link analysis, phishing detection, dark web monitoring, and attack surface mapping.
 
-### Future Scope:
-- Dark Web Monitoring (Next Module) (Monitors paste sites, leak databases, and darknet forums for sensitive info leaks.)
-- Attack Surface Mapping (Identifies all public-facing assets (subdomains, open ports, services))
-- Role-Based Access Control (RBAC) & Secure Audit Logs (mplements user-level security, role segregation, and immutable logs.)
-- Compliance Reporting Dashboard (Helps organizations meet compliance (GDPR, ISO, HIPAA) by summarizing security posture.)
-- Static & Dynamic Malware Analysis (Accepts uploaded files for sandbox-based behavioral analysis and static inspection.)
-- Smart Contract Auditing & Crypto Compliance
-### Setup & Usage:
-```
-# Clone
-git clone https://github.com/yourusername/link-load
-cd link-load
+---
 
-# Backend
+## Overview
+
+Link&Load combines traditional vulnerability scanning with modern threat intelligence gathering to provide a complete picture of an organization's security posture.
+
+---
+
+## Core Features
+
+### Security Scanning Modules
+
+- **Link Scanner**: Integrates with VirusTotal and Google Safe Browsing APIs to analyze URLs and detect malicious content, phishing attempts, and other web-based threats.
+- **OWASP Top 10 Scanner**: Uses OWASP ZAP, Nuclei, and Wapiti tools to identify common web application security issues.
+- **Phishing Detection**: Machine learning algorithms with 15+ URL feature extractors to classify potentially malicious websites and phishing attempts.
+- **Dark Web Monitoring**: Monitors data breach databases and dark web sources to identify compromised credentials and sensitive data.
+- **Threat Intelligence**: Real-time analysis of IP addresses and domains using multiple threat intelligence sources.
+- **Vulnerability Scanner**: Scans software packages and dependencies against known vulnerability databases.
+- **Attack Surface Mapping**: Discovers subdomains, open ports, and exposed services.
+- **Automated Remediation**: Generates remediation recommendations and automated fix commands.
+
+### Platform Capabilities
+
+- **Real-time Processing**: Live progress updates via WebSocket.
+- **Scan Management**: Start, pause, cancel, and resume scans.
+- **Report Generation**: Export options in PDF, CSV, and JSON.
+- **User Authentication**: JWT-based authentication and role-based access control.
+- **Analytics Dashboard**: Vulnerability trends, risk scoring, and compliance reporting.
+- **Modern Interface**: Responsive web UI built with React and Tailwind CSS.
+
+---
+
+## Technical Architecture
+
+### Backend
+
+- **FastAPI**: High-performance Python web framework.
+- **PostgreSQL/Supabase**: Scalable database.
+- **SQLAlchemy**: ORM and migrations.
+- **Pydantic**: Data validation.
+- **JWT Authentication**: Secure token-based auth.
+- **AsyncIO**: Concurrent scan execution.
+- **Machine Learning**: scikit-learn and joblib for phishing detection.
+
+### Frontend
+
+- **React 18**: Modern JS framework.
+- **React Router**: Client-side routing.
+- **Tailwind CSS**: Utility-first styling.
+- **Axios**: HTTP client.
+- **WebSocket**: Real-time updates.
+- **Context API**: State management.
+
+### Security Tools
+
+- **OWASP ZAP**: Web app security testing.
+- **Nuclei**: Template-based vulnerability scanner.
+- **Wapiti**: Web app vulnerability assessment.
+
+---
+
+## Installation and Setup
+
+### Quick Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/pratiyk/Link-Load.git
+cd Link-Load
+
+# Backend setup
 cd backend
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+cp .env.example .env
+python health_check.py
+python -m uvicorn app.main:app --reload
 
-# Frontend
+# Frontend setup (in a new terminal)
 cd ../frontend
 npm install
+cp .env.example .env.local
 npm start
-
 ```
-***
-#### 13-06-2025
-The Link Scanner module is now fully implemented. This feature allows users to input a URL and receive a consolidated threat analysis report based on multiple cybersecurity APIs. It helps detect malicious links, phishing URLs, and suspicious activity before interacting with the site.
-![alt text](image.png)
-######  How it Works:
- - The frontend takes a URL input from the user.
- - It sends the URL to the backend using a POST request.
- - The backend then queries multiple APIs to scan the link:
-   - Google Safe Browsing API for malware/phishing detection.
-   - VirusTotal API for detailed file/URL analysis.
-   - PhishTank API for crowdsourced phishing detection.
- - The results from all three sources are returned and displayed in a clean, formatted JSON view on the frontend.
 
-***
-#### 15-06-2025
-I have successfully implemented the Threat Score Aggregator module. This new feature enhances the project’s cybersecurity capabilities by aggregating threat intelligence from multiple external APIs to assess the risk associated with a domain or IP address.
-![image](https://github.com/user-attachments/assets/8f84f099-308f-43b2-bd5c-d90fb0c1e9ad)
-######  How it Works: 
- - The user inputs a domain or IP address in the frontend React app.
- - The input is sent to the backend FastAPI server.
- - The backend queries three key cybersecurity services:
-   - VirusTotal API: Provides analysis of domain reputation and detects malicious activity.
-   - AbuseIPDB API: Offers insights on IP address abuse history and confidence scores.
-   - Shodan API: Retrieves detailed information about the IP’s open ports, services, and vulnerabilities.
- - The backend processes and aggregates this data, classifying the overall risk level (High, Medium, or Low).
- - The frontend displays the detailed report and risk classification in a user-friendly format.
+### Service URLs
 
-***
-#### 17-06-2025
-The Vulnerability Scanner module is now fully implemented, providing a seamless way to scan software packages for known security vulnerabilities by querying multiple trusted vulnerability databases. It integrates a React frontend user interface with a FastAPI backend API, combining data from OSV.dev and the National Vulnerability Database (NVD) to deliver comprehensive vulnerability reports.
-![image](https://github.com/user-attachments/assets/a4971f20-6db9-43b5-8b66-5c78d059febf)
-######  How it Works: 
-- The user inputs a package name, selects its ecosystem, and optionally enters a version in the React frontend.
-- The frontend sends this data via POST request to the FastAPI backend /api/scan-vulnerabilities endpoint.
-- The backend queries two key vulnerability data sources:
-   - OSV.dev API: Retrieves vulnerability info for the given package and version.
-   - NVD API: Searches for related CVE entries based on the package name.
-- The backend processes and merges results from both sources, formatting details like vulnerability ID, summary, severity, affected versions, and data source.
-- The aggregated vulnerability data is returned to the frontend.
-- The frontend displays a user-friendly list of vulnerabilities, including severity and affected versions, with loading and error handling.
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
 
-***
-#### 20-06-2025
-I have successfully completed the Remediation Module of the Link & Load cybersecurity platform. The Remediation Module takes the output from the Vulnerability Scanner and classifies each vulnerability into Low, Medium, High, or Critical risk levels based on CVSS severity scores, generates actionable fix commands tailored to each software ecosystem (e.g., pip, npm, cargo, go, etc.) and automatically determines whether each issue is fixable via upgrade or requires manual review.
-![image](https://github.com/user-attachments/assets/21a90afb-d81b-4f8a-b481-6ad655938028)
-######  How it Works:
-- It accepts a list of vulnerabilities (ID, package, ecosystem, and severity) passed from the Vulnerability Scanner module.
-- Each vulnerability is categorized into: Low, Medium, High, or Critical based on CVSS scores.
-- Uses the package ecosystem to generate appropriate update commands:
-   - PyPI: pip install --upgrade <package>
-   - npm: npm update <package>
-   - Go: go get -u <package>
-   - RubyGems, crates.io, etc.
-- A detailed UI displays each vulnerability
--  Download the remediation strategy as a .txt file and a .sh shell script with all commands for batch execution.
+---
 
-*** 
-### 07-07-2025
-This module uses a trained LightGBM machine learning model to predict whether a given URL is likely to be a phishing link.
-It extracts key URL-based features (e.g., length, subdomains, use of IP address, special characters, DNS resolution, etc.) to analyze risk and returns a probability score and label.
-![image](https://github.com/user-attachments/assets/4eeb5650-762b-4a44-8cb9-104941df888d)
+## Project Documentation
 
-### 26-07-2025
-Attack Surface Module: It is designed to automatically discover, enumerate, and assess all externally exposed digital assets belonging to an organization (such as domains, subdomains, IP addresses, open ports, and internet-facing services). Its core purpose is to identify potential entry points that attackers might exploit, giving security teams visibility and actionable insight into possible weaknesses.
-<img width="1218" height="740" alt="image" src="https://github.com/user-attachments/assets/bbd1f09d-efc0-4d40-a919-d1db8f72aa1a" />
+- Setup Instructions: Detailed installation guide
+- Quick Start Guide: Fast setup for development
+- [API Documentation](http://localhost:8000/docs): Interactive OpenAPI docs
 
+---
 
-### 10-08-2025
-![alt text](image-1.png)
-The webpage's theme and look and feel have been updated, and Supabase integration for the Link Scanner Module has been completed.
+## Use Cases
+
+- **Enterprise Security Teams**: Continuous vulnerability assessment and compliance monitoring.
+- **Development Teams**: CI/CD integration for automated security testing.
+- **Security Researchers**: Comprehensive testing and threat intelligence.
+- **Compliance Officers**: Automated scanning and reporting for regulatory requirements.
+- **Training/Education**: Security awareness and red team exercises.
+
+---
+
+## Security Implementation
+
+### Authentication & Authorization
+
+- JWT token-based authentication
+- Role-based access control
+- Session management with timeout and token rotation
+
+### Data Protection
+
+- HTTPS/TLS for all API communications
+- SSL-secured database connections
+- Environment variable management for sensitive data
+- Input validation and sanitization
+
+### Infrastructure Security
+
+- Rate limiting (SlowAPI)
+- CORS policy configuration
+- Security headers (HSTS, CSP, X-Frame-Options)
+- SQL injection and XSS protection
+
+---
+
+## Project Structure
+
+```text
+linkload/
+├── backend/
+│   ├── app/
+│   │   ├── api/
+│   │   ├── core/
+│   │   ├── database/
+│   │   ├── models/
+│   │   ├── services/
+│   │   └── utils/
+│   ├── logs/
+│   ├── ml_models/
+│   └── requirements.txt
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   ├── services/
+│   │   └── utils/
+│   ├── public/
+│   └── package.json
+├── docs/
+├── SETUP_INSTRUCTIONS.md
+├── QUICKSTART.md
+└── README.md
+```
+
+---
+
+## API Endpoints
+
+### Authentication
+
+```http
+POST /api/v1/auth/register    # User registration
+POST /api/v1/auth/login       # User authentication
+POST /api/v1/auth/refresh     # Token refresh
+POST /api/v1/auth/logout      # User logout
+```
+
+### Security Scanning
+
+```http
+POST /api/v1/scan/start       # Start scan
+GET  /api/v1/scan/{id}/status # Scan progress
+GET  /api/v1/scan/{id}        # Scan results
+POST /api/v1/scan/{id}/cancel # Cancel scan
+GET  /api/v1/scan/{id}/export # Export report
+```
+
+### Specialized Services
+
+```http
+POST /api/v1/link_scan        # URL malware analysis
+POST /api/v1/phishing/predict # Phishing detection
+POST /api/v1/darkweb_scan     # Data breach monitoring
+POST /api/v1/vuln_scan        # Package vulnerability scan
+POST /api/v1/attack_surface   # Attack surface mapping
+```
+
+---
+
+## Development Roadmap
+
+### Near-term
+
+- Docker containerization
+- Kubernetes manifests and Helm charts
+- Test suite (pytest, Jest)
+- GitHub Actions CI/CD
+- Redis integration
+
+### Future
+
+- Granular role-based access control
+- Advanced compliance dashboard
+- API rate limiting (Redis)
+- Malware analysis
+- Smart contract auditing
+- Mobile apps
+
+---
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Implement improvements with tests
+4. Submit a pull request
+
+Please review contributing guidelines and code of conduct.
+
+---
+
+## License
+
+MIT License. See LICENSE file for details.
+
+---
+
+## Support & Contact
+
+- **Issues**: GitHub Issues
+- **Docs**: See docs/ directory
+- **Community**: GitHub Discussions
+- **Security Reports**: GitHub security advisories
+
+---
+
+## Acknowledgments
+
+- OWASP Foundation
+- ProjectDiscovery (Nuclei)
+- Supabase
+- FastAPI and React communities
+
+---
+
+*Last updated: October 2025*
+
+---
+

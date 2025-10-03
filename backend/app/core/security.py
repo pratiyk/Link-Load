@@ -1,0 +1,151 @@
+import uuid
+import secrets
+import string
+from datetime import datetime, timedelta
+from typing import Any, Union, Optional
+from jose import jwt, JWTError
+from passlib.context import CryptContext
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import HTTPException, status, Depends, Request, WebSocket
+from app.core.config import settings
+from app.database.supabase_client import supabase
+
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+security = HTTPBearer()
+
+class SecurityManager:
+    @staticmethod
+    def create_access_token(
+        subject: Union[str, Any], 
+        expires_delta: timedelta = None,
+        additional_claims: dict = None
+    ) -> str:
+        """Create JWT access token with jti for revocation tracking"""
+        if expires_delta:
+            expire = datetime.utcnow() + expires_delta
+        else:
+            expire = datetime.utcnow() + timedelta(
+                minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+            )
+        
+        jti = str(uuid.uuid4())
+        to_encode = {
+            "exp": expire, 
+            "sub": str(subject),
+            "jti": jti,
+            "type": "access"
+        }
+        if additional_claims:
+            to_encode.update(additional_claims)
+        
+        encoded_jwt = jwt.encode(
+            to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
+        )
+        return encoded_jwt
+
+    @staticmethod
+    def create_refresh_token(subject: Union[str, Any]) -> str:
+        """Create JWT refresh token with jti for revocation"""
+        expire = datetime.utcnow() + timedelta(
+            days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+        )
+        jti = str(uuid.uuid4())
+        to_encode = {
+            "exp": expire, 
+            "sub": str(subject), 
+            "type": "refresh",
+            "jti": jti
+        }
+        encoded_jwt = jwt.encode(
+            to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
+        )
+        return encoded_jwt
+
+    @staticmethod
+    def verify_token(token: str) -> Optional[dict]:
+        """Verify and decode JWT token"""
+        try:
+            payload = jwt.decode(
+                token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+            )
+            # Check if token is revoked
+            if supabase.is_token_revoked(payload.get("jti")):
+                return None
+            return payload
+        except JWTError:
+            return None
+
+    @staticmethod
+    def hash_password(password: str) -> str:
+        """Hash password using bcrypt"""
+        return pwd_context.hash(password)
+
+    @staticmethod
+    def verify_password(plain_password: str, hashed_password: str) -> bool:
+        """Verify password against hash"""
+        return pwd_context.verify(plain_password, hashed_password)
+
+    @staticmethod
+    def generate_api_key(length: int = 32) -> str:
+        """Generate secure API key"""
+        alphabet = string.ascii_letters + string.digits
+        return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+    @staticmethod
+    def generate_secure_token(length: int = 64) -> str:
+        """Generate cryptographically secure token"""
+        return secrets.token_urlsafe(length)
+
+    @staticmethod
+    def revoke_token(jti: str, expires: datetime):
+        """Add token to revocation list"""
+        supabase.revoke_token(jti, expires)
+
+security_manager = SecurityManager()
+
+async def get_current_user_id(
+    request: Request, 
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> str:
+    """Extract user ID from JWT token with revocation check"""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    
+    try:
+        payload = security_manager.verify_token(credentials.credentials)
+        if payload is None:
+            raise credentials_exception
+        
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+        
+        # Add token to request state for potential revocation
+        request.state.jti = payload.get("jti")
+        request.state.token_exp = payload.get("exp")
+        
+        return user_id
+    except JWTError:
+        raise credentials_exception
+
+async def get_current_user_ws(websocket: WebSocket) -> Optional[str]:
+    """Authenticate user for WebSocket connection"""
+    try:
+        token = websocket.query_params.get("token")
+        if not token:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return None
+        
+        payload = security_manager.verify_token(token)
+        if not payload:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return None
+            
+        return payload.get("sub")
+    except JWTError:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return None
