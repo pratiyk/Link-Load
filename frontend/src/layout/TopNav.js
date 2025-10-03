@@ -1,92 +1,198 @@
-// src/layout/TopNav.js
-import React from "react";
-import { NavLink } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import {
   ScanSearch,
-  ShieldCheck,
   Bug,
   Wrench,
-  Eye,
   ShieldQuestion,
-  Map
+  Map,
+  ShieldAlert,
+  Menu,
+  X,
+  User,
+  LogOut
 } from "lucide-react";
-
-const NAV_BG = "#FFFFFF";
-const NAV_BORDER = "#D1D1D6";
-const TEXT = "#1C1C1E";
-const ACCENT = "#478504ff";
+import { useAuth } from "../context/AuthContext";
+import "./TopNav.css";
 
 export default function TopNav() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user, isAuthenticated, logout } = useAuth();
+  
   const navItems = [
     { name: "Link Scanner", path: "/link-scanner", icon: ScanSearch },
-    { name: "Threat Scanner", path: "/threat-scanner", icon: ShieldCheck },
     { name: "Vulnerability", path: "/vulnerability-scanner", icon: Bug },
     { name: "Remediation", path: "/remediation", icon: Wrench },
-    { name: "Dark Web", path: "/darkweb-scanner", icon: Eye },
     { name: "Phishing", path: "/phishing-detector", icon: ShieldQuestion },
     { name: "Attack Surface", path: "/attack-surface", icon: Map },
+    { name: "OWASP", path: "/owasp-scanner", icon: ShieldAlert },
   ];
 
+  // Close menus when route changes
+  useEffect(() => {
+    setMobileMenuOpen(false);
+    setProfileMenuOpen(false);
+  }, [location]);
+
+  // Close profile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (profileMenuOpen && !e.target.closest('.profile-menu-container')) {
+        setProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [profileMenuOpen]);
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
   return (
-    <header
-      style={{ background: NAV_BG, borderBottom: `1px solid ${NAV_BORDER}` }}
-      className="sticky top-0 z-50"
-    >
-      <div className="max-w-6xl mx-auto flex items-center justify-between px-4 py-2">
+    <header className="top-nav">
+      <div className="top-nav-container">
         {/* Logo */}
-        <div className="flex items-center space-x-2">
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold"
-            style={{ background: ACCENT }}
-          >
-            
-          </div>
-          <span className="text-lg font-medium" style={{ color: TEXT }}>
-            <h1>Link&Load</h1>
-          </span>
+        <div className="top-nav-logo" onClick={() => navigate('/link-scanner')}>
+          <div className="logo-icon">LL</div>
+          <span className="logo-text">Link&Load</span>
         </div>
 
-        {/* Nav */}
-        <nav className="hidden md:flex space-x-6">
+        {/* Desktop Navigation */}
+        <nav className="top-nav-links">
           {navItems.map(({ name, path, icon: Icon }) => (
             <NavLink
               key={path}
               to={path}
               className={({ isActive }) =>
-                `flex items-center space-x-1 text-sm font-medium transition-colors ${
-                  isActive
-                    ? "border-b-2 pb-1"
-                    : "opacity-70 hover:opacity-100"
-                }`
+                `nav-link ${isActive ? 'nav-link-active' : ''}`
               }
-              style={({ isActive }) => ({
-                color: isActive ? ACCENT : TEXT,
-                borderColor: isActive ? ACCENT : "transparent"
-              })}
             >
-              <Icon className="w-5 h-5" />
+              <Icon size={18} />
               <span>{name}</span>
             </NavLink>
           ))}
         </nav>
 
-        {/* Mobile menu placeholder */}
-        <button className="md:hidden p-2">
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            stroke={TEXT}
-            viewBox="0 0 24 24"
+        {/* User Actions */}
+        <div className="top-nav-actions">
+          {isAuthenticated ? (
+            <div className="profile-menu-container">
+              <button 
+                className="profile-button"
+                onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+              >
+                <User size={18} />
+                <span className="profile-name">
+                  {user?.name || user?.email?.split('@')[0] || 'User'}
+                </span>
+              </button>
+              
+              {profileMenuOpen && (
+                <div className="profile-dropdown">
+                  <div className="profile-dropdown-header">
+                    <div className="profile-avatar">
+                      {(user?.name || user?.email)?.[0]?.toUpperCase()}
+                    </div>
+                    <div className="profile-info">
+                      <div className="profile-dropdown-name">
+                        {user?.name || 'User'}
+                      </div>
+                      <div className="profile-dropdown-email">
+                        {user?.email}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="profile-dropdown-divider"></div>
+                  <button 
+                    className="profile-dropdown-item"
+                    onClick={() => navigate('/profile')}
+                  >
+                    <User size={16} />
+                    Profile Settings
+                  </button>
+                  <button 
+                    className="profile-dropdown-item logout"
+                    onClick={handleLogout}
+                  >
+                    <LogOut size={16} />
+                    Logout
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="auth-buttons">
+              <button 
+                className="btn btn-ghost btn-sm"
+                onClick={() => navigate('/login')}
+              >
+                Login
+              </button>
+              <button 
+                className="btn btn-primary btn-sm"
+                onClick={() => navigate('/register')}
+              >
+                Get Started
+              </button>
+            </div>
+          )}
+
+          {/* Mobile Menu Toggle */}
+          <button 
+            className="mobile-menu-toggle"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label="Toggle menu"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 6h16M4 12h16M4 18h16"
-            />
-          </svg>
-        </button>
+            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
       </div>
+
+      {/* Mobile Menu */}
+      {mobileMenuOpen && (
+        <div className="mobile-menu">
+          <nav className="mobile-nav-links">
+            {navItems.map(({ name, path, icon: Icon }) => (
+              <NavLink
+                key={path}
+                to={path}
+                className={({ isActive }) =>
+                  `mobile-nav-link ${isActive ? 'mobile-nav-link-active' : ''}`
+                }
+              >
+                <Icon size={20} />
+                <span>{name}</span>
+              </NavLink>
+            ))}
+          </nav>
+          
+          {isAuthenticated && (
+            <div className="mobile-menu-footer">
+              <button 
+                className="btn btn-secondary"
+                onClick={() => navigate('/profile')}
+                style={{ width: '100%', marginBottom: '8px' }}
+              >
+                <User size={18} />
+                Profile
+              </button>
+              <button 
+                className="btn btn-ghost"
+                onClick={handleLogout}
+                style={{ width: '100%' }}
+              >
+                <LogOut size={18} />
+                Logout
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </header>
   );
 }

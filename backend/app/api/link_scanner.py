@@ -1,6 +1,6 @@
 import json
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 import httpx
 import os
 import base64
@@ -8,6 +8,8 @@ import logging
 from datetime import datetime
 from dotenv import load_dotenv
 from supabase import create_client, Client
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 # Load environment variables
 load_dotenv()
@@ -17,6 +19,9 @@ logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
+
+# Rate limiter
+limiter = Limiter(key_func=get_remote_address)
 
 # No prefix here; mount in main.py under /api
 router = APIRouter()
@@ -32,13 +37,34 @@ SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 
 supabase: Client = None
 if SUPABASE_URL and SUPABASE_SERVICE_KEY:
-    supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-    logging.info("Supabase client initialized")
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+        logging.info("Supabase client initialized successfully")
+    except Exception as e:
+        logging.error(f"Failed to initialize Supabase: {e}")
+        supabase = None
 else:
     logging.warning("Supabase disabled (missing credentials)")
 
 class ScanRequest(BaseModel):
     url: str
+
+    @validator('url')
+    def validate_url(cls, v):
+        """Validate URL format and prevent injection attacks"""
+        if not v or len(v) < 10:
+            raise ValueError("URL must be at least 10 characters long")
+        
+        # Must start with http:// or https://
+        if not v.startswith(('http://', 'https://')):
+            raise ValueError("URL must start with http:// or https://")
+        
+        # Prevent common injection patterns
+        dangerous_patterns = ['javascript:', 'data:', 'vbscript:', '<', '>']
+        if any(pattern in v.lower() for pattern in dangerous_patterns):
+            raise ValueError("URL contains potentially dangerous content")
+        
+        return v
 
 def encode_url_for_vt(url: str) -> str:
     """URL-safe base64 encoding without padding."""

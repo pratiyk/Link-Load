@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { scanThreat } from "../services/threatScanner";
+import { ShieldCheck, ScanSearch, AlertOctagon, TrendingUp, Award, Loader, Activity } from "lucide-react";
 
 export default function ThreatScanner() {
   const [input, setInput] = useState("");
@@ -17,72 +18,224 @@ export default function ThreatScanner() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <h2 className="section-title">Threat Scanner</h2>
+    <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+      {/* Header */}
+      <div style={{ marginBottom: 'var(--spacing-6)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-3)', marginBottom: 'var(--spacing-3)' }}>
+          <div style={{
+            width: '56px',
+            height: '56px',
+            borderRadius: 'var(--radius-lg)',
+            background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 8px 16px rgba(59, 130, 246, 0.25)',
+            flexShrink: 0
+          }}>
+            <ShieldCheck size={28} color="white" strokeWidth={2} />
+          </div>
+          <div>
+            <h1 style={{ 
+              fontSize: 'var(--font-size-2xl)',
+              fontWeight: 'var(--font-weight-bold)',
+              marginBottom: 'var(--spacing-1)'
+            }}>
+              Threat Intelligence Scanner
+            </h1>
+            <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)' }}>
+              Analyze domains and IP addresses for malicious activity
+            </p>
+          </div>
+        </div>
+      </div>
       
-      <div className="card">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="text"
-            className="input-field"
-            placeholder="Enter domain or IP address"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-          />
-          <button
-            type="submit"
-            className="btn btn-primary w-full"
-          >
-            Analyze Threat
-          </button>
+      {/* Scan Form */}
+      <div className="card" style={{ marginBottom: 'var(--spacing-6)' }}>
+        <form onSubmit={handleSubmit}>
+          <label className="input-label" style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)', marginBottom: 'var(--spacing-2)' }}>
+            <ScanSearch size={16} style={{ color: 'var(--color-accent)', flexShrink: 0 }} strokeWidth={2} />
+            <span>Domain or IP Address</span>
+          </label>
+          <div style={{ display: 'flex', gap: 'var(--spacing-3)' }}>
+            <input
+              type="text"
+              className="input"
+              placeholder="example.com or 192.168.1.1"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              style={{ flex: 1 }}
+              required
+            />
+            <button
+              type="submit"
+              className="btn btn-primary"
+              style={{ minWidth: '140px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--spacing-2)' }}
+              disabled={mutation.isLoading}
+            >
+              {mutation.isLoading ? (
+                <>
+                  <Loader size={18} className="spinner" strokeWidth={2} />
+                  <span>Analyzing...</span>
+                </>
+              ) : (
+                <>
+                  <ScanSearch size={18} strokeWidth={2} />
+                  <span>Analyze Threat</span>
+                </>
+              )}
+            </button>
+          </div>
         </form>
       </div>
 
+      {/* Loading State */}
       {mutation.isLoading && (
-        <div className="card mt-6 text-center py-8">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Analyzing threat level...</p>
+        <div className="card" style={{ textAlign: 'center', padding: 'var(--spacing-8)' }}>
+          <Loader size={48} className="spinner" style={{ 
+            margin: '0 auto var(--spacing-4)',
+            color: 'var(--color-accent)'
+          }} />
+          <h3 style={{ 
+            fontSize: 'var(--font-size-lg)',
+            fontWeight: 'var(--font-weight-semibold)',
+            marginBottom: 'var(--spacing-2)'
+          }}>
+            Analyzing Threat Level...
+          </h3>
+          <p style={{ color: 'var(--color-text-secondary)' }}>
+            Checking multiple threat intelligence sources
+          </p>
         </div>
       )}
 
+      {/* Error State */}
       {mutation.error && (
-        <div className="card mt-6 bg-red-50 border-l-4 border-red-500 p-4">
-          <p className="text-red-700">Error: {mutation.error.message}</p>
+        <div style={{
+          padding: 'var(--spacing-4)',
+          borderRadius: 'var(--radius-lg)',
+          backgroundColor: '#FEE2E2',
+          border: '1px solid #FCA5A5',
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 'var(--spacing-3)'
+        }}>
+          <AlertTriangle size={24} color="#DC2626" style={{ flexShrink: 0, marginTop: '2px' }} />
+          <div>
+            <h3 style={{ 
+              color: '#DC2626',
+              fontWeight: 'var(--font-weight-semibold)',
+              marginBottom: 'var(--spacing-1)'
+            }}>
+              Analysis Failed
+            </h3>
+            <p style={{ color: '#991B1B' }}>{mutation.error.message}</p>
+          </div>
         </div>
       )}
 
+      {/* Results */}
       {mutation.data && (
         <>
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="card bg-gray-50 border border-gray-200">
-              <h3 className="text-lg font-bold text-gray-800">Threat Score</h3>
-              <p className="text-3xl font-bold">
+          {/* Summary Cards */}
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: 'var(--spacing-4)',
+            marginBottom: 'var(--spacing-6)'
+          }}>
+            {/* Threat Score Card */}
+            <div className="card" style={{ 
+              background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)',
+              color: 'white',
+              border: 'none'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)', marginBottom: 'var(--spacing-3)' }}>
+                <TrendingUp size={20} />
+                <h3 style={{ fontSize: 'var(--font-size-base)', fontWeight: 'var(--font-weight-semibold)' }}>
+                  Threat Score
+                </h3>
+              </div>
+              <p style={{ fontSize: '2.5rem', fontWeight: 'var(--font-weight-bold)', marginBottom: 'var(--spacing-1)' }}>
                 {mutation.data?.threat_score || "N/A"}
               </p>
-              <p className="text-sm text-gray-700">0-100 scale</p>
+              <p style={{ fontSize: 'var(--font-size-sm)', opacity: 0.9 }}>
+                0-100 scale
+              </p>
             </div>
             
-            <div className="card bg-orange-50 border border-orange-200">
-              <h3 className="text-lg font-bold text-orange-800">Malicious Indicators</h3>
-              <p className="text-3xl font-bold">
+            {/* Malicious Indicators Card */}
+            <div className="card" style={{ 
+              background: 'linear-gradient(135deg, #F97316 0%, #EA580C 100%)',
+              color: 'white',
+              border: 'none'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)', marginBottom: 'var(--spacing-3)' }}>
+                <AlertTriangle size={20} />
+                <h3 style={{ fontSize: 'var(--font-size-base)', fontWeight: 'var(--font-weight-semibold)' }}>
+                  Malicious Indicators
+                </h3>
+              </div>
+              <p style={{ fontSize: '2.5rem', fontWeight: 'var(--font-weight-bold)', marginBottom: 'var(--spacing-1)' }}>
                 {mutation.data?.malicious_indicators?.length || 0}
               </p>
-              <p className="text-sm text-orange-700">Detected threats</p>
+              <p style={{ fontSize: 'var(--font-size-sm)', opacity: 0.9 }}>
+                Detected threats
+              </p>
             </div>
             
-            <div className="card bg-green-50 border border-green-200">
-              <h3 className="text-lg font-bold text-green-800">Reputation</h3>
-              <p className="text-3xl font-bold">
+            {/* Reputation Card */}
+            <div className="card" style={{ 
+              background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+              color: 'white',
+              border: 'none'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)', marginBottom: 'var(--spacing-3)' }}>
+                <Award size={20} />
+                <h3 style={{ fontSize: 'var(--font-size-base)', fontWeight: 'var(--font-weight-semibold)' }}>
+                  Reputation
+                </h3>
+              </div>
+              <p style={{ fontSize: '2.5rem', fontWeight: 'var(--font-weight-bold)', marginBottom: 'var(--spacing-1)' }}>
                 {mutation.data?.reputation || "N/A"}
               </p>
-              <p className="text-sm text-green-700">Community rating</p>
+              <p style={{ fontSize: 'var(--font-size-sm)', opacity: 0.9 }}>
+                Community rating
+              </p>
             </div>
           </div>
 
+          {/* Detailed Results Card */}
           <div className="card">
-            <h3 className="font-semibold text-lg mb-3 text-gray-800">Threat Analysis Details</h3>
-            <div className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm">
-              <pre>{JSON.stringify(mutation.data, null, 2)}</pre>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 'var(--spacing-2)', 
+              marginBottom: 'var(--spacing-4)',
+              paddingBottom: 'var(--spacing-4)',
+              borderBottom: '1px solid var(--color-border)'
+            }}>
+              <Shield size={24} color="var(--color-accent)" />
+              <h3 style={{ 
+                fontSize: 'var(--font-size-xl)',
+                fontWeight: 'var(--font-weight-semibold)'
+              }}>
+                Threat Analysis Details
+              </h3>
+            </div>
+            <div style={{
+              backgroundColor: 'var(--color-bg-secondary)',
+              padding: 'var(--spacing-4)',
+              borderRadius: 'var(--radius-md)',
+              fontSize: 'var(--font-size-sm)',
+              fontFamily: 'Monaco, Courier, monospace',
+              overflowX: 'auto',
+              maxHeight: '500px',
+              overflowY: 'auto'
+            }}>
+              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                {JSON.stringify(mutation.data, null, 2)}
+              </pre>
             </div>
           </div>
         </>

@@ -4,9 +4,20 @@ import TopNav from "./TopNav";
 
 export default function Layout({ children }) {
   return (
-    <div className="flex flex-col min-h-screen bg-[#F5F5F7] font-sans text-[#1C1C1E]">
+    <div style={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      minHeight: '100vh',
+      backgroundColor: 'var(--color-bg-primary)'
+    }}>
       <TopNav />
-      <main className="flex-1 p-6 max-w-6xl mx-auto">
+      <main style={{
+        flex: 1,
+        padding: 'var(--spacing-6)',
+        maxWidth: '1200px',
+        margin: '0 auto',
+        width: '100%'
+      }}>
         {children}
       </main>
     </div>

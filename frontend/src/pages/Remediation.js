@@ -3,6 +3,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import axios from "axios";
 import SeverityBadge from "../components/SeverityBadge";
+import { Wrench, Download, FileText, CheckCircle2, AlertOctagon, Loader, XCircle, Terminal, Package } from "lucide-react";
 
 export default function Remediation() {
   const location = useLocation();
@@ -119,112 +120,306 @@ export default function Remediation() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto">
-      <h2 className="section-title">Remediation Plan</h2>
+    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      {/* Header */}
+      <div style={{ marginBottom: 'var(--spacing-6)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-3)', marginBottom: 'var(--spacing-3)' }}>
+          <div style={{
+            width: '56px',
+            height: '56px',
+            borderRadius: 'var(--radius-lg)',
+            background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 8px 16px rgba(16, 185, 129, 0.25)',
+            flexShrink: 0
+          }}>
+            <Wrench size={28} color="white" strokeWidth={2} />
+          </div>
+          <div>
+            <h1 style={{ 
+              fontSize: 'var(--font-size-2xl)',
+              fontWeight: 'var(--font-weight-bold)',
+              marginBottom: 'var(--spacing-1)'
+            }}>
+              Remediation Plan
+            </h1>
+            <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)' }}>
+              Automated fixes and recommendations for discovered vulnerabilities
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* Summary Cards */}
       {remediationSteps.length > 0 && (
-        <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="card bg-purple-50 border border-purple-200">
-            <h3 className="text-lg font-bold text-purple-800">Total Issues</h3>
-            <p className="text-3xl font-bold">{remediationSummary.total}</p>
-            <p className="text-sm text-purple-700">Vulnerabilities to fix</p>
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+          gap: 'var(--spacing-4)',
+          marginBottom: 'var(--spacing-6)'
+        }}>
+          <div className="card" style={{ 
+            background: 'linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%)',
+            color: 'white',
+            border: 'none'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)', marginBottom: 'var(--spacing-3)' }}>
+              <AlertTriangle size={20} />
+              <h3 style={{ fontSize: 'var(--font-size-base)', fontWeight: 'var(--font-weight-semibold)' }}>
+                Total Issues
+              </h3>
+            </div>
+            <p style={{ fontSize: '2.5rem', fontWeight: 'var(--font-weight-bold)', marginBottom: 'var(--spacing-1)' }}>
+              {remediationSummary.total}
+            </p>
+            <p style={{ fontSize: 'var(--font-size-sm)', opacity: 0.9 }}>
+              Vulnerabilities to fix
+            </p>
           </div>
           
-          <div className="card bg-green-50 border border-green-200">
-            <h3 className="text-lg font-bold text-green-800">Fixable</h3>
-            <p className="text-3xl font-bold">{remediationSummary.fixable}</p>
-            <p className="text-sm text-green-700">Can be automatically fixed</p>
+          <div className="card" style={{ 
+            background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+            color: 'white',
+            border: 'none'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)', marginBottom: 'var(--spacing-3)' }}>
+              <CheckCircle size={20} />
+              <h3 style={{ fontSize: 'var(--font-size-base)', fontWeight: 'var(--font-weight-semibold)' }}>
+                Auto-Fixable
+              </h3>
+            </div>
+            <p style={{ fontSize: '2.5rem', fontWeight: 'var(--font-weight-bold)', marginBottom: 'var(--spacing-1)' }}>
+              {remediationSummary.fixable}
+            </p>
+            <p style={{ fontSize: 'var(--font-size-sm)', opacity: 0.9 }}>
+              Can be fixed automatically
+            </p>
           </div>
           
-          <div className="card bg-blue-50 border border-blue-200">
-            <h3 className="text-lg font-bold text-blue-800">Requires Manual Fix</h3>
-            <p className="text-3xl font-bold">{remediationSummary.total - remediationSummary.fixable}</p>
-            <p className="text-sm text-blue-700">Need manual intervention</p>
+          <div className="card" style={{ 
+            background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)',
+            color: 'white',
+            border: 'none'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)', marginBottom: 'var(--spacing-3)' }}>
+              <XCircle size={20} />
+              <h3 style={{ fontSize: 'var(--font-size-base)', fontWeight: 'var(--font-weight-semibold)' }}>
+                Manual Fix Required
+              </h3>
+            </div>
+            <p style={{ fontSize: '2.5rem', fontWeight: 'var(--font-weight-bold)', marginBottom: 'var(--spacing-1)' }}>
+              {remediationSummary.total - remediationSummary.fixable}
+            </p>
+            <p style={{ fontSize: 'var(--font-size-sm)', opacity: 0.9 }}>
+              Need manual intervention
+            </p>
           </div>
         </div>
       )}
 
-      {/* Action Buttons at the Top */}
+      {/* Export Buttons */}
       {remediationSteps.length > 0 && !loading && !error && (
-        <div className="flex flex-wrap gap-4 mb-6">
+        <div style={{ 
+          display: 'flex', 
+          flexWrap: 'wrap',
+          gap: 'var(--spacing-3)',
+          marginBottom: 'var(--spacing-6)'
+        }}>
           <button
             onClick={handleExportText}
-            className="btn bg-gradient-to-r from-purple-600 to-green-500 text-white"
+            className="btn btn-secondary"
           >
-            Export Remediation Plan (.txt)
+            <FileText size={18} />
+            Export as Text (.txt)
           </button>
 
           <button
             onClick={handleExportShell}
-            className="btn bg-gradient-to-r from-green-500 to-purple-600 text-white"
+            className="btn btn-secondary"
           >
-            Download Fix Script (.sh)
+            <Terminal size={18} />
+            Download Shell Script (.sh)
           </button>
         </div>
       )}
 
-      {/* Status / Results */}
-      {loading ? (
-        <div className="card text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Generating remediation steps...</p>
-        </div>
-      ) : error ? (
-        <div className="card bg-red-50 border-l-4 border-red-500 p-4">
-          <p className="text-red-700">{error}</p>
-        </div>
-      ) : remediationSteps.length === 0 ? (
-        <div className="card text-center py-12">
-          <div className="text-gray-400 mb-4">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
-          </div>
-          <p className="text-gray-600">
-            {scannedData.length 
-              ? "No remediation steps generated" 
-              : "No scanned vulnerabilities were passed to this page"}
+      {/* Loading State */}
+      {loading && (
+        <div className="card" style={{ textAlign: 'center', padding: 'var(--spacing-8)' }}>
+          <Loader size={48} className="spinner" style={{ 
+            margin: '0 auto var(--spacing-4)',
+            color: 'var(--color-accent)'
+          }} />
+          <h3 style={{ 
+            fontSize: 'var(--font-size-lg)',
+            fontWeight: 'var(--font-weight-semibold)',
+            marginBottom: 'var(--spacing-2)'
+          }}>
+            Generating Remediation Steps...
+          </h3>
+          <p style={{ color: 'var(--color-text-secondary)' }}>
+            Creating automated fixes and manual recommendations
           </p>
         </div>
-      ) : (
-        <div className="space-y-6">
+      )}
+
+      {/* Error State */}
+      {error && (
+        <div style={{
+          padding: 'var(--spacing-4)',
+          borderRadius: 'var(--radius-lg)',
+          backgroundColor: '#FEE2E2',
+          border: '1px solid #FCA5A5',
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 'var(--spacing-3)'
+        }}>
+          <AlertTriangle size={24} color="#DC2626" style={{ flexShrink: 0, marginTop: '2px' }} />
+          <div>
+            <h3 style={{ 
+              color: '#DC2626',
+              fontWeight: 'var(--font-weight-semibold)',
+              marginBottom: 'var(--spacing-1)'
+            }}>
+              Generation Failed
+            </h3>
+            <p style={{ color: '#991B1B' }}>{error}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {remediationSteps.length === 0 && !loading && !error && (
+        <div className="card" style={{ textAlign: 'center', padding: 'var(--spacing-12)' }}>
+          <Wrench size={64} style={{ 
+            margin: '0 auto var(--spacing-4)',
+            color: 'var(--color-text-tertiary)',
+            opacity: 0.5
+          }} />
+          <h3 style={{ 
+            fontSize: 'var(--font-size-lg)',
+            fontWeight: 'var(--font-weight-semibold)',
+            marginBottom: 'var(--spacing-2)',
+            color: 'var(--color-text-primary)'
+          }}>
+            No Remediation Plan Available
+          </h3>
+          <p style={{ 
+            color: 'var(--color-text-secondary)',
+            fontSize: 'var(--font-size-base)'
+          }}>
+            {scannedData.length 
+              ? "No remediation steps were generated for the scanned vulnerabilities" 
+              : "Run a vulnerability scan first to generate a remediation plan"}
+          </p>
+        </div>
+      )}
+
+      {/* Remediation Steps */}
+      {remediationSteps.length > 0 && !loading && !error && (
+        <div style={{ display: 'grid', gap: 'var(--spacing-5)' }}>
           {remediationSteps.map((step, index) => (
-            <div
-              key={index}
-              className="card"
-            >
-              <div className="flex justify-between items-start mb-3">
+            <div key={index} className="card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--spacing-3)' }}>
                 <div>
-                  <h3 className="font-semibold text-lg text-gray-800">
-                    {step.id}
-                  </h3>
-                  <p className="text-sm text-gray-600">{step.package} ({step.ecosystem})</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)', marginBottom: 'var(--spacing-2)' }}>
+                    <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: 'var(--radius-full)',
+                      backgroundColor: 'var(--color-accent)',
+                      color: 'white',
+                      fontSize: 'var(--font-size-sm)',
+                      fontWeight: 'var(--font-weight-bold)'
+                    }}>
+                      {index + 1}
+                    </span>
+                    <h3 style={{ 
+                      fontSize: 'var(--font-size-lg)', 
+                      fontWeight: 'var(--font-weight-semibold)'
+                    }}>
+                      {step.id}
+                    </h3>
+                  </div>
+                  <p style={{ 
+                    fontSize: 'var(--font-size-sm)', 
+                    color: 'var(--color-text-secondary)',
+                    marginLeft: '36px'
+                  }}>
+                    {step.package} ({step.ecosystem})
+                  </p>
                 </div>
                 <SeverityBadge severity={step.severity} />
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+                gap: 'var(--spacing-4)',
+                marginTop: 'var(--spacing-4)',
+                padding: 'var(--spacing-4)',
+                backgroundColor: 'var(--color-bg-secondary)',
+                borderRadius: 'var(--radius-md)'
+              }}>
                 <div>
-                  <p className="text-sm text-gray-700 mb-1">
-                    <span className="font-medium">Risk Level:</span> {step.risk_level}
+                  <p style={{ fontSize: 'var(--font-size-sm)', marginBottom: 'var(--spacing-2)' }}>
+                    <strong style={{ color: 'var(--color-text-secondary)' }}>Risk Level:</strong>{' '}
+                    <span style={{ color: 'var(--color-text-primary)', fontWeight: 'var(--font-weight-medium)' }}>
+                      {step.risk_level}
+                    </span>
                   </p>
-                  <p className="text-sm text-gray-700">
-                    <span className="font-medium">Fixable:</span>{" "}
+                  <p style={{ fontSize: 'var(--font-size-sm)', display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)' }}>
+                    <strong style={{ color: 'var(--color-text-secondary)' }}>Status:</strong>{' '}
                     {step.fixable ? (
-                      <span className="text-green-600 font-medium">Yes</span>
+                      <>
+                        <CheckCircle size={16} color="#059669" />
+                        <span style={{ color: '#059669', fontWeight: 'var(--font-weight-semibold)' }}>
+                          Auto-Fixable
+                        </span>
+                      </>
                     ) : (
-                      <span className="text-red-600 font-medium">No</span>
+                      <>
+                        <XCircle size={16} color="#DC2626" />
+                        <span style={{ color: '#DC2626', fontWeight: 'var(--font-weight-semibold)' }}>
+                          Manual Fix Required
+                        </span>
+                      </>
                     )}
                   </p>
                 </div>
+                
                 <div>
-                  <p className="text-sm font-medium text-gray-700 mb-1">
-                    Remediation:
+                  <p style={{ 
+                    fontSize: 'var(--font-size-sm)', 
+                    fontWeight: 'var(--font-weight-semibold)',
+                    color: 'var(--color-text-secondary)',
+                    marginBottom: 'var(--spacing-2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--spacing-2)'
+                  }}>
+                    <Terminal size={16} />
+                    Remediation Command:
                   </p>
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <code className="text-sm text-gray-800 font-mono break-words">
-                      {step.fix_command || "Manual review required"}
+                  <div style={{
+                    padding: 'var(--spacing-3)',
+                    backgroundColor: 'white',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)'
+                  }}>
+                    <code style={{
+                      fontSize: 'var(--font-size-sm)',
+                      fontFamily: 'Monaco, Courier, monospace',
+                      color: 'var(--color-text-primary)',
+                      wordBreak: 'break-all',
+                      display: 'block'
+                    }}>
+                      {step.fix_command || "Manual review required - no automated fix available"}
                     </code>
                   </div>
                 </div>
