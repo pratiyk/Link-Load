@@ -108,6 +108,18 @@ async def get_current_user_id(
     request: Request, 
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> str:
+    """Validate JWT token and return user ID
+    
+    Args:
+        request: FastAPI request object
+        credentials: JWT credentials from auth header
+        
+    Returns:
+        str: User ID from token
+        
+    Raises:
+        HTTPException: If token is invalid, expired or revoked
+    """
     """Extract user ID from JWT token with revocation check"""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -116,9 +128,16 @@ async def get_current_user_id(
     )
     
     try:
+        if not credentials:
+            raise credentials_exception
+            
         payload = security_manager.verify_token(credentials.credentials)
         if payload is None:
-            raise credentials_exception
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has been revoked or is invalid",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         
         user_id: str = payload.get("sub")
         if user_id is None:
@@ -133,7 +152,17 @@ async def get_current_user_id(
         raise credentials_exception
 
 async def get_current_user_ws(websocket: WebSocket) -> Optional[str]:
-    """Authenticate user for WebSocket connection"""
+    """Authenticate user for WebSocket connection
+    
+    Args:
+        websocket: WebSocket connection instance
+        
+    Returns:
+        Optional[str]: User ID if authentication successful, None otherwise
+        
+    Note:
+        Closes WebSocket connection with appropriate status code on authentication failure
+    """
     try:
         token = websocket.query_params.get("token")
         if not token:
