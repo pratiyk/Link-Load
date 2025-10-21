@@ -5,7 +5,7 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 export const authApi = {
   login: async (email, password) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/auth/login`, { 
+      const response = await axios.post(`${API_BASE_URL}/api/v1/auth/login`, { 
         email, 
         password 
       });
@@ -17,7 +17,7 @@ export const authApi = {
   
   register: async (userData) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/auth/register`, userData);
+      const response = await axios.post(`${API_BASE_URL}/api/v1/auth/register`, userData);
       return response.data;
     } catch (error) {
       throw error.response?.data?.detail || 'Registration failed';
@@ -27,7 +27,7 @@ export const authApi = {
   getCurrentUser: async () => {
     try {
       const token = localStorage.getItem('access_token');
-      const response = await axios.get(`${API_BASE_URL}/api/auth/me`, {
+      const response = await axios.get(`${API_BASE_URL}/api/v1/auth/me`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -41,7 +41,7 @@ export const authApi = {
   logout: async () => {
     try {
       const token = localStorage.getItem('access_token');
-      await axios.post(`${API_BASE_URL}/api/auth/logout`, {}, {
+      await axios.post(`${API_BASE_URL}/api/v1/auth/logout`, {}, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -53,7 +53,7 @@ export const authApi = {
   
   refreshToken: async (refreshToken) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/auth/refresh`, { 
+      const response = await axios.post(`${API_BASE_URL}/api/v1/auth/refresh`, { 
         refresh_token: refreshToken 
       });
       return response.data;
