@@ -61,13 +61,30 @@ export const scannerApi = {
     const qs = token ? `?token=${encodeURIComponent(token)}` : "";
     const wsUrl = `${WS_BASE_URL}/ws/scans/${scanId}${qs}`;
     const ws = new WebSocket(wsUrl);
+
+    // Set up ping interval
+    const pingInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send("pong");
+      }
+    }, 25000); // Slightly less than server's 30s timeout
+
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        // Handle ping messages
+        if (data.type === "ping") {
+          ws.send("pong");
+          return;
+        }
         onUpdate(data);
       } catch (error) {
         console.error("WebSocket message parse error:", error);
       }
+    };
+
+    ws.onopen = () => {
+      console.log(`WebSocket connected for scan ${scanId}`);
     };
 
     ws.onerror = (error) => {
@@ -75,7 +92,22 @@ export const scannerApi = {
       if (onError) onError(error);
     };
 
-    return ws;
+    ws.onclose = (event) => {
+      console.log(`WebSocket closed for scan ${scanId}:`, event.code, event.reason);
+      clearInterval(pingInterval);
+      if (onError) onError(new Error("WebSocket connection closed"));
+    };
+
+    // Return cleanup function
+    return {
+      socket: ws,
+      disconnect: () => {
+        clearInterval(pingInterval);
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.close();
+        }
+      }
+    };
   },
 };
 

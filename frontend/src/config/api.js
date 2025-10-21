@@ -184,8 +184,11 @@ export const refreshAccessToken = async () => {
   }
 };
 
-// Export API endpoints configuration
+  // Export API endpoints configuration
 export const API_ENDPOINTS = {
+  // Base paths
+  base: API_BASE_URL,
+  ws: WS_BASE_URL,
   // Authentication
   auth: {
     register: "/api/v1/auth/register",
