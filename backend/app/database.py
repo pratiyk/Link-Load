@@ -9,11 +9,8 @@ load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/linkload")
 
 engine = create_engine(
-    DATABASE_URL, 
-    pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20,
-    pool_recycle=3600,
+    DATABASE_URL,
+    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {},
     echo=False
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -44,5 +41,6 @@ def init_db():
     """Initialize database tables"""
     from app.models.user import User, RevokedToken
     from app.models.attack_surface_models import AttackSurfaceScan, DiscoveredAsset
+    from app.models.vulnerability_models import VulnerabilityData, VulnerabilityMitigation, ThreatIntelData
     
     Base.metadata.create_all(bind=engine)

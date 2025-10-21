@@ -25,7 +25,8 @@ from app.api import (
     remediation,
     darkweb_scanner,
     phishing_detector,
-    attack_surface_mapping
+    attack_surface_mapping,
+    vulnerabilities
 )
 
 logger = logging.getLogger(__name__)
@@ -121,6 +122,7 @@ app.include_router(remediation.router, prefix=settings.API_PREFIX)
 app.include_router(darkweb_scanner.router, prefix=settings.API_PREFIX)
 app.include_router(phishing_detector.router, prefix=settings.API_PREFIX)
 app.include_router(attack_surface_mapping.router)
+app.include_router(vulnerabilities.router)
 
 # Health check endpoints
 @app.get("/")

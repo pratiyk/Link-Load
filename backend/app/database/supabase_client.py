@@ -1,13 +1,30 @@
 import logging
 import os
+import time
 from supabase import create_client, Client
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import SQLAlchemyError, OperationalError
 from app.core.config import settings
-from typing import Dict, List, Optional
-from datetime import datetime
+from typing import Dict, List, Optional, Any
+from datetime import datetime, timedelta
+from tenacity import retry, stop_after_attempt, wait_exponential
+from contextlib import contextmanager
+from sqlalchemy.exc import SQLAlchemyError, OperationalError
 
 logger = logging.getLogger(__name__)
+
+class DatabaseError(Exception):
+    """Base class for database errors"""
+    pass
+
+class ConnectionError(DatabaseError):
+    """Database connection error"""
+    pass
+
+class QueryError(DatabaseError):
+    """Database query error"""
+    pass
 
 class SupabaseClient:
     def __init__(self):
@@ -30,14 +47,53 @@ class SupabaseClient:
         """Simple health check against database"""
         try:
             with self.Session() as session:
-                session.execute("SELECT 1")
+                session.execute(text("SELECT 1"))
+                session.commit()
             logger.info("Supabase health check passed")
             return True
+        except OperationalError as e:
+            logger.error(f"Supabase connection error: {e}")
+            return False
         except Exception as e:
             logger.error(f"Supabase health check failed: {e}")
             return False
+            
+    def cleanup_expired_tokens(self) -> None:
+        """Remove expired tokens from revocation list"""
+        try:
+            with self.Session() as session:
+                session.execute(
+                    text("DELETE FROM revoked_tokens WHERE expires < NOW()")
+                )
+                session.commit()
+        except Exception as e:
+            logger.error(f"Failed to cleanup expired tokens: {e}")
 
-    def create_scan(self, record: Dict) -> Dict:
+    @contextmanager
+    def get_connection(self):
+        """Context manager for database connections with retry logic"""
+        retries = 3
+        delay = 1  # Initial delay in seconds
+        
+        for attempt in range(retries):
+            try:
+                session = self.Session()
+                try:
+                    yield session
+                    session.commit()
+                except Exception:
+                    session.rollback()
+                    raise
+                finally:
+                    session.close()
+                return
+            except OperationalError as e:
+                if attempt == retries - 1:
+                    raise ConnectionError(f"Failed to connect to database after {retries} attempts") from e
+                logger.warning(f"Database connection attempt {attempt + 1} failed, retrying...")
+                time.sleep(delay * (2 ** attempt))  # Exponential backoff
+
+    def create_scan(self, record: Dict) -> Optional[Dict[str, Any]]:
         """Insert a new scan record"""
         try:
             # Convert datetime objects to ISO strings
@@ -46,14 +102,14 @@ class SupabaseClient:
                     record[k] = v.isoformat()
                     
             res = self.admin.table("owasp_scans").insert(record).execute()
-            if hasattr(res, 'error') and res.error:
-                raise Exception(res.error.message)
-            return res.data[0] if res.data else None
+            if not res.data:
+                return None
+            return res.data[0]
         except Exception as e:
             logger.error(f"Failed to create scan: {str(e)}", exc_info=True)
             raise
 
-    def update_scan(self, scan_id: str, update: Dict) -> Optional[Dict]:
+    def update_scan(self, scan_id: str, update: Dict) -> Optional[Dict[str, Any]]:
         """Update scan record identified by scan_id"""
         try:
             # Convert datetime to ISO strings
@@ -62,26 +118,27 @@ class SupabaseClient:
                     update[k] = v.isoformat()
                     
             res = self.admin.table("owasp_scans").update(update).eq("scan_id", scan_id).execute()
-            if hasattr(res, 'error') and res.error:
-                logger.error(f"Supabase error: {res.error}")
+            if not res.data:
                 return None
-            return res.data[0] if res.data else None
+            if len(res.data) == 0:
+                return None
+            return res.data[0]
         except Exception as e:
             logger.error(f"Failed to update scan {scan_id}: {str(e)}", exc_info=True)
             return None
 
-    def fetch_scan(self, scan_id: str) -> Optional[Dict]:
+    def fetch_scan(self, scan_id: str) -> Optional[Dict[str, Any]]:
         """Retrieve a single scan record"""
         try:
             res = self.client.table("owasp_scans").select("*").eq("scan_id", scan_id).single().execute()
-            if hasattr(res, 'error') and res.error:
+            if not res.data:
                 return None
             return res.data
         except Exception as e:
             logger.error(f"Failed to fetch scan {scan_id}: {str(e)}", exc_info=True)
             return None
 
-    def insert_vulnerabilities(self, scan_id: str, vulns: List[Dict]) -> int:
+    def insert_vulnerabilities(self, scan_id: str, vulns: List[Dict[str, Any]]) -> int:
         """Bulk insert vulnerabilities; adds scan_id to each record"""
         try:
             for v in vulns:
@@ -91,20 +148,16 @@ class SupabaseClient:
                     v["discovered_at"] = v["discovered_at"].isoformat()
                     
             res = self.admin.table("owasp_vulnerabilities").insert(vulns).execute()
-            if hasattr(res, 'error') and res.error:
-                return 0
             return len(res.data) if res.data else 0
         except Exception as e:
             logger.error(f"Failed to insert vulnerabilities for {scan_id}: {str(e)}", exc_info=True)
             return 0
 
-    def fetch_vulnerabilities(self, scan_id: str) -> List[Dict]:
+    def fetch_vulnerabilities(self, scan_id: str) -> List[Dict[str, Any]]:
         """Retrieve all vulnerabilities for a given scan_id"""
         try:
             res = self.client.table("owasp_vulnerabilities").select("*").eq("scan_id", scan_id).execute()
-            if hasattr(res, 'error') and res.error:
-                return []
-            return res.data
+            return res.data if res.data else []
         except Exception as e:
             logger.error(f"Failed to fetch vulnerabilities for {scan_id}: {str(e)}", exc_info=True)
             return []
@@ -114,8 +167,8 @@ class SupabaseClient:
         try:
             with self.Session() as session:
                 session.execute(
-                    "INSERT INTO revoked_tokens (jti, expires) VALUES (:jti, :expires) "
-                    "ON CONFLICT (jti) DO UPDATE SET expires = :expires",
+                    text("INSERT INTO revoked_tokens (jti, expires) VALUES (:jti, :expires) "
+                         "ON CONFLICT (jti) DO UPDATE SET expires = :expires"),
                     {"jti": jti, "expires": expires}
                 )
                 session.commit()
@@ -130,7 +183,7 @@ class SupabaseClient:
                 
             with self.Session() as session:
                 result = session.execute(
-                    "SELECT 1 FROM revoked_tokens WHERE jti = :jti AND expires > NOW()",
+                    text("SELECT 1 FROM revoked_tokens WHERE jti = :jti AND expires > NOW()"),
                     {"jti": jti}
                 ).scalar()
                 return bool(result)

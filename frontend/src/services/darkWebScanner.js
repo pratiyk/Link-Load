@@ -1,8 +1,10 @@
-import axios from "axios";
+import apiClient, { API_ENDPOINTS } from "../config/api";
 
 export const scanDarkWeb = async (email) => {
   try {
-    const response = await axios.post("http://localhost:8000/api/darkweb_scan", { email });
+    const response = await apiClient.post(API_ENDPOINTS.scans.darkweb, {
+      email,
+    });
     return response.data;
   } catch (error) {
     throw new Error(

@@ -1,15 +1,16 @@
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Optional
 from app.utils.threat_sources import get_virustotal_score, get_abuseipdb_score, get_shodan_info
 
-router = APIRouter()
+from app.core.config import settings
+router = APIRouter(prefix=settings.API_PREFIX)
 
 class ThreatInput(BaseModel):
-    domain: Optional[str] = Field(None, example="example.com")
-    ip: Optional[str] = Field(None, example="8.8.8.8")
+    domain: Optional[str] = None
+    ip: Optional[str] = None
 
-@router.post("/api/scan-threat")
+@router.post("/scan-threat")
 def scan_threat(data: ThreatInput):
     if not data.domain and not data.ip:
         raise HTTPException(

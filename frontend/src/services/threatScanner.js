@@ -1,4 +1,4 @@
-import axios from "axios";
+import apiClient, { API_ENDPOINTS } from "../config/api";
 
 export async function scanThreat(input) {
   // Basic IPv4 regex check
@@ -7,6 +7,6 @@ export async function scanThreat(input) {
   // Prepare payload depending on input type
   const payload = isIp ? { ip: input } : { domain: input };
 
-  const res = await axios.post("http://localhost:8000/api/scan-threat", payload);
+  const res = await apiClient.post(API_ENDPOINTS.scans.threat, payload);
   return res.data;
 }
