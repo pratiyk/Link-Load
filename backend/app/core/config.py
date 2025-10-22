@@ -1,39 +1,49 @@
-from pydantic_settings import BaseSettings
-from pydantic import Field, validator, RedisDsn, PostgresDsn
-from typing import List, Optional
+from pydantic import Field, field_validator, computed_field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import List, Optional, Union
 
 class Settings(BaseSettings):
     # FastAPI
     API_PREFIX: str = "/api/v1"
-    ENVIRONMENT: str = "development"  # "production" or "development"
-    ENABLE_DOCS: bool = Field(True, env="ENABLE_DOCS")
-    CORS_ORIGINS: str = Field("http://localhost:3000", env="CORS_ORIGINS")
+    ENVIRONMENT: str = "development"
+    ENABLE_DOCS: bool = True
+    CORS_ORIGINS: str = "http://localhost:3000"
     
     # Security
-    SECRET_KEY: str = Field(..., env="SECRET_KEY")
+    SECRET_KEY: str = Field(..., description="Secret key for JWT tokens")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 1 week
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     
     # Database
-    SUPABASE_URL: str = Field(..., env="SUPABASE_URL")
-    SUPABASE_KEY: str = Field(..., env="SUPABASE_KEY")
-    SUPABASE_SERVICE_KEY: str = Field(..., env="SUPABASE_SERVICE_KEY")
-    SUPABASE_HOST: str = Field(..., env="SUPABASE_HOST")
-    SUPABASE_PORT: str = Field(..., env="SUPABASE_PORT")
-    SUPABASE_DB: str = Field(..., env="SUPABASE_DB")
-    SUPABASE_USER: str = Field(..., env="SUPABASE_USER")
-    SUPABASE_PASSWORD: str = Field(..., env="SUPABASE_PASSWORD")
+    SUPABASE_URL: str = Field(..., description="Supabase project URL")
+    SUPABASE_KEY: str = Field(..., description="Supabase public API key")
+    SUPABASE_SERVICE_KEY: str = Field(..., description="Supabase service role API key")
+    SUPABASE_HOST: str = Field(default="localhost", description="Supabase PostgreSQL host")
+    SUPABASE_PORT: Union[str, int] = Field(default="54321", description="Supabase PostgreSQL port")
+    SUPABASE_DB: str = Field(default="postgres", description="Supabase PostgreSQL database name")
+    SUPABASE_USER: str = Field(default="postgres", description="Supabase PostgreSQL user")
+    SUPABASE_PASSWORD: str = Field(default="postgres", description="Supabase PostgreSQL password")
     
     # Scanners
     ZAP_BASE_URL: str = "http://localhost:8080"
-    ZAP_API_KEY: str = Field(..., env="ZAP_API_KEY")
+    ZAP_API_KEY: str = Field(default="zap", description="OWASP ZAP API key")
     NUCLEI_BINARY_PATH: str = "nuclei"
     WAPITI_BINARY_PATH: str = "wapiti"
     SCAN_TIMEOUT: int = 600  # 10 minutes
     
-    # Redis for task queue (optional)
-    REDIS_DSN: Optional[RedisDsn] = None
+    # Redis for task queue and caching
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_PASSWORD: Optional[str] = None
+    REDIS_DB: int = 0
+    CACHE_EXPIRE_IN_SECONDS: int = 3600  # 1 hour
+    
+    # Rate Limiting
+    RATE_LIMIT_PER_MINUTE: int = Field(default=60, description="API rate limit per minute")
+    MAX_CONCURRENT_SCANS: int = Field(default=3, description="Maximum concurrent scans")
+    MAX_SCANS_PER_USER_PER_DAY: int = Field(default=10, description="Maximum scans per user per day")
+    MAX_SCAN_QUEUE_SIZE: int = Field(default=100, description="Maximum scan queue size")
     
     # Notification
     SMTP_SERVER: Optional[str] = None
@@ -42,21 +52,45 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: Optional[str] = None
     NOTIFICATION_FROM: Optional[str] = None
     
-    class Config:
-        case_sensitive = True
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    # Third-party API Keys
+    VT_API_KEY: Optional[str] = Field(default=None, description="VirusTotal API key")
+    GSB_API_KEY: Optional[str] = Field(default=None, description="Google Safe Browsing API key")
+    ABUSEIPDB_API_KEY: Optional[str] = Field(default=None, description="AbuseIPDB API key")
+    SHODAN_API_KEY: Optional[str] = Field(default=None, description="Shodan API key")
+    NVD_API_KEY: Optional[str] = Field(default=None, description="NVD API key")
+    LEAK_LOOKUP_API_KEY: Optional[str] = Field(default=None, description="LeakLookup API key")
+    RAPIDAPI_KEY: Optional[str] = Field(default=None, description="RapidAPI key")
+    GOOGLE_API_KEY: Optional[str] = Field(default=None, description="Google Cloud API key")
+    WHOIS_API_KEY: Optional[str] = Field(default=None, description="WHOIS API key")
+    HF_API_KEY: Optional[str] = Field(default=None, description="Hugging Face API key")
+    GROQ_API_KEY: Optional[str] = Field(default=None, description="Groq API key")
+    SECURITYTRAILS_API_KEY: Optional[str] = Field(default=None, description="SecurityTrails API key")
     
-    @validator("ENVIRONMENT")
-    def validate_environment(cls, v):
+    model_config = SettingsConfigDict(
+        case_sensitive=True,
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore"  # Allow additional env variables
+    )
+    
+    @field_validator("ENVIRONMENT")
+    @classmethod
+    def validate_environment(cls, v: str) -> str:
         if v not in {"development", "production"}:
             raise ValueError("ENVIRONMENT must be 'development' or 'production'")
         return v
         
-    @validator("ENABLE_DOCS", pre=True)
-    def validate_enable_docs(cls, v):
+    @field_validator("ENABLE_DOCS", mode="before")
+    @classmethod
+    def validate_enable_docs(cls, v) -> bool:
         if isinstance(v, str):
             return v.lower() in {"true", "1", "yes"}
         return bool(v)
+    
+    @computed_field
+    @property
+    def REDIS_URL(self) -> str:
+        password_part = f":{self.REDIS_PASSWORD}@" if self.REDIS_PASSWORD else ""
+        return f"redis://{password_part}{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
 settings = Settings()

@@ -1,0 +1,199 @@
+openapi: 3.0.0
+info:
+  title: Link&Load Intelligence API
+  version: 2.0.0
+  description: API documentation for Link&Load's threat intelligence platform
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+  - url: https://api.linkload.io
+    description: Production server
+
+tags:
+  - name: intelligence
+    description: Threat intelligence endpoints
+  - name: mitre
+    description: MITRE ATT&CK mapping endpoints
+  - name: realtime
+    description: Real-time intelligence streaming
+
+paths:
+  /api/v1/intelligence/threat-intel/{vuln_id}:
+    get:
+      summary: Get threat intelligence for vulnerability
+      tags: [intelligence]
+      parameters:
+        - name: vuln_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Threat intelligence data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreatIntelResponse'
+        '404':
+          description: Vulnerability not found
+        '500':
+          description: Internal server error
+
+  /api/v1/intelligence/mitre-mapping/{vuln_id}:
+    get:
+      summary: Get MITRE ATT&CK mapping
+      tags: [mitre]
+      parameters:
+        - name: vuln_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: MITRE mapping data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MITREMappingResponse'
+
+  /api/v1/intelligence/ws/stream:
+    get:
+      summary: Real-time intelligence WebSocket stream
+      tags: [realtime]
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '101':
+          description: WebSocket connection established
+
+components:
+  schemas:
+    ThreatIntelResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        source:
+          type: string
+        threat_type:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        confidence_score:
+          type: number
+          format: float
+        severity:
+          type: number
+          format: float
+        indicators:
+          type: object
+        references:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    MITREMappingResponse:
+      type: object
+      properties:
+        techniques:
+          type: array
+          items:
+            $ref: '#/components/schemas/TechniqueMapping'
+        ttps:
+          type: array
+          items:
+            $ref: '#/components/schemas/TTPRelationship'
+        capec_patterns:
+          type: array
+          items:
+            $ref: '#/components/schemas/CAPECPattern'
+        confidence_explanation:
+          $ref: '#/components/schemas/ConfidenceExplanation'
+
+    TechniqueMapping:
+      type: object
+      properties:
+        technique_id:
+          type: string
+        name:
+          type: string
+        confidence:
+          type: number
+          format: float
+        methods:
+          type: array
+          items:
+            type: string
+
+    TTPRelationship:
+      type: object
+      properties:
+        tactic:
+          type: string
+        technique:
+          type: string
+        procedure:
+          type: array
+          items:
+            type: string
+        confidence:
+          type: number
+          format: float
+
+    CAPECPattern:
+      type: object
+      properties:
+        pattern_id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        likelihood:
+          type: string
+        confidence:
+          type: number
+          format: float
+
+    ConfidenceExplanation:
+      type: object
+      properties:
+        overall_confidence:
+          type: number
+          format: float
+        matching_methods:
+          type: object
+        decision_factors:
+          type: array
+          items:
+            type: object
+            properties:
+              factor:
+                type: string
+              weight:
+                type: number
+                format: float
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - BearerAuth: []

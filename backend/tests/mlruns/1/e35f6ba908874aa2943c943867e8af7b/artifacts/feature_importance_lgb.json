@@ -1,0 +1,12 @@
+{
+  "severity": 1.1664615194013348,
+  "cvss_score": 0.6296477025791958,
+  "asset_risk_score": 0.4801473071355846,
+  "threat_count": 0.05225121298104203,
+  "avg_threat_confidence": 0.03619936493966728,
+  "days_since_discovery": 0.005134746033552251,
+  "attack_vector": 0.0012558584007681434,
+  "attack_complexity": 0.0013875493060305896,
+  "privileges_required": 0.002395698592955504,
+  "asset_type": 0.002455241067822134
+}
