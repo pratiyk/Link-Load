@@ -19,6 +19,13 @@ class ScanStatus(str, Enum):
     CANCELLED  = "cancelled"
     TIMEOUT    = "timeout"
 
+class BatchScanStatus(str, Enum):
+    PENDING    = "pending"
+    RUNNING    = "running"
+    COMPLETED  = "completed"
+    FAILED     = "failed"
+    CANCELLED  = "cancelled"
+
 class SeverityLevel(str, Enum):
     CRITICAL = "Critical"
     HIGH     = "High"
@@ -165,3 +172,22 @@ class ScanExport(BaseModel):
     include_low_risk: bool = Field(True)
     sections: List[str] = Field(default=["summary", "vulnerabilities", "recommendations"])
     custom_branding: bool = Field(False)
+
+class BatchScanRequest(BaseModel):
+    targets: List[HttpUrl] = Field(..., min_items=1, description="List of target URLs to scan")
+    scan_config: ScanRequest = Field(..., description="Scan configuration to apply to all targets")
+    concurrent_scans: int = Field(5, ge=1, le=20, description="Number of concurrent scans")
+    notify_on_completion: bool = Field(False, description="Send notification when batch completes")
+    force_new_scan: bool = Field(False, description="Force new scans ignoring cache")
+
+class BatchScan(BaseModel):
+    batch_id: str = Field(..., description="Unique batch identifier")
+    user_id: str = Field(..., description="User who initiated the batch")
+    status: BatchScanStatus = Field(..., description="Current batch status")
+    total_targets: int = Field(..., description="Total number of targets")
+    completed_targets: int = Field(0, description="Number of completed scans")
+    failed_targets: int = Field(0, description="Number of failed scans")
+    scan_config: Dict[str, Any] = Field(..., description="Scan configuration")
+    started_at: datetime = Field(..., description="Batch start time")
+    completed_at: Optional[datetime] = Field(None, description="Batch completion time")
+    scan_results: List[ScanResult] = Field(default_factory=list, description="Results of completed scans")

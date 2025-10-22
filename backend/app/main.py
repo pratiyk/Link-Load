@@ -17,16 +17,11 @@ from app.core.exceptions import (
     ValidationException,
     ResourceNotFoundException
 )
-from app.api import owasp_scanner, ws, auth
+from app.api import ws, auth
 from app.api import (
-    link_scanner,
-    threat_scanner,
     vulnerability_scanner,
-    remediation,
-    darkweb_scanner,
-    phishing_detector,
-    attack_surface_mapping,
-    vulnerabilities
+    vulnerabilities,
+    intelligence
 )
 
 logger = logging.getLogger(__name__)
@@ -105,24 +100,36 @@ if settings.ENVIRONMENT == "production":
 async def startup_event():
     """Initialize application on startup"""
     try:
+        # Initialize database
         from app.database import init_db
         init_db()
         logger.info("Database tables initialized successfully")
+        
+        # Initialize Redis cache
+        from app.core.cache import cache_manager
+        await cache_manager.initialize()
+        logger.info("Redis cache initialized successfully")
     except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
+        logger.error(f"Failed to initialize services: {e}")
+
+# Cleanup event
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on application shutdown"""
+    try:
+        # Close Redis connections
+        from app.core.cache import cache_manager
+        await cache_manager.close()
+        logger.info("Redis cache connections closed")
+    except Exception as e:
+        logger.error(f"Error during cleanup: {e}")
 
 # Register routers
 app.include_router(auth.router, prefix=settings.API_PREFIX)  # Authentication routes
-app.include_router(owasp_scanner.router)
 app.include_router(ws.router)  # WebSocket router
-app.include_router(link_scanner.router, prefix=settings.API_PREFIX)
-app.include_router(threat_scanner.router, prefix=settings.API_PREFIX)
 app.include_router(vulnerability_scanner.router, prefix=settings.API_PREFIX)
-app.include_router(remediation.router, prefix=settings.API_PREFIX)
-app.include_router(darkweb_scanner.router, prefix=settings.API_PREFIX)
-app.include_router(phishing_detector.router, prefix=settings.API_PREFIX)
-app.include_router(attack_surface_mapping.router)
 app.include_router(vulnerabilities.router)
+app.include_router(intelligence.router, prefix=settings.API_PREFIX)  # Intelligence routes
 
 # Health check endpoints
 @app.get("/")

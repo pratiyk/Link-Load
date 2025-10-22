@@ -151,6 +151,39 @@ async def get_current_user_id(
     except JWTError:
         raise credentials_exception
 
+from app.models.user import User
+from sqlalchemy.orm import Session
+from app.database import get_db
+
+async def get_current_user(
+    request: Request, 
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+) -> User:
+    """
+    Get current authenticated user from JWT token
+    
+    Args:
+        request: FastAPI request object
+        credentials: JWT credentials from auth header
+        db: Database session
+        
+    Returns:
+        User: User object for authenticated user
+        
+    Raises:
+        HTTPException: If token is invalid, expired or revoked
+    """
+    user_id = await get_current_user_id(request, credentials)
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
+
 async def get_current_user_ws(websocket: WebSocket) -> Optional[str]:
     """Authenticate user for WebSocket connection
     

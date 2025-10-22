@@ -208,5 +208,59 @@ class SupabaseClient:
             logger.error(f"Failed to fetch user scans: {str(e)}", exc_info=True)
             return []
 
+    def insert_batch_scan(self, record: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Insert a new batch scan record"""
+        try:
+            # Convert datetime objects to ISO strings
+            for k, v in record.items():
+                if isinstance(v, datetime):
+                    record[k] = v.isoformat()
+                    
+            res = self.admin.table("batch_scans").insert(record).execute()
+            if not res.data:
+                return None
+            return res.data[0]
+        except Exception as e:
+            logger.error(f"Failed to create batch scan: {str(e)}", exc_info=True)
+            raise
+
+    def update_batch_scan(self, batch_id: str, update: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Update batch scan record"""
+        try:
+            # Convert datetime to ISO strings
+            for k, v in list(update.items()):
+                if isinstance(v, datetime):
+                    update[k] = v.isoformat()
+                    
+            res = self.admin.table("batch_scans").update(update).eq("batch_id", batch_id).execute()
+            if not res.data:
+                return None
+            if len(res.data) == 0:
+                return None
+            return res.data[0]
+        except Exception as e:
+            logger.error(f"Failed to update batch scan {batch_id}: {str(e)}", exc_info=True)
+            return None
+
+    def fetch_batch_scan(self, batch_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieve a single batch scan record"""
+        try:
+            res = self.client.table("batch_scans").select("*").eq("batch_id", batch_id).single().execute()
+            if not res.data:
+                return None
+            return res.data
+        except Exception as e:
+            logger.error(f"Failed to fetch batch scan {batch_id}: {str(e)}", exc_info=True)
+            return None
+
+    def fetch_batch_scan_results(self, batch_id: str) -> List[str]:
+        """Retrieve all scan IDs associated with a batch"""
+        try:
+            res = self.client.table("owasp_scans").select("scan_id").like("scan_id", f"{batch_id}-%").execute()
+            return [r["scan_id"] for r in res.data] if res.data else []
+        except Exception as e:
+            logger.error(f"Failed to fetch batch scan results for {batch_id}: {str(e)}", exc_info=True)
+            return []
+
 # Global instance
 supabase = SupabaseClient()

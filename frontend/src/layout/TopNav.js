@@ -10,7 +10,8 @@ import {
   Menu,
   X,
   User,
-  LogOut
+  LogOut,
+  ListChecks
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import "./TopNav.css";
@@ -29,6 +30,7 @@ export default function TopNav() {
     { name: "Phishing", path: "/phishing-detector", icon: ShieldQuestion },
     { name: "Attack Surface", path: "/attack-surface", icon: Map },
     { name: "OWASP", path: "/owasp-scanner", icon: ShieldAlert },
+    { name: "Batch Scanner", path: "/batch-scanner", icon: ListChecks },
   ];
 
   // Close menus when route changes
