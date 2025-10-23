@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 import pandas as pd
 import numpy as np
@@ -10,11 +10,11 @@ class FeatureSet:
     """Container for processed features"""
     X: pd.DataFrame
     y: Optional[pd.Series] = None
-    feature_names: List[str] = None
-    categorical_features: List[str] = None
-    numerical_features: List[str] = None
-    scalers: Dict[str, StandardScaler] = None
-    encoders: Dict[str, LabelEncoder] = None
+    feature_names: List[str] = field(default_factory=list)
+    categorical_features: List[str] = field(default_factory=list)
+    numerical_features: List[str] = field(default_factory=list)
+    scalers: Dict[str, StandardScaler] = field(default_factory=dict)
+    encoders: Dict[str, LabelEncoder] = field(default_factory=dict)
 
 class FeatureEngineer:
     """Feature engineering for vulnerability risk assessment"""
@@ -108,8 +108,8 @@ class FeatureEngineer:
                 confidences.append(threat['confidence_score'])
 
         return {
-            'threat_count': len(threat_data),
-            'avg_threat_confidence': np.mean(confidences) if confidences else 0,
-            'max_threat_confidence': max(confidences) if confidences else 0,
-            'unique_threat_types': len(threat_types)
+            'threat_count': float(len(threat_data)),
+            'avg_threat_confidence': float(np.mean(confidences)) if confidences else 0.0,
+            'max_threat_confidence': float(max(confidences)) if confidences else 0.0,
+            'unique_threat_types': float(len(threat_types))
         }

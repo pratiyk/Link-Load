@@ -125,7 +125,7 @@ async def get_risk_score(
         
         if not risk_score or refresh:
             # Calculate new risk score
-            score_data = await risk_engine.calculate_risk_score(vuln)
+            score_data = risk_engine.calculate_risk_score(vuln)
             
             if not risk_score:
                 risk_score = RiskScore(vulnerability_id=vuln_id)
@@ -189,8 +189,9 @@ async def get_mitre_mapping(
         if not vuln.description:
             return []
             
-        mappings = await risk_engine.map_to_mitre_techniques(
-            vuln.description,
+        description = db.scalar(vuln.description) if vuln.description else ""
+        mappings = risk_engine.map_to_mitre_techniques(
+            description,
             threshold=threshold
         )
         
@@ -276,7 +277,7 @@ async def websocket_analysis_updates(
                     
                 # Recalculate analysis on request
                 if data == "refresh":
-                    analysis = await risk_engine.analyze_vulnerability(vuln)
+                    analysis = risk_engine.analyze_vulnerability(vuln)
                     await websocket.send_json(analysis)
                     
             except Exception as e:

@@ -1,14 +1,36 @@
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List, Tuple, Union
+from sklearn.ensemble import BaseEstimator
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
-import xgboost as xgb
-import lightgbm as lgb
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-import optuna
-import mlflow
-import shap
+
+# Optional ML dependencies
+try:
+    import xgboost as xgb
+except ImportError:
+    xgb = None
+
+try:
+    import lightgbm as lgb
+except ImportError:
+    lgb = None
+
+try:
+    import optuna
+except ImportError:
+    optuna = None
+
+try:
+    import mlflow
+except ImportError:
+    mlflow = None
+
+try:
+    import shap
+except ImportError:
+    shap = None
 import joblib
 from pathlib import Path
 from datetime import datetime
@@ -25,9 +47,14 @@ class RiskScoringModel:
 
     def train(self, X: pd.DataFrame, y: pd.Series, experiment_name: str = "risk_scoring") -> Dict[str, float]:
         """Train the ensemble model and track with MLflow"""
-        mlflow.set_experiment(experiment_name)
-        
-        with mlflow.start_run(run_name=f"ensemble_training_{datetime.now().strftime('%Y%m%d_%H%M%S')}"):
+        if mlflow is not None:
+            mlflow.set_experiment(experiment_name)
+            run_context = mlflow.start_run(run_name=f"ensemble_training_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+        else:
+            from contextlib import nullcontext
+            run_context = nullcontext()
+            
+        with run_context:
             # Split data
             X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
             
@@ -54,9 +81,10 @@ class RiskScoringModel:
                 'r2': r2_score(y_val, ensemble_pred)
             }
             
-            # Log metrics and parameters
-            mlflow.log_metrics(metrics)
-            mlflow.log_params({
+            # Log metrics and parameters if MLflow is available
+            if mlflow is not None:
+                mlflow.log_metrics(metrics)
+                mlflow.log_params({
                 'rf_max_depth': self.models['rf'].get_params()['max_depth'],
                 'xgb_learning_rate': self.models['xgb'].get_params()['learning_rate'],
                 'lgb_num_leaves': self.models['lgb'].get_params()['num_leaves']
@@ -91,7 +119,7 @@ class RiskScoringModel:
         best_rf.fit(X_train, y_train)
         return best_rf
 
-    def _train_xgboost(self, X_train, y_train, X_val, y_val) -> xgb.XGBRegressor:
+    def _train_xgboost(self, X_train, y_train, X_val, y_val) -> Any:
         """Train and optimize XGBoost model"""
         def objective(trial):
             params = {
@@ -106,26 +134,49 @@ class RiskScoringModel:
                 'base_score': float(y_train.mean())
             }
             eval_set = [(X_val, y_val)]
-            model = xgb.XGBRegressor(**params)
-            model.fit(X_train, y_train,
-                     eval_set=eval_set)
+            if xgb is not None:
+                model = xgb.XGBRegressor(**params)
+                model.fit(X_train, y_train, eval_set=eval_set)
+            else:
+                # Fallback to Random Forest if XGBoost not available
+                model = RandomForestRegressor(random_state=42)
+                model.fit(X_train, y_train)
             pred = np.array(model.predict(X_val))
             return float(mean_squared_error(y_val, pred))  # Convert prediction to numpy array
 
-        study = optuna.create_study(direction='minimize')
-        study.optimize(objective, n_trials=50)
+        if optuna is not None:
+            study = optuna.create_study(direction='minimize')
+            study.optimize(objective, n_trials=50)
+            
+            # Add base_score to best params
+            best_params = study.best_params
+            best_params['base_score'] = y_train.mean()
+            best_params['enable_categorical'] = False
+        else:
+            # Default parameters if Optuna not available
+            best_params = {
+                'max_depth': 6,
+                'learning_rate': 0.1,
+                'n_estimators': 100,
+                'min_child_weight': 3,
+                'subsample': 0.8,
+                'colsample_bytree': 0.8,
+                'reg_alpha': 0.1,
+                'reg_lambda': 0.1,
+                'base_score': y_train.mean(),
+                'enable_categorical': False
+            }
         
-        # Add base_score to best params
-        best_params = study.best_params
-        best_params['base_score'] = y_train.mean()
-        best_params['enable_categorical'] = False
-        
-        best_xgb = xgb.XGBRegressor(**best_params, random_state=42)
-        best_xgb.fit(X_train, y_train,
-                 eval_set=[(X_val, y_val)])
+        if xgb is not None:
+            best_xgb = xgb.XGBRegressor(**best_params, random_state=42)
+            best_xgb.fit(X_train, y_train, eval_set=[(X_val, y_val)])
+        else:
+            # Fallback to Random Forest if XGBoost not available
+            best_xgb = RandomForestRegressor(random_state=42)
+            best_xgb.fit(X_train, y_train)
         return best_xgb
 
-    def _train_lightgbm(self, X_train, y_train, X_val, y_val) -> lgb.LGBMRegressor:
+    def _train_lightgbm(self, X_train, y_train, X_val, y_val) -> Any:
         """Train and optimize LightGBM model"""
         def objective(trial):
             params = {
@@ -140,18 +191,28 @@ class RiskScoringModel:
                 'feature_fraction': trial.suggest_float('feature_fraction', 0.6, 1.0),
                 'min_data_in_bin': trial.suggest_int('min_data_in_bin', 3, 100)
             }
-            model = lgb.LGBMRegressor(**params, random_state=42)
-            model.fit(X_train, y_train,
-                     eval_set=[(X_val, y_val)],
-                     callbacks=[lgb.early_stopping(stopping_rounds=50)])
+            if lgb is not None:
+                model = lgb.LGBMRegressor(**params, random_state=42)
+                model.fit(X_train, y_train,
+                         eval_set=[(X_val, y_val)],
+                         callbacks=[lgb.early_stopping(stopping_rounds=50)])
+            else:
+                # Fallback to Random Forest if LightGBM not available
+                model = RandomForestRegressor(random_state=42)
+                model.fit(X_train, y_train)
             pred = np.array(model.predict(X_val))
             return float(mean_squared_error(y_val, pred))
 
         study = optuna.create_study(direction='minimize')
         study.optimize(objective, n_trials=50)
         
-        best_lgb = lgb.LGBMRegressor(**study.best_params, random_state=42)
-        best_lgb.fit(X_train, y_train)
+        if lgb is not None:
+            best_lgb = lgb.LGBMRegressor(**study.best_params, random_state=42)
+            best_lgb.fit(X_train, y_train)
+        else:
+            # Fallback to Random Forest if LightGBM not available
+            best_lgb = RandomForestRegressor(random_state=42)
+            best_lgb.fit(X_train, y_train)
         return best_lgb
 
     def _optimize_weights(self, predictions: Dict[str, np.ndarray], y_true: np.ndarray) -> Dict[str, float]:
@@ -170,15 +231,42 @@ class RiskScoringModel:
             weighted_pred = sum(weights[name] * pred for name, pred in predictions.items())
             return mean_squared_error(y_true, weighted_pred)
 
-        study = optuna.create_study(direction='minimize')
-        study.optimize(objective, n_trials=100)
-        
-        # Get best weights and normalize
-        weights = {
-            'rf': study.best_params['rf_weight'],
-            'xgb': study.best_params['xgb_weight'],
-            'lgb': study.best_params['lgb_weight']
-        }
+        if optuna is not None:
+            try:
+                study = optuna.create_study(direction='minimize')
+                study.optimize(objective, n_trials=100)
+                weights = {
+                    'rf': study.best_params['rf_weight'],
+                    'xgb': study.best_params['xgb_weight'],
+                    'lgb': study.best_params['lgb_weight']
+                }
+            except Exception as e:
+                print(f"Optuna optimization failed: {e}")
+                # Fallback to equal weights
+                weights = {'rf': 1.0, 'xgb': 1.0, 'lgb': 1.0}
+        else:
+            # Default to equal weights if Optuna is not available
+            weights = {'rf': 1.0, 'xgb': 1.0, 'lgb': 1.0}
+
+        # Normalize weights
+        total = sum(weights.values())
+        return {k: v/total for k, v in weights.items()}
+            study = optuna.create_study(direction='minimize')
+            study.optimize(objective, n_trials=100)
+            
+            # Get best weights and normalize
+            weights = {
+                'rf': study.best_params['rf_weight'],
+                'xgb': study.best_params['xgb_weight'],
+                'lgb': study.best_params['lgb_weight']
+            }
+        else:
+            # Default equal weights if Optuna not available
+            weights = {
+                'rf': 0.34,
+                'xgb': 0.33,
+                'lgb': 0.33
+            }
         total = sum(weights.values())
         return {k: v/total for k, v in weights.items()}
 
@@ -208,8 +296,11 @@ class RiskScoringModel:
                 self.feature_importances[name] = dict(zip(X.columns, importance_vals))
             else:
                 try:
-                    explainer = shap.TreeExplainer(model)
-                    shap_values = explainer.shap_values(X)
+                    if shap is not None:
+                        explainer = shap.TreeExplainer(model)
+                        shap_values = explainer.shap_values(X)
+                    else:
+                        raise ImportError('SHAP not installed')
                     
                     if isinstance(shap_values, list):
                         shap_values = shap_values[0]  # For multi-output models
@@ -221,11 +312,12 @@ class RiskScoringModel:
                     importance_vals = model.feature_importances_
                     self.feature_importances[name] = dict(zip(X.columns, importance_vals))
             
-            # Log to MLflow
-            mlflow.log_dict(
-                self.feature_importances[name], 
-                f'feature_importance_{name}.json'
-            )
+            # Log to MLflow if available
+            if mlflow is not None:
+                mlflow.log_dict(
+                    self.feature_importances[name], 
+                    f'feature_importance_{name}.json'
+                )
 
     def _acquire_lock(self, file_path: Path, shared: bool = False) -> Any:
         """Acquire a file lock using msvcrt on Windows"""

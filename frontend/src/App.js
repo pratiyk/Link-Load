@@ -1,32 +1,21 @@
 import React from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import Layout from "./layout/Layout";
-import { AuthProvider } from "./context/AuthContext";
-
-import VulnerabilityScanner from "./pages/VulnerabilityScanner";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import Profile from "./pages/Profile";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import Home from "./pages/Home";
+import ScanResults from "./pages/ScanResults";
 import NotFound from "./pages/NotFound";
 
+import "./styles/variables.css";
 import "./App.css";
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <Routes>
-          <Route path="/" element={<Navigate to="/vulnerability-scanner" replace />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/profile" element={<Layout><Profile /></Layout>} />
-          
-          <Route path="/vulnerability-scanner" element={<Layout><VulnerabilityScanner /></Layout>} />
-          
-          <Route path="*" element={<Layout><NotFound /></Layout>} />
-        </Routes>
-      </Router>
-    </AuthProvider>
+    <Router>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/scan/:scanId" element={<ScanResults />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </Router>
   );
 }
 

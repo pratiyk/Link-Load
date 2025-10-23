@@ -206,6 +206,14 @@ export const API_ENDPOINTS = {
     vulnerability: "/api/v1/scan-vulnerabilities",
     darkweb: "/api/v1/darkweb_scan",
     phishing: "/api/v1/phishing/predict",
+    comprehensive: {
+      start: "/api/v1/scans/comprehensive/start",
+      status: (id) => `/api/v1/scans/comprehensive/${id}/status`,
+      result: (id) => `/api/v1/scans/comprehensive/${id}/result`,
+      list: "/api/v1/scans/comprehensive/list",
+      cancel: (id) => `/api/v1/scans/comprehensive/${id}/cancel`,
+      ws: (id) => `/api/v1/scans/ws/${id}`,
+    },
     owasp: {
       start: "/api/v1/scan/start",
       status: (id) => `/api/v1/scan/${id}/status`,

@@ -1,4 +1,7 @@
-import mlflow
+try:
+    import mlflow
+except ImportError:
+    mlflow = None
 import pandas as pd
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -18,8 +21,9 @@ class MLPipeline:
         self.feature_engineer = FeatureEngineer()
         self.model = RiskScoringModel(model_dir)
         
-        # Initialize MLflow
-        mlflow.set_tracking_uri('sqlite:///mlflow.db')
+        # Initialize MLflow if available
+        if mlflow is not None:
+            mlflow.set_tracking_uri('sqlite:///mlflow.db')
 
     def train_pipeline(self, training_data: pd.DataFrame) -> Dict[str, float]:
         """Train the complete pipeline"""
@@ -30,6 +34,9 @@ class MLPipeline:
             feature_set = self.feature_engineer.prepare_features(training_data, fit=True)
             
             # Model training
+            if feature_set.y is None:
+                logger.error('No target values available for training')
+                raise ValueError('Training data must include target values')
             metrics = self.model.train(feature_set.X, feature_set.y)
             
             logger.info(f"Pipeline training completed. Metrics: {metrics}")
@@ -69,11 +76,15 @@ class MLPipeline:
             
             # Calculate metrics
             from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-            metrics = {
-                'test_mse': mean_squared_error(feature_set.y, predictions),
-                'test_mae': mean_absolute_error(feature_set.y, predictions),
-                'test_r2': r2_score(feature_set.y, predictions)
-            }
+            if feature_set.y is not None:
+                metrics = {
+                    'test_mse': mean_squared_error(feature_set.y, predictions),
+                    'test_mae': mean_absolute_error(feature_set.y, predictions),
+                    'test_r2': r2_score(feature_set.y, predictions)
+                }
+            else:
+                metrics = {}
+                logger.warning('No target values available for evaluation')
             
             logger.info(f"Model evaluation metrics: {metrics}")
             return metrics
@@ -89,7 +100,9 @@ class MLPipeline:
         save_dir.mkdir(parents=True, exist_ok=True)
         
         # Save the feature engineering components
-        pd.to_pickle(self.feature_engineer, save_dir / 'feature_engineer.pkl')
+        import pickle
+        with open(save_dir / 'feature_engineer.pkl', 'wb') as f:
+            pickle.dump(self.feature_engineer, f)
         
         # Save the model
         self.model.save_models()
@@ -110,7 +123,9 @@ class MLPipeline:
             else:
                 # Load latest
                 latest_fe = sorted(self.model_dir.glob('*/feature_engineer.pkl'))[-1]
-                self.feature_engineer = pd.read_pickle(latest_fe)
+                import pickle
+                with open(latest_fe, 'rb') as f:
+                    self.feature_engineer = pickle.load(f)
                 self.model.load_models()
                 
             logger.info("Pipeline loaded successfully")
