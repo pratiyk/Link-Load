@@ -3,8 +3,10 @@ from fastapi.testclient import TestClient
 from unittest.mock import Mock, patch
 from datetime import datetime
 from uuid import uuid4
+from types import SimpleNamespace
 
 from app.main import app
+from app.core.security import get_current_user
 from app.models.scan_models import BatchScanStatus
 
 @pytest.fixture
@@ -15,13 +17,22 @@ def client():
 def mock_batch_processor():
     return Mock()
 
-@pytest.fixture
-def mock_auth():
-    return Mock(return_value={"id": str(uuid4()), "email": "test@example.com"})
 
-def test_start_batch_scan(client, mock_batch_processor, mock_auth):
-    with patch('app.api.batch_scanner.batch_processor', mock_batch_processor), \
-         patch('app.api.batch_scanner.get_current_user', mock_auth):
+@pytest.fixture(autouse=True)
+def override_auth():
+    user = SimpleNamespace(id=str(uuid4()), email="test@example.com")
+
+    async def _fake_current_user():
+        return user
+
+    app.dependency_overrides[get_current_user] = _fake_current_user
+    try:
+        yield user
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+def test_start_batch_scan(client, mock_batch_processor):
+    with patch('app.api.batch_scanner.batch_processor', mock_batch_processor):
         
         response = client.post("/api/v1/batch/scan", json={
             "targets": ["https://example1.com", "https://example2.com"],
@@ -38,9 +49,8 @@ def test_start_batch_scan(client, mock_batch_processor, mock_auth):
         assert "batch_id" in response.json()
         assert mock_batch_processor.start_batch_scan.called
 
-def test_get_batch_status(client, mock_batch_processor, mock_auth):
-    with patch('app.api.batch_scanner.batch_processor', mock_batch_processor), \
-         patch('app.api.batch_scanner.get_current_user', mock_auth):
+def test_get_batch_status(client, mock_batch_processor):
+    with patch('app.api.batch_scanner.batch_processor', mock_batch_processor):
         
         batch_id = str(uuid4())
         mock_batch_processor.get_batch_status.return_value = {
@@ -57,9 +67,8 @@ def test_get_batch_status(client, mock_batch_processor, mock_auth):
         assert response.json()["batch_id"] == batch_id
         mock_batch_processor.get_batch_status.assert_called_once()
 
-def test_cancel_batch_scan(client, mock_batch_processor, mock_auth):
-    with patch('app.api.batch_scanner.batch_processor', mock_batch_processor), \
-         patch('app.api.batch_scanner.get_current_user', mock_auth):
+def test_cancel_batch_scan(client, mock_batch_processor):
+    with patch('app.api.batch_scanner.batch_processor', mock_batch_processor):
         
         batch_id = str(uuid4())
         mock_batch_processor.update_batch_status.return_value = True
@@ -72,9 +81,8 @@ def test_cancel_batch_scan(client, mock_batch_processor, mock_auth):
             BatchScanStatus.CANCELLED
         )
 
-def test_batch_scan_not_found(client, mock_batch_processor, mock_auth):
-    with patch('app.api.batch_scanner.batch_processor', mock_batch_processor), \
-         patch('app.api.batch_scanner.get_current_user', mock_auth):
+def test_batch_scan_not_found(client, mock_batch_processor):
+    with patch('app.api.batch_scanner.batch_processor', mock_batch_processor):
         
         batch_id = str(uuid4())
         mock_batch_processor.get_batch_status.return_value = None
@@ -84,34 +92,33 @@ def test_batch_scan_not_found(client, mock_batch_processor, mock_auth):
         assert response.status_code == 404
         assert response.json()["detail"] == "Batch scan not found"
 
-def test_batch_scan_validation(client, mock_auth):
-    with patch('app.api.batch_scanner.get_current_user', mock_auth):
-        # Test with empty targets
-        response = client.post("/api/v1/batch/scan", json={
-            "targets": [],
-            "scan_config": {
-                "scan_types": ["comprehensive"],
-                "include_low_risk": False
-            }
-        })
-        assert response.status_code == 422
+def test_batch_scan_validation(client):
+    # Test with empty targets
+    response = client.post("/api/v1/batch/scan", json={
+        "targets": [],
+        "scan_config": {
+            "scan_types": ["comprehensive"],
+            "include_low_risk": False
+        }
+    })
+    assert response.status_code == 422
 
-        # Test with invalid scan type
-        response = client.post("/api/v1/batch/scan", json={
-            "targets": ["https://example.com"],
-            "scan_config": {
-                "scan_types": ["invalid_type"],
-                "include_low_risk": False
-            }
-        })
-        assert response.status_code == 422
+    # Test with invalid scan type
+    response = client.post("/api/v1/batch/scan", json={
+        "targets": ["https://example.com"],
+        "scan_config": {
+            "scan_types": ["invalid_type"],
+            "include_low_risk": False
+        }
+    })
+    assert response.status_code == 422
 
-        # Test with invalid URL
-        response = client.post("/api/v1/batch/scan", json={
-            "targets": ["not_a_url"],
-            "scan_config": {
-                "scan_types": ["comprehensive"],
-                "include_low_risk": False
-            }
-        })
-        assert response.status_code == 422
+    # Test with invalid URL
+    response = client.post("/api/v1/batch/scan", json={
+        "targets": ["not_a_url"],
+        "scan_config": {
+            "scan_types": ["comprehensive"],
+            "include_low_risk": False
+        }
+    })
+    assert response.status_code == 422

@@ -3,6 +3,7 @@ Rate limiting configuration for LinkLoad API
 """
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from limits.errors import ConfigurationError
 from fastapi import Request
 from typing import Optional
 import os
@@ -13,16 +14,23 @@ import os
 REDIS_URL = os.getenv("REDIS_URL")
 
 if REDIS_URL:
-    # Production: Use Redis for rate limiting
-    limiter = Limiter(
-        key_func=get_remote_address,
-        storage_uri=REDIS_URL,
-        default_limits=["60/minute", "1000/hour"]
-    )
+    try:
+        limiter = Limiter(
+            key_func=get_remote_address,
+            storage_uri=REDIS_URL,
+            default_limits=["60/minute", "1000/hour"]
+        )
+    except ConfigurationError:
+        limiter = Limiter(
+            key_func=get_remote_address,
+            storage_uri="memory://",
+            default_limits=["60/minute", "1000/hour"]
+        )
 else:
     # Development: Use in-memory storage
     limiter = Limiter(
         key_func=get_remote_address,
+        storage_uri="memory://",
         default_limits=["60/minute", "1000/hour"]
     )
 

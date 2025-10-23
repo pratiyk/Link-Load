@@ -21,8 +21,8 @@ class NucleiScannerConfig(BaseModel):
     debug: bool = False
 
 class NucleiScanner(BaseScanner):
-    def __init__(self, config: NucleiScannerConfig):
-        self.config = config
+    def __init__(self, config: Optional[NucleiScannerConfig] = None):
+        self.config = config or NucleiScannerConfig()
         self.active_scans: Dict[str, Dict[str, Any]] = {}
         
     async def initialize(self) -> bool:

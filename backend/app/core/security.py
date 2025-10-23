@@ -104,6 +104,18 @@ class SecurityManager:
 
 security_manager = SecurityManager()
 
+
+async def verify_token(token: str) -> Optional[str]:
+    """Async-compatible wrapper returning the token subject.
+
+    Returns None when the token is invalid or revoked so callers can
+    close connections or raise auth errors without crashing.
+    """
+    payload = security_manager.verify_token(token)
+    if not payload:
+        return None
+    return payload.get("sub")
+
 async def get_current_user_id(
     request: Request, 
     credentials: HTTPAuthorizationCredentials = Depends(security)

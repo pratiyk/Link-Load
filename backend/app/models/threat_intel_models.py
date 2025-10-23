@@ -2,7 +2,7 @@
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, JSON, Table
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from typing import List, Optional
+from typing import TYPE_CHECKING
 from datetime import datetime
 from app.database import Base
 
@@ -67,6 +67,18 @@ class MITRETechnique(Base):
         secondary=vulnerability_technique_association,
         back_populates='mitre_techniques'
     )
+
+
+if TYPE_CHECKING:  # pragma: no cover - type check convenience
+    from app.models.mitre_models import CAPEC as CAPEC
+
+
+def __getattr__(name: str):  # pragma: no cover - lazy import bridge
+    if name == "CAPEC":
+        from app.models.mitre_models import CAPEC as _CAPEC
+
+        return _CAPEC
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 class ThreatIntelligence(Base):
     """Threat Intelligence data."""

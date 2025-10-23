@@ -9,50 +9,46 @@ export const scannerApi = {
 
   // Start a new scan
   startScan: async (scanRequest) => {
-    const response = await apiClient.post(API_ENDPOINTS.scans.owasp.start, scanRequest);
+    const response = await apiClient.post(API_ENDPOINTS.scans.manager.start, scanRequest);
     return response.data;
   },
 
   // Get scan result
   getScanResult: async (scanId) => {
-    const response = await apiClient.get(API_ENDPOINTS.scans.owasp.result(scanId));
+    const response = await apiClient.get(API_ENDPOINTS.scans.manager.detail(scanId));
     return response.data;
   },
 
   // Get scan progress
   getScanProgress: async (scanId) => {
-    const response = await apiClient.get(API_ENDPOINTS.scans.owasp.status(scanId));
+    const response = await apiClient.get(API_ENDPOINTS.scans.manager.detail(scanId));
     return response.data;
   },
 
   // Get scan vulnerabilities
   getScanVulnerabilities: async (scanId, filters = {}) => {
-    const params = new URLSearchParams(filters);
-    const response = await apiClient.get(`/api/v1/scan/${scanId}/vulnerabilities?${params}`);
+    const response = await apiClient.get(
+      API_ENDPOINTS.scans.manager.findings(scanId),
+      { params: filters }
+    );
     return response.data;
   },
 
   // Get all user scans
   getUserScans: async (filters = {}) => {
-    const params = new URLSearchParams(filters);
-    const response = await apiClient.get(`/api/v1/scans?${params}`);
+    const response = await apiClient.get(API_ENDPOINTS.scans.manager.list, { params: filters });
     return response.data;
   },
 
   // Cancel scan
   cancelScan: async (scanId) => {
-    const response = await apiClient.post(API_ENDPOINTS.scans.owasp.cancel(scanId));
+    const response = await apiClient.delete(API_ENDPOINTS.scans.manager.cancel(scanId));
     return response.data;
   },
 
   // Export scan results
   exportScanResults: async (scanId, exportConfig) => {
-    const response = await apiClient.post(
-      API_ENDPOINTS.scans.owasp.export(scanId),
-      exportConfig,
-      { responseType: "blob" }
-    );
-    return response;
+    throw new Error("Scan export is not available for this scanner configuration.");
   },
 
   // WebSocket connection for real-time updates

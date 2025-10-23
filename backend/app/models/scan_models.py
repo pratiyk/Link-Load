@@ -1,4 +1,4 @@
-from pydantic import BaseModel, HttpUrl, Field, validator
+from pydantic import BaseModel, HttpUrl, Field, validator, model_validator
 from typing import List, Optional, Dict, Any
 from enum import Enum
 from datetime import datetime
@@ -68,6 +68,16 @@ class ScanRequest(BaseModel):
         if values.get("authenticated") and not v:
             raise ValueError("Password required for authenticated scans")
         return v
+
+
+class BatchScanConfig(ScanRequest):
+    target_url: Optional[HttpUrl] = Field(
+        default=None,
+        description="Target URL supplied per batch item",
+    )
+
+    class Config:
+        extra = "allow"
 
 class Vulnerability(BaseModel):
     id: str = Field(..., description="Unique vulnerability ID")
@@ -175,10 +185,22 @@ class ScanExport(BaseModel):
 
 class BatchScanRequest(BaseModel):
     targets: List[HttpUrl] = Field(..., min_items=1, description="List of target URLs to scan")
-    scan_config: ScanRequest = Field(..., description="Scan configuration to apply to all targets")
+    scan_config: BatchScanConfig = Field(..., description="Scan configuration to apply to all targets")
     concurrent_scans: int = Field(5, ge=1, le=20, description="Number of concurrent scans")
     notify_on_completion: bool = Field(False, description="Send notification when batch completes")
     force_new_scan: bool = Field(False, description="Force new scans ignoring cache")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_scan_config(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+
+        scan_config = data.get("scan_config")
+        if isinstance(scan_config, ScanRequest):
+            data = dict(data)
+            data["scan_config"] = BatchScanConfig.model_validate(scan_config.model_dump())
+        return data
 
 class BatchScan(BaseModel):
     batch_id: str = Field(..., description="Unique batch identifier")

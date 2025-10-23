@@ -1,7 +1,10 @@
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 import logging
-from zapv2 import ZAPv2
+try:
+    from zapv2 import ZAPv2
+except ImportError:  # pragma: no cover - optional dependency
+    ZAPv2 = None
 import asyncio
 import uuid
 import json
@@ -25,6 +28,9 @@ class OWASPZAPScanner(BaseScanner):
         self.active_scans: Dict[str, Dict[str, Any]] = {}
 
     async def initialize(self) -> bool:
+        if ZAPv2 is None:
+            logger.warning("OWASP ZAP client library not installed; skipping initialization")
+            return False
         try:
             # Initialize ZAP API client
             self.zap = ZAPv2(
@@ -46,6 +52,8 @@ class OWASPZAPScanner(BaseScanner):
 
     async def start_scan(self, config: ScannerConfig) -> str:
         """Start a new ZAP scan"""
+        if ZAPv2 is None or self.zap is None:
+            raise RuntimeError("OWASP ZAP client not available")
         try:
             scan_id = str(uuid.uuid4())
             
@@ -89,6 +97,8 @@ class OWASPZAPScanner(BaseScanner):
 
     async def get_scan_status(self, scan_id: str) -> Dict[str, Any]:
         """Get current status of ZAP scan"""
+        if ZAPv2 is None or self.zap is None:
+            return {'status': 'unavailable'}
         try:
             if scan_id not in self.active_scans:
                 return {'status': 'not_found'}
@@ -114,6 +124,8 @@ class OWASPZAPScanner(BaseScanner):
 
     async def get_scan_results(self, scan_id: str) -> ScanResult:
         """Get results from a ZAP scan"""
+        if ZAPv2 is None or self.zap is None:
+            raise RuntimeError("OWASP ZAP client not available")
         try:
             if scan_id not in self.active_scans:
                 raise ValueError(f"Scan {scan_id} not found")
@@ -160,6 +172,8 @@ class OWASPZAPScanner(BaseScanner):
 
     async def stop_scan(self, scan_id: str) -> bool:
         """Stop a running ZAP scan"""
+        if ZAPv2 is None or self.zap is None:
+            return False
         try:
             if scan_id not in self.active_scans:
                 return False
@@ -178,6 +192,8 @@ class OWASPZAPScanner(BaseScanner):
 
     async def cleanup_scan(self, scan_id: str) -> bool:
         """Clean up a completed ZAP scan"""
+        if ZAPv2 is None or self.zap is None:
+            return False
         try:
             if scan_id not in self.active_scans:
                 return False
@@ -216,3 +232,10 @@ class OWASPZAPScanner(BaseScanner):
         except Exception as e:
             logger.error(f"Error shutting down ZAP scanner: {str(e)}")
             return False
+
+
+class ZAPScanner(OWASPZAPScanner):
+    """Backward compatible wrapper that applies default configuration."""
+
+    def __init__(self, config: Optional[ZAPScannerConfig] = None):
+        super().__init__(config or ZAPScannerConfig())

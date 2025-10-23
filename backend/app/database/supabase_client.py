@@ -1,16 +1,15 @@
 import logging
 import os
 import time
+from enum import Enum
 from supabase import create_client, Client
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.exc import SQLAlchemyError, OperationalError
+from sqlalchemy.exc import OperationalError
 from app.core.config import settings
 from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
-from tenacity import retry, stop_after_attempt, wait_exponential
+from datetime import datetime
 from contextlib import contextmanager
-from sqlalchemy.exc import SQLAlchemyError, OperationalError
 
 logger = logging.getLogger(__name__)
 
@@ -93,15 +92,21 @@ class SupabaseClient:
                 logger.warning(f"Database connection attempt {attempt + 1} failed, retrying...")
                 time.sleep(delay * (2 ** attempt))  # Exponential backoff
 
+    def _normalize_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
+        normalized = {}
+        for key, value in record.items():
+            if isinstance(value, datetime):
+                normalized[key] = value.isoformat()
+            elif isinstance(value, Enum):
+                normalized[key] = value.value
+            else:
+                normalized[key] = value
+        return normalized
+
     def create_scan(self, record: Dict) -> Optional[Dict[str, Any]]:
         """Insert a new scan record"""
         try:
-            # Convert datetime objects to ISO strings
-            for k, v in record.items():
-                if isinstance(v, datetime):
-                    record[k] = v.isoformat()
-                    
-            res = self.admin.table("owasp_scans").insert(record).execute()
+            res = self.admin.table("owasp_scans").insert(self._normalize_record(record)).execute()
             if not res.data:
                 return None
             return res.data[0]
@@ -112,12 +117,8 @@ class SupabaseClient:
     def update_scan(self, scan_id: str, update: Dict) -> Optional[Dict[str, Any]]:
         """Update scan record identified by scan_id"""
         try:
-            # Convert datetime to ISO strings
-            for k, v in list(update.items()):
-                if isinstance(v, datetime):
-                    update[k] = v.isoformat()
-                    
-            res = self.admin.table("owasp_scans").update(update).eq("scan_id", scan_id).execute()
+            normalized = self._normalize_record(update)
+            res = self.admin.table("owasp_scans").update(normalized).eq("scan_id", scan_id).execute()
             if not res.data:
                 return None
             if len(res.data) == 0:
@@ -147,7 +148,8 @@ class SupabaseClient:
                 if isinstance(v.get("discovered_at"), datetime):
                     v["discovered_at"] = v["discovered_at"].isoformat()
                     
-            res = self.admin.table("owasp_vulnerabilities").insert(vulns).execute()
+            normalized = [self._normalize_record(v) for v in vulns]
+            res = self.admin.table("owasp_vulnerabilities").insert(normalized).execute()
             return len(res.data) if res.data else 0
         except Exception as e:
             logger.error(f"Failed to insert vulnerabilities for {scan_id}: {str(e)}", exc_info=True)
@@ -211,12 +213,7 @@ class SupabaseClient:
     def insert_batch_scan(self, record: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Insert a new batch scan record"""
         try:
-            # Convert datetime objects to ISO strings
-            for k, v in record.items():
-                if isinstance(v, datetime):
-                    record[k] = v.isoformat()
-                    
-            res = self.admin.table("batch_scans").insert(record).execute()
+            res = self.admin.table("batch_scans").insert(self._normalize_record(record)).execute()
             if not res.data:
                 return None
             return res.data[0]
@@ -227,12 +224,8 @@ class SupabaseClient:
     def update_batch_scan(self, batch_id: str, update: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update batch scan record"""
         try:
-            # Convert datetime to ISO strings
-            for k, v in list(update.items()):
-                if isinstance(v, datetime):
-                    update[k] = v.isoformat()
-                    
-            res = self.admin.table("batch_scans").update(update).eq("batch_id", batch_id).execute()
+            normalized = self._normalize_record(update)
+            res = self.admin.table("batch_scans").update(normalized).eq("batch_id", batch_id).execute()
             if not res.data:
                 return None
             if len(res.data) == 0:

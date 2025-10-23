@@ -92,7 +92,7 @@ const Home = () => {
       <div className="home">
         {/* Navigation Bar */}
         <nav className="navbar">
-          <div className="navbar-logo">LL</div>
+          <div className="navbar-logo"></div>
           <ul className="navbar-menu">
             <li><a href="#console">Console</a></li>
             <li><a href="#history">History</a></li>
@@ -105,7 +105,7 @@ const Home = () => {
         <section className="title-section">
           <div className="logo-title">
             <h1 className="project-title">Link&Load</h1>
-            <p className="subtitle">AI-Powered Security Scanning Platform</p>
+            <p className="subtitle">Link. Load. Defend. Repeat.</p>
           </div>
         </section>
 

@@ -26,8 +26,8 @@ class WapitiScannerConfig(BaseModel):
     ]
 
 class WapitiScanner(BaseScanner):
-    def __init__(self, config: WapitiScannerConfig):
-        self.config = config
+    def __init__(self, config: Optional[WapitiScannerConfig] = None):
+        self.config = config or WapitiScannerConfig()
         self.active_scans: Dict[str, Dict[str, Any]] = {}
         
     async def initialize(self) -> bool:

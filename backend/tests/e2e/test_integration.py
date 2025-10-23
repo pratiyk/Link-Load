@@ -1,20 +1,40 @@
 """End-to-end test suite for Link&Load platform."""
+import os
+from pathlib import Path
+
+test_env_path = Path(__file__).parent / ".." / ".env.test"
+if test_env_path.exists():
+    with open(test_env_path, "r", encoding="utf-8") as env_file:
+        for line in env_file:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            key, value = line.split("=", 1)
+            os.environ[key.strip()] = value.strip()
+
+# Ensure in-memory SQLite database for integration tests before app import
+os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
+
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
 from httpx import AsyncClient
 import asyncio
-from app.main import app
-from app.database import get_db, SessionLocal
-from app.core.config import settings
-from app.models.user import User
-from app.models.vulnerability_models import VulnerabilityData
-from app.services.intelligence_mapping.mitre_mapper import MITREMapper
-from app.services.intelligence_mapping.realtime_intel import RealTimeIntelligence
 import jwt
 import json
 from datetime import datetime, timedelta
 import websockets
 import logging
+
+import app.database as db_module
+from app.database import Base, get_db, SessionLocal
+from app.core.config import settings
+from app.main import app
+from app.models.user import User
+from app.models.vulnerability_models import VulnerabilityData
+from app.services.intelligence_mapping.mitre_mapper import MITREMapper
+from app.services.intelligence_mapping.realtime_intel import RealTimeIntelligence
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +44,35 @@ TEST_USER = {
     "password": "test_password123!",
     "full_name": "Test User"
 }
+
+
+@pytest.fixture(scope="module", autouse=True)
+def configure_test_database():
+    """Ensure integration tests use isolated in-memory SQLite."""
+
+    database_url = os.environ["DATABASE_URL"]
+    engine = create_engine(
+        database_url,
+        connect_args={"check_same_thread": False} if database_url.startswith("sqlite") else {},
+    )
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    db_module.engine = engine
+    db_module.SessionLocal = TestingSessionLocal
+    Base.metadata.bind = engine
+
+    # Import models to register metadata
+    import app.models.threat_intel_models  # noqa: F401
+    import app.models.vulnerability_models  # noqa: F401
+    import app.models.associations  # noqa: F401
+    import app.models.user  # noqa: F401
+
+    Base.metadata.create_all(bind=engine)
+    try:
+        yield
+    finally:
+        Base.metadata.drop_all(bind=engine)
+        engine.dispose()
 
 @pytest.fixture(scope="module")
 def test_client():
