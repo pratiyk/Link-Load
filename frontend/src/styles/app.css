@@ -1,0 +1,180 @@
+@font-face {
+  font-family: 'Unmistakably';
+  src: url('../fonts/Unmistakably.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+}
+
+/* App.js - Root Styles */
+:root {
+  --color-black: #000000;
+  --color-white: #ffffff;
+  --color-yellow: #FFD700;
+  --color-purple-light: #E6E6FA;
+  --color-pink: #FF69B4;
+  --font-mono: 'SF Mono', monospace;
+  --font-display: 'Unmistakably', serif;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-mono);
+  background: var(--color-white);
+  color: var(--color-black);
+  overflow-x: hidden;
+}
+
+/* Navigation */
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 280px;
+  height: 100vh;
+  background: var(--color-black);
+  padding: 32px;
+  color: var(--color-white);
+}
+
+.navbar-items {
+  margin-top: 64px;
+}
+
+.navbar-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 24px;
+  cursor: pointer;
+}
+
+.item-number {
+  opacity: 0.5;
+  margin-right: 16px;
+  font-size: 14px;
+}
+
+/* Main Content */
+.main-content {
+  margin-left: 280px;
+  padding: 32px;
+}
+
+/* Typography */
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-weight: normal;
+}
+
+.large-heading {
+  font-size: 96px;
+  line-height: 1.1;
+  margin: 0;
+}
+
+/* Circle Highlights */
+.highlight-circle {
+  position: relative;
+  display: inline-block;
+}
+
+.highlight-circle::after {
+  content: '';
+  position: absolute;
+  width: 140%;
+  height: 140%;
+  background: var(--color-purple-light);
+  border-radius: 50%;
+  z-index: -1;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.highlight-yellow {
+  position: relative;
+  display: inline-block;
+}
+
+.highlight-yellow::after {
+  content: '';
+  position: absolute;
+  width: 140%;
+  height: 140%;
+  background: var(--color-yellow);
+  border-radius: 50%;
+  z-index: -1;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Game Console */
+.game-console {
+  width: 400px;
+  height: 600px;
+  background: var(--color-white);
+  border-radius: 20px;
+  padding: 32px;
+  box-shadow: 20px 20px 60px rgba(0, 0, 0, 0.1);
+  margin: 0 auto;
+  position: relative;
+}
+
+.game-screen {
+  width: 100%;
+  height: 300px;
+  background: var(--color-black);
+  margin-bottom: 32px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Top Navigation */
+.top-nav {
+  display: flex;
+  justify-content: flex-end;
+  padding: 32px;
+  gap: 32px;
+}
+
+.nav-link {
+  color: var(--color-black);
+  text-decoration: none;
+  font-size: 14px;
+  letter-spacing: 0.05em;
+}
+
+/* Sections */
+.section {
+  padding: 120px 0;
+}
+
+.hero-title {
+  font-size: 64px;
+  line-height: 1.2;
+  max-width: 800px;
+}
+
+.hero-subtitle {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  opacity: 0.5;
+  margin-top: 24px;
+}
+
+/* Message Box */
+.message-box {
+  margin: 120px 0;
+}
+
+.message-title {
+  font-family: var(--font-mono);
+  font-size: 32px;
+  margin-bottom: 16px;
+}
+
+.message-text {
+  font-family: var(--font-mono);
+  font-size: 48px;
+}

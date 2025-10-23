@@ -1,0 +1,135 @@
+/* Layout Styles */
+.layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 280px;
+  background-color: #000000;
+  padding: 2rem 0;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  position: fixed;
+  height: 100vh;
+}
+
+.logo-container {
+  padding: 1.5rem 2rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #000000;
+}
+
+.logo {
+  width: 80px;
+  height: auto;
+  filter: brightness(0) invert(1);
+  transition: transform 0.3s ease;
+}
+
+.logo:hover {
+  transform: scale(1.05);
+}
+
+.nav-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.folder-item {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 2rem;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  font-family: "SF Mono", monospace;
+  font-size: 14px;
+}
+
+.folder-item:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.folder-number {
+  color: #888;
+  margin-right: 1rem;
+  font-size: 12px;
+}
+
+.folder-name {
+  flex-grow: 1;
+}
+
+.folder-menu {
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 0 0.5rem;
+}
+
+/* Main Content Area */
+.main-content {
+  flex-grow: 1;
+  margin-left: 280px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.top-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2rem;
+  background-color: #ffffff;
+}
+
+.nav-links {
+  display: flex;
+  gap: 2rem;
+}
+
+.nav-link {
+  color: #000000;
+  text-decoration: none;
+  font-family: "SF Mono", monospace;
+  font-size: 14px;
+  letter-spacing: 0.05em;
+  transition: color 0.3s ease;
+}
+
+.nav-link:hover {
+  color: #967bdc;
+}
+
+.help-button {
+  color: #000000;
+  background: none;
+  border: none;
+  font-family: "SF Mono", monospace;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.content-area {
+  flex-grow: 1;
+  padding: 2rem;
+  overflow-y: auto;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 200px;
+  }
+  
+  .main-content {
+    margin-left: 200px;
+  }
+}

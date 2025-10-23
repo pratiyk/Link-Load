@@ -1,267 +1,328 @@
-# Link&Load Security Platform
+# Link&Load
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/pratiyk/Link-Load)
-[![Python](https://img.shields.io/badge/python-3.9+-green.svg)](https://python.org)
-[![React](https://img.shields.io/badge/react-18+-blue.svg)](https://reactjs.org)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+> **AI-Powered Web Security Scanning Platform**
 
-Link&Load is a comprehensive cybersecurity scanning platform designed to help organizations identify, assess, and remediate security vulnerabilities across their digital infrastructure. The platform provides automated security testing capabilities including OWASP Top 10 vulnerability detection, malicious link analysis, phishing detection, dark web monitoring, and attack surface mapping.
-
----
-
-## Overview
-
-Link&Load is an AI-powered vulnerability intelligence platform that provides comprehensive vulnerability discovery, threat contextualization, and risk quantification through advanced machine learning and MITRE ATT&CK framework integration.
+[![GitHub License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776ab.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688.svg)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-18+-61dafb.svg)](https://react.dev/)
+[![Docker](https://img.shields.io/badge/Docker-Supported-2496ed.svg)](https://www.docker.com/)
 
 ---
 
-## Core Features
+## ✨ Features
 
-### Security Scanning Modules
+### 🔍 Multi-Scanner Integration
+- **OWASP ZAP** - Comprehensive web application scanning
+- **Nuclei** - Template-based vulnerability detection  
+- **Wapiti** - Black-box web application security scanner
+- Concurrent execution for faster results
 
-- **Link Scanner**: Integrates with VirusTotal and Google Safe Browsing APIs to analyze URLs and detect malicious content, phishing attempts, and other web-based threats.
-- **OWASP Top 10 Scanner**: Uses OWASP ZAP, Nuclei, and Wapiti tools to identify common web application security issues.
-- **Phishing Detection**: Machine learning algorithms with 15+ URL feature extractors to classify potentially malicious websites and phishing attempts.
-- **Dark Web Monitoring**: Monitors data breach databases and dark web sources to identify compromised credentials and sensitive data.
-- **Threat Intelligence**: Real-time analysis of IP addresses and domains using multiple threat intelligence sources.
-- **Vulnerability Scanner**: Scans software packages and dependencies against known vulnerability databases.
-- **Attack Surface Mapping**: Discovers subdomains, open ports, and exposed services.
-- **Automated Remediation**: Generates remediation recommendations and automated fix commands.
+### 🧠 AI-Powered Analysis
+- **OpenAI GPT-4** or **Anthropic Claude** integration
+- Intelligent vulnerability analysis
+- Context-aware recommendations
+- Fallback mechanism when LLM unavailable
 
-### Platform Capabilities
+### 🎯 MITRE ATT&CK Mapping
+- Automatic technique correlation
+- Threat landscape understanding
+- Tactic and technique classification
+- Executive-ready reporting
 
-- **Real-time Processing**: Live progress updates via WebSocket.
-- **Scan Management**: Start, pause, cancel, and resume scans.
-- **Report Generation**: Export options in PDF, CSV, and JSON.
-- **User Authentication**: JWT-based authentication and role-based access control.
-- **Analytics Dashboard**: Vulnerability trends, risk scoring, and compliance reporting.
-- **Modern Interface**: Responsive web UI built with React and Tailwind CSS.
+### 📊 Risk Quantification
+- 0-10 risk scoring algorithm
+- Severity-based aggregation
+- Business context awareness
+- Compliance mapping
 
----
+### ⚡ Real-Time Updates
+- WebSocket live progress tracking
+- Instant result notifications
+- Stage-by-stage visibility
+- Connection resilience
 
-## Technical Architecture
-
-### Backend
-
-- **FastAPI**: High-performance Python web framework.
-- **PostgreSQL/Supabase**: Scalable database.
-- **SQLAlchemy**: ORM and migrations.
-- **Pydantic**: Data validation.
-- **JWT Authentication**: Secure token-based auth.
-- **AsyncIO**: Concurrent scan execution.
-- **Machine Learning**: scikit-learn and joblib for phishing detection.
-
-### Frontend
-
-- **React 18**: Modern JS framework.
-- **React Router**: Client-side routing.
-- **Tailwind CSS**: Utility-first styling.
-- **Axios**: HTTP client.
-- **WebSocket**: Real-time updates.
-- **Context API**: State management.
-
-### Security Tools
-
-- **OWASP ZAP**: Web app security testing.
-- **Nuclei**: Template-based vulnerability scanner.
-- **Wapiti**: Web app vulnerability assessment.
+### 🎮 Professional UI
+- Game console-style interface
+- Tabbed results dashboard
+- Responsive design
+- Classy aesthetic
 
 ---
 
-## Installation and Setup
+## 🚀 Quick Start
 
-### Quick Installation
+### Prerequisites
+- Docker & Docker Compose (recommended)
+- Or: Python 3.11+, Node.js 18+
+
+### Development Setup
 
 ```bash
-# Clone the repository
+# Clone repository
 git clone https://github.com/pratiyk/Link-Load.git
 cd Link-Load
 
-# Backend setup
+# Backend
 cd backend
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env
-python health_check.py
 python -m uvicorn app.main:app --reload
 
-# Frontend setup (in a new terminal)
-cd ../frontend
+# Frontend (new terminal)
+cd frontend
 npm install
-cp .env.example .env.local
 npm start
+
+# Access
+# Frontend: http://localhost:3000
+# API Docs: http://localhost:8000/docs
 ```
 
-### Service URLs
+### Production with Docker
 
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8000
-- **API Docs**: http://localhost:8000/docs
+```bash
+# Copy environment file
+cp .env.example .env
+nano .env  # Configure settings
 
----
+# Start all services
+docker-compose up -d
 
-## Project Documentation
+# Initialize database
+docker-compose exec backend alembic upgrade head
 
-- Setup Instructions: Detailed installation guide
-- Quick Start Guide: Fast setup for development
-- [API Documentation](http://localhost:8000/docs): Interactive OpenAPI docs
-
----
-
-## Use Cases
-
-- **Enterprise Security Teams**: Continuous vulnerability assessment and compliance monitoring.
-- **Development Teams**: CI/CD integration for automated security testing.
-- **Security Researchers**: Comprehensive testing and threat intelligence.
-- **Compliance Officers**: Automated scanning and reporting for regulatory requirements.
-- **Training/Education**: Security awareness and red team exercises.
-
----
-
-## Security Implementation
-
-### Authentication & Authorization
-
-- JWT token-based authentication
-- Role-based access control
-- Session management with timeout and token rotation
-
-### Data Protection
-
-- HTTPS/TLS for all API communications
-- SSL-secured database connections
-- Environment variable management for sensitive data
-- Input validation and sanitization
-
-### Infrastructure Security
-
-- Rate limiting (SlowAPI)
-- CORS policy configuration
-- Security headers (HSTS, CSP, X-Frame-Options)
-- SQL injection and XSS protection
-
----
-
-## Project Structure
-
-```text
-linkload/
-├── backend/
-│   ├── app/
-│   │   ├── api/
-│   │   ├── core/
-│   │   ├── database/
-│   │   ├── models/
-│   │   ├── services/
-│   │   └── utils/
-│   ├── logs/
-│   ├── ml_models/
-│   └── requirements.txt
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   ├── services/
-│   │   └── utils/
-│   ├── public/
-│   └── package.json
-├── docs/
-├── SETUP_INSTRUCTIONS.md
-├── QUICKSTART.md
-└── README.md
+# Access
+# Frontend: http://localhost:3000
+# API: http://localhost:8000
 ```
 
 ---
 
-## API Endpoints
+## 📚 Documentation
 
-### Authentication
+| Document | Purpose |
+|----------|---------|
+| [SETUP_AND_CONFIG.md](./SETUP_AND_CONFIG.md) | Initial setup & scanner configuration |
+| [DEVELOPER_QUICKSTART.md](./DEVELOPER_QUICKSTART.md) | Developer reference & API usage |
+| [DOCKER_SETUP.md](./DOCKER_SETUP.md) | Docker operations & troubleshooting |
+| [PRODUCTION_DEPLOYMENT.md](./PRODUCTION_DEPLOYMENT.md) | Production deployment guide |
+| [PROJECT_COMPLETION_SUMMARY.md](./PROJECT_COMPLETION_SUMMARY.md) | Complete implementation overview |
 
-```http
-POST /api/v1/auth/register    # User registration
-POST /api/v1/auth/login       # User authentication
-POST /api/v1/auth/refresh     # Token refresh
-POST /api/v1/auth/logout      # User logout
+---
+
+## 🏗️ Architecture
+
 ```
-
-### Security Scanning
-
-```http
-POST /api/v1/scan/start       # Start scan
-GET  /api/v1/scan/{id}/status # Scan progress
-GET  /api/v1/scan/{id}        # Scan results
-POST /api/v1/scan/{id}/cancel # Cancel scan
-GET  /api/v1/scan/{id}/export # Export report
-```
-
-### Specialized Services
-
-```http
-POST /api/v1/link_scan        # URL malware analysis
-POST /api/v1/phishing/predict # Phishing detection
-POST /api/v1/darkweb_scan     # Data breach monitoring
-POST /api/v1/vuln_scan        # Package vulnerability scan
-POST /api/v1/attack_surface   # Attack surface mapping
+┌─────────────────────┐
+│   React Frontend    │
+│  Home + Results     │
+└──────────┬──────────┘
+           │ REST/WS
+┌──────────▼──────────┐
+│   FastAPI Backend   │
+│  Scan Orchestration │
+└──────────┬──────────┘
+      ┌────┼────┬─────────┐
+      │    │    │         │
+    OWASP ZAP Nuclei   Wapiti
+      │    │    │         │
+      └────┴────┴────┬────┘
+          Vulnerabilities
+           │         │
+       LLM Service   DB
+        (Analysis)
 ```
 
 ---
 
-## Development Roadmap
+## 🔌 API Endpoints
 
-### Near-term
+### Start Comprehensive Scan
+```bash
+POST /api/v1/scans/comprehensive/start
+Content-Type: application/json
 
-- Docker containerization
-- Kubernetes manifests and Helm charts
-- Test suite (pytest, Jest)
-- GitHub Actions CI/CD
-- Redis integration
+{
+  "target_url": "https://example.com",
+  "scan_types": ["owasp", "nuclei", "wapiti"],
+  "options": {
+    "enable_ai_analysis": true,
+    "enable_mitre_mapping": true
+  }
+}
 
-### Future
+Response: { "scan_id": "scan_abc123..." }
+```
 
-- Granular role-based access control
-- Advanced compliance dashboard
-- API rate limiting (Redis)
-- Malware analysis
-- Smart contract auditing
-- Mobile apps
+### Get Scan Status
+```bash
+GET /api/v1/scans/comprehensive/{scan_id}/status
+Response: { "status": "in_progress", "progress": 45 }
+```
+
+### Get Scan Results
+```bash
+GET /api/v1/scans/comprehensive/{scan_id}/result
+Response: {
+  "vulnerabilities": [...],
+  "risk_assessment": {...},
+  "mitre_mapping": [...],
+  "ai_analysis": [...]
+}
+```
 
 ---
 
-## Contributing
+## 🛠️ Configuration
+
+### Environment Variables
+
+```bash
+# Database
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your-anon-key
+
+# Scanners
+ZAP_URL=http://localhost:8090
+NUCLEI_PATH=/usr/bin/nuclei
+WAPITI_PATH=/usr/bin/wapiti
+
+# LLM (choose one)
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Security
+SECRET_KEY=your-secret-key
+```
+
+See [.env.example](./.env.example) for all options.
+
+---
+
+## 🧪 Testing
+
+```bash
+# Health checks
+python backend/health_check_services.py
+
+# E2E tests
+python backend/run_e2e_tests.py
+
+# Unit tests
+pytest backend/tests/
+npm test --prefix frontend
+```
+
+---
+
+## 📦 Tech Stack
+
+### Backend
+- **Framework:** FastAPI (Python 3.11)
+- **Database:** Supabase (PostgreSQL)
+- **Scanners:** OWASP ZAP, Nuclei, Wapiti
+- **LLM:** OpenAI GPT-4, Anthropic Claude
+- **Async:** asyncio, uvicorn
+
+### Frontend
+- **Framework:** React 18
+- **Router:** React Router v6
+- **HTTP:** Axios
+- **Styling:** CSS3 with variables
+- **WebSocket:** Native API
+
+### DevOps
+- **Containerization:** Docker
+- **CI/CD:** GitHub Actions
+- **Database:** PostgreSQL
+- **Proxy:** Nginx
+
+---
+
+## 🔐 Security
+
+- ✅ JWT authentication
+- ✅ CORS protection
+- ✅ Rate limiting
+- ✅ SQL injection prevention
+- ✅ XSS protection
+- ✅ SSL/TLS encryption
+- ✅ Row-level security
+- ✅ Secure password hashing
+
+---
+
+## 📈 Project Status
+
+**Status:** ✅ **PRODUCTION READY**
+
+### Implementation Complete
+- ✅ 8 Backend API endpoints
+- ✅ 3 Integrated scanners
+- ✅ 2 LLM providers (+ fallback)
+- ✅ Professional UI
+- ✅ Docker containerization
+- ✅ CI/CD pipelines
+- ✅ Production deployment
+- ✅ Complete documentation
+
+---
+
+## 🐛 Troubleshooting
+
+### Backend won't start
+```bash
+docker-compose logs backend
+docker-compose up --build
+```
+
+### Frontend connection issues
+- Check backend: `http://localhost:8000/docs`
+- Verify CORS settings
+- Check API URL in environment
+
+### Scanner issues
+```bash
+python backend/health_check_services.py
+```
+
+---
+
+## 🤝 Contributing
+
+Contributions welcome! Please:
 
 1. Fork the repository
 2. Create a feature branch
-3. Implement improvements with tests
-4. Submit a pull request
-
-Please review contributing guidelines and code of conduct.
-
----
-
-## License
-
-MIT License. See LICENSE file for details.
+3. Make your changes
+4. Add tests
+5. Submit a pull request
 
 ---
 
-## Support & Contact
+## 📝 License
 
-- **Issues**: GitHub Issues
-- **Docs**: See docs/ directory
-- **Community**: GitHub Discussions
-- **Security Reports**: GitHub security advisories
+MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-## Acknowledgments
+## 👨‍💼 Author
 
-- OWASP Foundation
-- ProjectDiscovery (Nuclei)
-- Supabase
-- FastAPI and React communities
+**Prateek Kumar** ([@pratiyk](https://github.com/pratiyk))
 
 ---
 
-*Last updated: October 2025*
+## 📞 Support
+
+For issues, features, or questions:
+- Open [GitHub Issue](https://github.com/pratiyk/Link-Load/issues)
+- Check [Documentation](./SETUP_AND_CONFIG.md)
+- Review [Project Status](./PROJECT_COMPLETION_SUMMARY.md)
 
 ---
 
+**Built with ❤️ for web security**
+
+Latest Update: October 23, 2025 | Version: 1.0.0 | Status: ✅ Production Ready

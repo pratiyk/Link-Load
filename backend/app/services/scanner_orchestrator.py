@@ -11,14 +11,11 @@ from typing import List, Optional, Dict, Callable
 from collections import defaultdict
 from fpdf import FPDF
 import tempfile
-from fastapi_cache.decorator import cache
 
 from app.services import zap_scanner, nuclei_scanner, wapiti_scanner
 from app.database.supabase_client import supabase
 from app.models.scan_models import ScanRequest, ScanResult, Vulnerability, ScanProgress, ScanStatus, ScanSummary
 from app.core.config import settings
-from app.core.cache import cache_manager
-
 logger = logging.getLogger(__name__)
 
 class OWASPOrchestrator:
@@ -30,27 +27,52 @@ class OWASPOrchestrator:
         self.lock = threading.Lock()  # For synchronous access
         self.async_lock = asyncio.Lock()  # For async contexts
         self.subscribers = defaultdict(list)
+        self._cache = {}
     
-    @cache(expire=3600)  # Cache for 1 hour
+    def _get_from_cache(self, key: str):
+        """Get value from in-memory cache"""
+        return self._cache.get(key)
+    
+    def _set_in_cache(self, key: str, value: any, expire: int = 3600):
+        """Set value in in-memory cache"""
+        self._cache[key] = value
+    
     async def get_cached_scan_result(self, scan_id: str, user_id: str) -> Optional[ScanResult]:
         """Get cached scan result or fetch from database"""
-        return self.get_result(scan_id, user_id)
+        cache_key = f"scan_result:{scan_id}:{user_id}"
+        cached = self._get_from_cache(cache_key)
+        if cached:
+            return cached
+        result = self.get_result(scan_id, user_id)
+        if result:
+            self._set_in_cache(cache_key, result)
+        return result
 
-    @cache(expire=3600)
     async def get_cached_vulnerability_list(self, scan_id: str) -> List[Vulnerability]:
         """Get cached vulnerability list or fetch from database"""
+        cache_key = f"vulns:{scan_id}"
+        cached = self._get_from_cache(cache_key)
+        if cached:
+            return cached
         raw_vulns = supabase.fetch_vulnerabilities(scan_id)
-        return [Vulnerability(**v) for v in raw_vulns]
+        vulns = [Vulnerability(**v) for v in raw_vulns]
+        self._set_in_cache(cache_key, vulns)
+        return vulns
 
     def _generate_cache_key(self, target_url: str, scan_types: List[str]) -> str:
         """Generate a unique cache key based on scan parameters"""
         key_str = f"{target_url}:{','.join(sorted(scan_types))}"
         return hashlib.sha256(key_str.encode()).hexdigest()
 
-    @cache(expire=3600)
     async def get_cached_risk_score(self, cache_key: str, vulnerabilities: List[Vulnerability]) -> float:
         """Cache and return risk score calculation"""
-        return self.calculate_risk_score(vulnerabilities)
+        score_key = f"risk_score:{cache_key}"
+        cached = self._get_from_cache(score_key)
+        if cached:
+            return cached
+        score = self.calculate_risk_score(vulnerabilities)
+        self._set_in_cache(score_key, score)
+        return score
 
     async def run_scan(self, scan_id: str, req: ScanRequest, user_id: str):
         """Run the selected scanners with progress tracking, cancellation, and caching"""
@@ -58,11 +80,11 @@ class OWASPOrchestrator:
         
         try:
             # Check cache for recent scan results
-            cached_vulns = await cache_manager.redis.get(f"scan_vulns:{cache_key}")
+            cached_vulns = self._get_from_cache(f"scan_vulns:{cache_key}")
             
             if cached_vulns and not req.force_new_scan:
                 # Use cached results if available and not forcing new scan
-                vulns = [Vulnerability(**v) for v in json.loads(cached_vulns)]
+                vulns = cached_vulns
                 
                 # Calculate summary from cached vulnerabilities
                 summary = ScanSummary(
@@ -180,10 +202,10 @@ class OWASPOrchestrator:
                 all_vulns = [v for v in all_vulns if v.severity in ("Critical", "High", "Medium")]
             
             # Cache vulnerabilities
-            await cache_manager.redis.setex(
+            self._set_in_cache(
                 f"scan_vulns:{cache_key}",
-                settings.CACHE_EXPIRE_IN_SECONDS,
-                json.dumps([v.dict() for v in all_vulns])
+                all_vulns,
+                settings.CACHE_EXPIRE_IN_SECONDS
             )
             
             # Insert vulnerabilities

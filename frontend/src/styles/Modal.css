@@ -1,0 +1,156 @@
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(5px);
+}
+
+.modal {
+  background: var(--color-bg);
+  width: 90%;
+  max-width: 600px;
+  border: var(--pixel-size) solid var(--color-primary);
+  animation: modalEnter 0.3s var(--ease-out);
+}
+
+@keyframes modalEnter {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.modal-header {
+  padding: 1rem;
+  border-bottom: var(--pixel-size) solid var(--color-primary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(0, 245, 255, 0.05);
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  line-height: 1;
+}
+
+.modal-content {
+  padding: 2rem;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.modal-footer {
+  padding: 1rem;
+  border-top: var(--pixel-size) solid var(--color-primary);
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+
+/* Settings Styles */
+.settings-grid {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.setting-item {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.pixel-input {
+  background: transparent;
+  border: var(--pixel-size) solid var(--color-primary);
+  color: var(--color-text);
+  padding: 0.5rem;
+  font-family: var(--font-mono);
+  width: 100%;
+}
+
+.pixel-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-primary);
+}
+
+/* Report Styles */
+.report-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.report-item {
+  padding: 1rem;
+  background: rgba(0, 245, 255, 0.02);
+  transition: all 0.3s ease;
+}
+
+.report-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(0, 245, 255, 0.1);
+}
+
+.report-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.report-date {
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+}
+
+.report-stats {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.value {
+  font-family: var(--font-mono);
+  color: var(--color-primary);
+}
+
+.value.high {
+  color: var(--color-error);
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+  .modal {
+    width: 95%;
+    margin: 1rem;
+  }
+
+  .modal-content {
+    padding: 1rem;
+  }
+
+  .settings-grid {
+    gap: 1rem;
+  }
+}

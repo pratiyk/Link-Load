@@ -7,7 +7,6 @@ Create Date: 2025-10-21 12:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import JSONB
 
 # revision identifiers, used by Alembic.
 revision = '94b3c7e2a1f9'
@@ -25,7 +24,7 @@ def upgrade():
         sa.Column('total_targets', sa.Integer, nullable=False),
         sa.Column('completed_targets', sa.Integer, nullable=False, server_default='0'),
         sa.Column('failed_targets', sa.Integer, nullable=False, server_default='0'),
-        sa.Column('scan_config', JSONB, nullable=False),
+        sa.Column('scan_config', sa.JSON, nullable=False),
         sa.Column('started_at', sa.DateTime(timezone=True), nullable=False),
         sa.Column('completed_at', sa.DateTime(timezone=True)),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()')),

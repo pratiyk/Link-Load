@@ -1,0 +1,192 @@
+@font-face {
+  font-family: 'Pixel';
+  src: url('../assets/fonts/VT323-Regular.ttf') format('truetype');
+}
+
+:root {
+  /* Color palette matching the image */
+  --color-background: #ffffff;
+  --color-text: #000000;
+  --color-accent-pink: #FF69B4;
+  --color-accent-purple: #E6E6FA;
+  --color-accent-gray: #F0F0F0;
+  
+  /* Typography */
+  --font-pixel: 'Pixel', 'VT323', monospace;
+  --font-size-base: 16px;
+  --font-size-large: 2rem;
+  --font-size-heading: 3.5rem;
+}
+
+/* Reset */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--color-background);
+  font-family: var(--font-pixel);
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+}
+
+/* Pixel Text Styling */
+.pixel-text {
+  font-family: var(--font-pixel);
+  color: var(--color-text);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  image-rendering: pixelated;
+}
+
+.heading-large {
+  font-size: var(--font-size-heading);
+  line-height: 1.2;
+  margin-bottom: 1rem;
+}
+
+/* Retro Bubble */
+.retro-bubble {
+  background-color: var(--color-accent-purple);
+  border-radius: 50%;
+  padding: 2rem;
+  display: inline-block;
+  position: relative;
+  opacity: 0.6;
+}
+
+/* Navigation */
+.nav {
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.nav-links {
+  display: flex;
+  gap: 2rem;
+}
+
+.nav-link {
+  font-family: var(--font-pixel);
+  color: var(--color-text);
+  text-decoration: none;
+  text-transform: uppercase;
+  position: relative;
+  transition: color 0.3s ease;
+}
+
+.nav-link:hover {
+  color: var(--color-accent-pink);
+}
+
+/* Hero Section */
+.hero {
+  padding: 4rem 2rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Pixel Border */
+.pixel-border {
+  position: relative;
+  border: 2px solid var(--color-text);
+  image-rendering: pixelated;
+}
+
+.pixel-border::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  right: -4px;
+  bottom: -4px;
+  background: var(--color-text);
+  z-index: -1;
+}
+
+/* Retro Button */
+.retro-button {
+  font-family: var(--font-pixel);
+  background: var(--color-text);
+  color: var(--color-background);
+  border: none;
+  padding: 0.75rem 1.5rem;
+  font-size: 1.25rem;
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.2s ease;
+}
+
+.retro-button:hover {
+  transform: translate(-2px, -2px);
+}
+
+.retro-button::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  right: -2px;
+  bottom: -2px;
+  background: var(--color-accent-pink);
+  z-index: -1;
+}
+
+/* Floating Elements */
+.floating {
+  animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+}
+
+/* Year Text */
+.year-text {
+  font-size: 1rem;
+  color: var(--color-text);
+  opacity: 0.7;
+  margin-top: 2rem;
+}
+
+/* Game Console Display */
+.game-console {
+  background: var(--color-background);
+  border: 2px solid var(--color-text);
+  border-radius: 10px;
+  padding: 2rem;
+  box-shadow: 8px 8px 0 var(--color-text);
+  margin: 2rem auto;
+  max-width: 600px;
+}
+
+/* Screen Effect */
+.screen-effect {
+  position: relative;
+  overflow: hidden;
+}
+
+.screen-effect::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    transparent 50%,
+    rgba(0, 0, 0, 0.05) 50%
+  );
+  background-size: 100% 4px;
+  pointer-events: none;
+}

@@ -14,6 +14,12 @@ zaproxy>=0.4.0
 supabase>=2.0.0
 wapiti3>=3.2.0
 mitmproxy>=11.0.0
+python-owasp-zap-v2.4>=0.4.2
+nuclei-sdk>=0.1.0
+python-nuclei>=0.2.0
+aiohttp-client-cache>=0.8.1
+PyJWT>=2.6.0
+cryptography>=40.0.0
 
 # ML and data processing
 numpy>=1.20.0
@@ -37,6 +43,9 @@ tqdm>=4.60.0
 aiohttp>=3.8.0
 requests>=2.20.0
 httpx>=0.20.0
+websockets>=11.0.0
+fastapi-websocket-pubsub>=0.3.0
+asyncio>=3.4.3
 
 # Development and testing dependencies
 pytest>=7.0.0

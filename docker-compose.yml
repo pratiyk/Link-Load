@@ -1,0 +1,171 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database (Supabase alternative)
+  postgres:
+    image: postgres:15-alpine
+    container_name: linkload-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-linkload}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-linkload_dev_password}
+      POSTGRES_DB: ${DB_NAME:-linkload}
+      POSTGRES_INITDB_ARGS: "-c max_connections=200"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/scripts/init_db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-linkload}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - linkload-network
+    restart: unless-stopped
+
+  # OWASP ZAP API Server
+  owasp-zap:
+    image: owasp/zap2docker-stable:latest
+    container_name: linkload-zap
+    command: zap.sh -config api.disablekey=true -daemon -host 0.0.0.0 -port 8090
+    ports:
+      - "8090:8090"
+    environment:
+      ZAP_CONFIG_DAEMON: "true"
+      ZAP_CONFIG_API_LISTEN: "0.0.0.0"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/JSON/core/action/version/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - linkload-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: linkload-backend
+    environment:
+      # Database
+      DATABASE_URL: postgresql://${DB_USER:-linkload}:${DB_PASSWORD:-linkload_dev_password}@postgres:5432/${DB_NAME:-linkload}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_KEY: ${SUPABASE_KEY}
+      
+      # Scanners
+      ZAP_URL: http://owasp-zap:8090
+      NUCLEI_PATH: /usr/bin/nuclei
+      WAPITI_PATH: /usr/bin/wapiti
+      
+      # API
+      API_TITLE: Link&Load API
+      API_VERSION: 1.0.0
+      CORS_ORIGINS: '["http://localhost:3000","http://frontend:3000"]'
+      
+      # Security
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      
+      # Logging
+      LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      owasp-zap:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app/backend
+      - /app/backend/__pycache__
+    networks:
+      - linkload-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: linkload-frontend
+    environment:
+      REACT_APP_API_URL: http://localhost:8000
+      REACT_APP_API_TIMEOUT: 30000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend/src:/app/frontend/src
+      - ./frontend/public:/app/frontend/public
+    networks:
+      - linkload-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx Reverse Proxy (optional, for production-like setup)
+  nginx:
+    image: nginx:alpine
+    container_name: linkload-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - linkload-network
+    restart: unless-stopped
+    profiles:
+      - production
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  linkload-network:
+    driver: bridge
+
+# Usage:
+# Development:
+#   docker-compose up
+#
+# Production:
+#   docker-compose --profile production up -d
+#
+# Stop:
+#   docker-compose down
+#
+# View logs:
+#   docker-compose logs -f backend
+#   docker-compose logs -f frontend
+#   docker-compose logs -f postgres
+#
+# Clean up:
+#   docker-compose down -v
