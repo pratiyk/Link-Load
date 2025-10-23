@@ -1,5 +1,4 @@
 from typing import Dict, Any, Optional, List, Tuple, Union
-from sklearn.ensemble import BaseEstimator
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -84,11 +83,21 @@ class RiskScoringModel:
             # Log metrics and parameters if MLflow is available
             if mlflow is not None:
                 mlflow.log_metrics(metrics)
-                mlflow.log_params({
-                'rf_max_depth': self.models['rf'].get_params()['max_depth'],
-                'xgb_learning_rate': self.models['xgb'].get_params()['learning_rate'],
-                'lgb_num_leaves': self.models['lgb'].get_params()['num_leaves']
-            })
+                param_payload = {}
+                rf_params = getattr(self.models.get('rf'), 'get_params', lambda: {})()
+                if rf_params:
+                    param_payload['rf_max_depth'] = rf_params.get('max_depth')
+
+                xgb_params = getattr(self.models.get('xgb'), 'get_params', lambda: {})()
+                if xgb_params:
+                    param_payload['xgb_learning_rate'] = xgb_params.get('learning_rate')
+
+                lgb_params = getattr(self.models.get('lgb'), 'get_params', lambda: {})()
+                if lgb_params:
+                    param_payload['lgb_num_leaves'] = lgb_params.get('num_leaves')
+
+                if param_payload:
+                    mlflow.log_params(param_payload)
             
             # Calculate and log feature importance
             self._calculate_feature_importance(X, y)
@@ -111,6 +120,17 @@ class RiskScoringModel:
             model.fit(X_train, y_train)
             pred = model.predict(X_val)
             return mean_squared_error(y_val, pred)
+
+        if optuna is None:
+            default_params: Dict[str, Any] = {
+                'n_estimators': 200,
+                'max_depth': 8,
+                'min_samples_split': 2,
+                'min_samples_leaf': 1
+            }
+            model = RandomForestRegressor(**default_params, random_state=42, n_jobs=-1)
+            model.fit(X_train, y_train)
+            return model
 
         study = optuna.create_study(direction='minimize')
         study.optimize(objective, n_trials=50)
@@ -203,11 +223,26 @@ class RiskScoringModel:
             pred = np.array(model.predict(X_val))
             return float(mean_squared_error(y_val, pred))
 
-        study = optuna.create_study(direction='minimize')
-        study.optimize(objective, n_trials=50)
+        if optuna is not None:
+            study = optuna.create_study(direction='minimize')
+            study.optimize(objective, n_trials=50)
+            best_params = study.best_params
+        else:
+            best_params = {
+                'num_leaves': 31,
+                'learning_rate': 0.05,
+                'n_estimators': 200,
+                'min_child_samples': 20,
+                'subsample': 0.8,
+                'colsample_bytree': 0.8,
+                'reg_alpha': 0.0,
+                'reg_lambda': 0.0,
+                'feature_fraction': 0.8,
+                'min_data_in_bin': 20
+            }
         
         if lgb is not None:
-            best_lgb = lgb.LGBMRegressor(**study.best_params, random_state=42)
+            best_lgb = lgb.LGBMRegressor(**best_params, random_state=42)
             best_lgb.fit(X_train, y_train)
         else:
             # Fallback to Random Forest if LightGBM not available
@@ -236,39 +271,19 @@ class RiskScoringModel:
                 study = optuna.create_study(direction='minimize')
                 study.optimize(objective, n_trials=100)
                 weights = {
-                    'rf': study.best_params['rf_weight'],
-                    'xgb': study.best_params['xgb_weight'],
-                    'lgb': study.best_params['lgb_weight']
+                    'rf': study.best_params.get('rf_weight', 1.0),
+                    'xgb': study.best_params.get('xgb_weight', 1.0),
+                    'lgb': study.best_params.get('lgb_weight', 1.0)
                 }
             except Exception as e:
                 print(f"Optuna optimization failed: {e}")
-                # Fallback to equal weights
                 weights = {'rf': 1.0, 'xgb': 1.0, 'lgb': 1.0}
         else:
             # Default to equal weights if Optuna is not available
             weights = {'rf': 1.0, 'xgb': 1.0, 'lgb': 1.0}
 
-        # Normalize weights
-        total = sum(weights.values())
-        return {k: v/total for k, v in weights.items()}
-            study = optuna.create_study(direction='minimize')
-            study.optimize(objective, n_trials=100)
-            
-            # Get best weights and normalize
-            weights = {
-                'rf': study.best_params['rf_weight'],
-                'xgb': study.best_params['xgb_weight'],
-                'lgb': study.best_params['lgb_weight']
-            }
-        else:
-            # Default equal weights if Optuna not available
-            weights = {
-                'rf': 0.34,
-                'xgb': 0.33,
-                'lgb': 0.33
-            }
-        total = sum(weights.values())
-        return {k: v/total for k, v in weights.items()}
+        total = sum(weights.values()) or 1.0
+        return {k: v / total for k, v in weights.items()}
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
         """Generate ensemble predictions"""

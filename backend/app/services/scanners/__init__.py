@@ -1,5 +1,5 @@
 from .base_scanner import BaseScanner, ScannerConfig, ScanResult, Vulnerability
-from .zap_scanner import OWASPZAPScanner, ZAPScannerConfig
+from .zap_scanner import OWASPZAPScanner, ZAPScannerConfig, ZAPScanner
 from .nuclei_scanner import NucleiScanner, NucleiScannerConfig
 from .wapiti_scanner import WapitiScanner, WapitiScannerConfig
 
@@ -9,6 +9,7 @@ __all__ = [
     'ScanResult',
     'Vulnerability',
     'OWASPZAPScanner',
+    'ZAPScanner',
     'ZAPScannerConfig',
     'NucleiScanner', 
     'NucleiScannerConfig',

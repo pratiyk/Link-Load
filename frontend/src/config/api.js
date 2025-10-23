@@ -186,10 +186,8 @@ export const refreshAccessToken = async () => {
 
   // Export API endpoints configuration
 export const API_ENDPOINTS = {
-  // Base paths
   base: API_BASE_URL,
   ws: WS_BASE_URL,
-  // Authentication
   auth: {
     register: "/api/v1/auth/register",
     login: "/api/v1/auth/login",
@@ -199,13 +197,13 @@ export const API_ENDPOINTS = {
     updateProfile: "/api/v1/auth/me",
     changePassword: "/api/v1/auth/change-password",
   },
-  // Scanning
   scans: {
-    link: "/api/v1/scan-url",
     threat: "/api/v1/scan-threat",
-    vulnerability: "/api/v1/scan-vulnerabilities",
     darkweb: "/api/v1/darkweb_scan",
     phishing: "/api/v1/phishing/predict",
+    packages: {
+      scan: "/api/v1/packages/scan",
+    },
     comprehensive: {
       start: "/api/v1/scans/comprehensive/start",
       status: (id) => `/api/v1/scans/comprehensive/${id}/status`,
@@ -214,12 +212,13 @@ export const API_ENDPOINTS = {
       cancel: (id) => `/api/v1/scans/comprehensive/${id}/cancel`,
       ws: (id) => `/api/v1/scans/ws/${id}`,
     },
-    owasp: {
-      start: "/api/v1/scan/start",
-      status: (id) => `/api/v1/scan/${id}/status`,
-      result: (id) => `/api/v1/scan/${id}`,
-      cancel: (id) => `/api/v1/scan/${id}/cancel`,
-      export: (id) => `/api/v1/scan/${id}/export`,
+    manager: {
+      start: "/api/v1/scans",
+      list: "/api/v1/scans",
+      detail: (id) => `/api/v1/scans/${id}`,
+      cancel: (id) => `/api/v1/scans/${id}`,
+      findings: (id) => `/api/v1/scans/${id}/findings`,
+      schedule: "/api/v1/scans/schedule",
     },
     attackSurface: {
       list: "/api/v1/attack-surface/scans",
@@ -231,9 +230,7 @@ export const API_ENDPOINTS = {
       websocket: (id) => `/api/v1/attack-surface/scan/${id}/ws`,
     },
   },
-  // Remediation
   remediation: "/api/v1/remediate",
   remediationExport: "/api/v1/remediate/export",
-  // Health check
   health: "/health",
 };

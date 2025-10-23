@@ -12,7 +12,8 @@ from collections import defaultdict
 from fpdf import FPDF
 import tempfile
 
-from app.services import zap_scanner, nuclei_scanner, wapiti_scanner
+# Import scanner implementations directly to avoid circular imports through app.services
+from app.services.scanners import zap_scanner, nuclei_scanner, wapiti_scanner
 from app.database.supabase_client import supabase
 from app.models.scan_models import ScanRequest, ScanResult, Vulnerability, ScanProgress, ScanStatus, ScanSummary
 from app.core.config import settings

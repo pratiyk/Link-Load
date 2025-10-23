@@ -9,7 +9,8 @@ from app.models.threat_intel_models import (
 from typing import Dict, Any
 import json
 
-def test_semantic_mapping(mitre_mapper, db_session):
+@pytest.mark.anyio("asyncio")
+async def test_semantic_mapping(mitre_mapper, db_session):
     """Test semantic similarity-based technique mapping."""
     # Prepare test data
     test_description = """
@@ -27,16 +28,14 @@ def test_semantic_mapping(mitre_mapper, db_session):
     db_session.commit()
     
     # Run mapping
-    mapping_results = pytest.mark.asyncio(mitre_mapper.map_vulnerability)(
-        test_description
-    )
+    mapping_results = await mitre_mapper.map_vulnerability(test_description)
     
     assert mapping_results is not None
     assert len(mapping_results["techniques"]) > 0
     assert any(t["technique_id"] == "T1190" for t in mapping_results["techniques"])
     assert all(0 <= t["confidence"] <= 1 for t in mapping_results["techniques"])
 
-@pytest.mark.asyncio
+@pytest.mark.anyio("asyncio")
 async def test_ensemble_mapping(mitre_mapper, db_session):
     """Test multi-algorithm ensemble mapping approach."""
     # Prepare test data
@@ -78,7 +77,7 @@ async def test_ensemble_mapping(mitre_mapper, db_session):
     assert all(0 <= t["confidence"] <= 1 for t in results["techniques"])
     assert len(results["techniques"]) > 0
 
-@pytest.mark.asyncio
+@pytest.mark.anyio("asyncio")
 async def test_ttp_relationship_mapping(mitre_mapper, db_session):
     """Test TTP (Tactics, Techniques, Procedures) relationship mapping."""
     # Create test data
@@ -111,7 +110,7 @@ async def test_ttp_relationship_mapping(mitre_mapper, db_session):
     assert "procedure" in ttp
     assert ttp["tactic"] == "Initial Access"
 
-@pytest.mark.asyncio
+@pytest.mark.anyio("asyncio")
 async def test_capec_correlation(mitre_mapper, db_session):
     """Test CAPEC pattern correlation with MITRE techniques."""
     # Create test data
@@ -144,7 +143,7 @@ async def test_capec_correlation(mitre_mapper, db_session):
     assert "likelihood" in pattern
     assert "confidence" in pattern
 
-@pytest.mark.asyncio
+@pytest.mark.anyio("asyncio")
 async def test_confidence_scoring(mitre_mapper):
     """Test confidence scoring and explanation generation."""
     # Test mapping with high-confidence match
@@ -174,13 +173,14 @@ def test_technique_caching(mitre_mapper):
         assert isinstance(technique, MITRETechnique)
         assert technique.technique_id == tech_id
 
-def test_error_handling(mitre_mapper):
+@pytest.mark.anyio("asyncio")
+async def test_error_handling(mitre_mapper):
     """Test error handling in mapping process."""
     # Test with invalid input
     with pytest.raises(ValueError):
-        pytest.mark.asyncio(mitre_mapper.map_vulnerability)(None)
+        await mitre_mapper.map_vulnerability(None)
     
     # Test with empty description
-    results = pytest.mark.asyncio(mitre_mapper.map_vulnerability)("")
+    results = await mitre_mapper.map_vulnerability("")
     assert results["techniques"] == []
     assert results["confidence_explanation"]["overall_confidence"] == 0

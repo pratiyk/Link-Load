@@ -9,7 +9,7 @@ metadata = Base.metadata
 vulnerability_technique_association = Table(
     'vulnerability_technique_association',
     metadata,
-    Column('vulnerability_id', Integer, ForeignKey('vulnerability_data.id'), primary_key=True),
+    Column('vulnerability_id', Integer, ForeignKey('vulnerabilities.id'), primary_key=True),
     Column('technique_id', String, ForeignKey('mitre_techniques.technique_id'), primary_key=True),
     extend_existing=True  # Allow table redefinition
 )

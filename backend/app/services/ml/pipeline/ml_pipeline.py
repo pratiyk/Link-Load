@@ -2,10 +2,24 @@
 from typing import Dict, Any, List, Optional
 import os
 from datetime import datetime
+from contextlib import nullcontext
 import pandas as pd
 import numpy as np
-import mlflow
-from mlflow.tracking import MlflowClient
+
+try:
+    import mlflow  # type: ignore
+    from mlflow.tracking import MlflowClient  # type: ignore
+except ImportError:  # pragma: no cover - optional dependency
+    mlflow = None
+
+    class MlflowClient:  # type: ignore
+        """Fallback MlflowClient stub when mlflow is unavailable."""
+
+        def __init__(self, *args, **kwargs) -> None:  # noqa: D401
+            pass
+
+        def __getattr__(self, item):  # noqa: D401
+            raise AttributeError(item)
 from ..features.feature_engineering import FeatureEngineer
 from ..models.ensemble import EnsembleModel
 
@@ -16,13 +30,14 @@ class MLPipeline:
         self.model_dir = model_dir
         self.feature_engineer = FeatureEngineer()
         self.model = None
-        self.mlflow_client = MlflowClient()
+        self.mlflow_client = MlflowClient() if mlflow is not None else None
         
         # Ensure model directory exists
         os.makedirs(model_dir, exist_ok=True)
         
         # Initialize MLflow
-        mlflow.set_tracking_uri(os.path.join(model_dir, "mlruns"))
+        if mlflow is not None:
+            mlflow.set_tracking_uri(os.path.join(model_dir, "mlruns"))
 
     def train_pipeline(
         self, 
@@ -32,8 +47,13 @@ class MLPipeline:
     ) -> None:
         """Train the full ML pipeline."""
         # Start MLflow experiment
-        mlflow.set_experiment(experiment_name)
-        with mlflow.start_run() as run:
+        if mlflow is not None:
+            mlflow.set_experiment(experiment_name)
+            run_context = mlflow.start_run()
+        else:
+            run_context = nullcontext()
+
+        with run_context as run:
             # Extract features
             X = []
             for vuln in training_data:
@@ -45,36 +65,44 @@ class MLPipeline:
             y = np.array(labels)
             
             # Feature selection
-            selected_features = self.feature_engineer.select_features(X_df, y)
+            selected_features = self.feature_engineer.select_features(X_df, pd.Series(labels))
             
             # Transform features
-            X_transformed = self.feature_engineer.transform_features(X_df.to_dict('records')[0])
+            X_transformed = [
+                self.feature_engineer.transform_features(record)
+                for record in X_df.to_dict('records')
+            ]
             
             # Initialize and train model
             self.model = EnsembleModel()
             
             # Log parameters
-            mlflow.log_params({
-                "n_features": len(selected_features),
-                "selected_features": ", ".join(selected_features),
-                "model_type": "stacked_ensemble"
-            })
+            if mlflow is not None:
+                mlflow.log_params({
+                    "n_features": len(selected_features),
+                    "selected_features": ", ".join(selected_features),
+                    "model_type": "stacked_ensemble"
+                })
             
             # Optimize hyperparameters
             best_params = self.model.optimize_hyperparameters(X_transformed, y)
-            mlflow.log_params({"best_" + k: v for k, v in best_params.items()})
+            if mlflow is not None:
+                mlflow.log_params({"best_" + k: v for k, v in best_params.items()})
             
             # Train model
             self.model.fit(X_transformed, y)
             
             # Log metrics
             metrics = self.model.model_metrics
-            mlflow.log_metrics(metrics)
+            if mlflow is not None:
+                mlflow.log_metrics(metrics)
             
             # Save model
-            model_path = os.path.join(self.model_dir, f"model_{run.info.run_id}.joblib")
+            run_id = getattr(getattr(run, "info", None), "run_id", datetime.utcnow().strftime("%Y%m%d%H%M%S"))
+            model_path = os.path.join(self.model_dir, f"model_{run_id}.joblib")
             self.model.save_model(model_path)
-            mlflow.log_artifact(model_path)
+            if mlflow is not None:
+                mlflow.log_artifact(model_path)
 
     def predict(self, vulnerability: Dict[str, Any]) -> Dict[str, Any]:
         """Generate predictions for a vulnerability."""
