@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import '../styles/home.css';
 import scannerService from '../services/scannerService';
+import logo from '../assets/logo.png';
 
 const Home = () => {
   const navigate = useNavigate();
@@ -37,7 +38,7 @@ const Home = () => {
     setError(null);
     setScanProgress(0);
     setCurrentStage('Initializing...');
-    
+
     try {
       // Start the scan
       const result = await scannerService.startScan(scanUrl, ['owasp', 'nuclei', 'wapiti'], {
@@ -45,7 +46,7 @@ const Home = () => {
         enable_mitre_mapping: true,
         include_low_risk: true
       });
-      
+
       const scanId = result.scan_id;
 
       // Setup WebSocket for real-time updates
@@ -94,16 +95,16 @@ const Home = () => {
         <nav className="navbar">
           <div className="navbar-logo"></div>
           <ul className="navbar-menu">
-            <li><a href="#console">Console</a></li>
-            <li><a href="#history">History</a></li>
-            <li><a href="#intelligence">Intelligence</a></li>
-            <li><a href="mailto:hello@linkload.app">Contact</a></li>
+            <li className="login-register-tab">
+              <a href="/login">Login / Register</a>
+            </li>
           </ul>
         </nav>
 
         {/* Title Section */}
         <section className="title-section">
           <div className="logo-title">
+            <img src={logo} alt="Link&Load Logo" className="home-logo" />
             <h1 className="project-title">Link&Load</h1>
             <p className="subtitle">Link. Load. Defend. Repeat.</p>
           </div>
@@ -145,7 +146,7 @@ const Home = () => {
                 className="scan-input"
                 disabled={isScanActive}
               />
-              <button 
+              <button
                 onClick={handleScan}
                 className="scan-button"
                 disabled={isScanActive || !scanUrl.trim()}
@@ -168,8 +169,8 @@ const Home = () => {
             <h2 className="section-title">Recent Scans</h2>
             <div className="recent-scans-list">
               {recentScans.map((scan) => (
-                <div 
-                  key={scan.scan_id} 
+                <div
+                  key={scan.scan_id}
                   className="recent-scan-item"
                   onClick={() => handleScanFromHistory(scan.scan_id)}
                 >

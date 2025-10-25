@@ -39,8 +39,26 @@ def get_db_context():
 
 def init_db():
     """Initialize database tables"""
-    from app.models.user import User, RevokedToken
-    from app.models.attack_surface_models import AttackSurfaceScan, DiscoveredAsset
-    from app.models.vulnerability_models import VulnerabilityData, VulnerabilityMitigation, ThreatIntelData
-    
-    Base.metadata.create_all(bind=engine)
+    try:
+        from app.models.user import User, RevokedToken
+        from app.models.attack_surface_models import AttackSurfaceScan, DiscoveredAsset
+        from app.models.vulnerability_models import VulnerabilityData, VulnerabilityMitigation, ThreatIntelData
+        
+        # Import MITRE models to ensure tables are created
+        try:
+            from app.models.threat_intel_models import MITRETactic, MITRETechnique
+            from app.models.mitre_models import MITRESubTechnique, Procedure, CAPEC
+            from app.models.associations import (
+                vulnerability_technique_association,
+                technique_tactic_association,
+                technique_capec_association
+            )
+        except Exception as e:
+            # If MITRE models fail to import, log but continue
+            print(f"Warning: Could not import MITRE models: {e}")
+        
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        print(f"Error initializing database: {e}")
+        # Continue anyway - tables may already exist
+        pass

@@ -223,3 +223,25 @@ async def get_current_user_ws(websocket: WebSocket) -> Optional[str]:
     except JWTError:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return None
+
+
+async def get_current_user_optional(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
+    db: Session = Depends(get_db)
+) -> Optional[User]:
+    """
+    Get current authenticated user from JWT token (optional)
+    
+    Returns None if no authentication is provided instead of raising an error.
+    Useful for endpoints that work with or without authentication.
+    """
+    if not credentials:
+        return None
+    
+    try:
+        user_id = await get_current_user_id(request, credentials)
+        user = db.query(User).filter(User.id == user_id).first()
+        return user
+    except HTTPException:
+        return None

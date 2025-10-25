@@ -118,7 +118,21 @@ class SupabaseClient:
         """Update scan record identified by scan_id"""
         try:
             normalized = self._normalize_record(update)
-            res = self.admin.table("owasp_scans").update(normalized).eq("scan_id", scan_id).execute()
+            
+            # Filter out columns that might not exist in schema yet (for Supabase cache issues)
+            # Known safe columns
+            safe_columns = {
+                'scan_id', 'user_id', 'target_url', 'status', 'progress', 'current_stage',
+                'started_at', 'completed_at', 'scan_types', 'options', 'risk_score', 
+                'risk_level', 'ai_analysis', 'mitre_mapping', 'remediation_strategies',
+                'created_at', 'updated_at'
+            }
+            
+            # Filter update to only include safe columns initially
+            filtered_update = {k: v for k, v in normalized.items() if k in safe_columns}
+            
+            # Try with filtered update
+            res = self.admin.table("owasp_scans").update(filtered_update).eq("scan_id", scan_id).execute()
             if not res.data:
                 return None
             if len(res.data) == 0:

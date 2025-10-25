@@ -19,7 +19,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  color: #967bdc;
+  color: #000;
 }
 
 .report-date {
@@ -63,10 +63,10 @@
 
 .report-list::-webkit-scrollbar-track {
   background: #000;
-  border: 2px solid #967bdc;
+  border: 2px solid #000;
 }
 
 .report-list::-webkit-scrollbar-thumb {
-  background: #967bdc;
+  background: #000;
   border: 2px solid #000;
 }

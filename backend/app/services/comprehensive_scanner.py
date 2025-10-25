@@ -26,10 +26,20 @@ class ComprehensiveScanner:
             from app.services.scanners.nuclei_scanner import NucleiScanner, NucleiScannerConfig
             from app.services.scanners.wapiti_scanner import WapitiScanner, WapitiScannerConfig
             
-            # Create default configurations
-            zap_config = ZAPScannerConfig()
-            nuclei_config = NucleiScannerConfig()
-            wapiti_config = WapitiScannerConfig()
+            # Create configurations from settings
+            zap_config = ZAPScannerConfig(
+                api_key=settings.ZAP_API_KEY or "",
+                host=settings.ZAP_BASE_URL.split("://")[1].split(":")[0] if settings.ZAP_BASE_URL else "127.0.0.1",
+                port=int(settings.ZAP_BASE_URL.split(":")[-1]) if settings.ZAP_BASE_URL else 8080
+            )
+            
+            nuclei_config = NucleiScannerConfig(
+                binary_path=settings.NUCLEI_BINARY_PATH or "nuclei"
+            )
+            
+            wapiti_config = WapitiScannerConfig(
+                binary_path=settings.WAPITI_BINARY_PATH or "wapiti"
+            )
             
             self.scanners = {
                 "owasp": OWASPZAPScanner(zap_config),
@@ -142,15 +152,40 @@ class ComprehensiveScanner:
 
             scanner = self.scanners[scanner_type]
             
-            # Configure scanner
-            if hasattr(scanner, 'configure'):
-                scanner.configure({
-                    "timeout": options.get("timeout_minutes", 30) * 60,
-                    "deep_scan": options.get("deep_scan", False)
-                })
+            # Configure scanner options
+            from app.services.scanners.base_scanner import ScannerConfig
+            scanner_config = ScannerConfig(
+                target_url=target_url,
+                scan_types=[scanner_type],
+                include_passive=True,
+                max_scan_duration=options.get("timeout_minutes", 30) * 60
+            )
 
             # Execute scan
-            vulnerabilities = await scanner.scan(target_url)
+            scan_task_id = await scanner.start_scan(scanner_config)
+            logger.info(f"{scanner_type} scan started with task ID: {scan_task_id}")
+            
+            # Wait for scan to complete (poll status)
+            max_wait = options.get("timeout_minutes", 30) * 60
+            wait_interval = 5  # seconds
+            elapsed = 0
+            
+            while elapsed < max_wait:
+                status = await scanner.get_scan_status(scan_task_id)
+                scan_status = status.get('status')
+                
+                if scan_status == 'completed':
+                    break
+                elif scan_status in ['failed', 'error', 'not_found']:
+                    logger.error(f"{scanner_type} scan failed: {status}")
+                    return []
+                
+                await asyncio.sleep(wait_interval)
+                elapsed += wait_interval
+            
+            # Get scan results
+            result = await scanner.get_scan_results(scan_task_id)
+            vulnerabilities = result.vulnerabilities if result and hasattr(result, 'vulnerabilities') else []
             
             logger.info(f"{scanner_type} scanner found {len(vulnerabilities)} vulnerabilities")
             return vulnerabilities

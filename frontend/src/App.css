@@ -53,7 +53,7 @@ svg {
 
 /* Custom Focus Styles */
 :focus {
-  outline: 2px solid #967bdc;
+  outline: 2px solid #000;
   outline-offset: 2px;
 }
 

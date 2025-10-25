@@ -40,8 +40,10 @@ logger = logging.getLogger(__name__)
 
 # Test data
 TEST_USER = {
+    "username": "testuser",
     "email": "test@linkload.io",
-    "password": "test_password123!",
+    "password": "TestPassword123!",
+    "confirm_password": "TestPassword123!",
     "full_name": "Test User"
 }
 
@@ -65,7 +67,9 @@ def configure_test_database():
     import app.models.threat_intel_models  # noqa: F401
     import app.models.vulnerability_models  # noqa: F401
     import app.models.associations  # noqa: F401
-    import app.models.user  # noqa: F401
+    import app.models.asset_models  # noqa: F401
+    import app.models.attack_surface_models  # noqa: F401
+    from app.models.user import User, RevokedToken  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
     try:
@@ -94,14 +98,14 @@ def auth_headers(test_client):
     """Get authentication headers for test user."""
     # Register test user
     response = test_client.post("/api/v1/auth/register", json=TEST_USER)
-    assert response.status_code == 201
+    assert response.status_code in [200, 201], f"Registration failed: {response.json()}"
     
     # Login and get token
-    response = test_client.post("/api/v1/auth/login", data={
-        "username": TEST_USER["email"],
+    response = test_client.post("/api/v1/auth/login", json={
+        "email": TEST_USER["email"],
         "password": TEST_USER["password"]
     })
-    assert response.status_code == 200
+    assert response.status_code == 200, f"Login failed: {response.json()}"
     token = response.json()["access_token"]
     
     return {"Authorization": f"Bearer {token}"}

@@ -24,17 +24,6 @@
   box-shadow: 8px 8px 0 rgba(18, 20, 23, 0.15);
 }
 
-.navbar::after {
-  content: '';
-  position: absolute;
-  right: var(--spacing-4);
-  bottom: -14px;
-  width: var(--spacing-4);
-  height: var(--spacing-4);
-  background: var(--color-block-green);
-  border: 3px solid var(--color-black);
-}
-
 .navbar-logo {
   font-family: var(--font-display);
   font-size: var(--font-size-lg);
@@ -71,6 +60,24 @@
 .navbar-menu a:hover {
   border-color: var(--color-black);
   box-shadow: 4px 4px 0 rgba(18, 20, 23, 0.2);
+  transform: translate(-2px, -2px);
+}
+
+.login-register-tab {
+  margin-left: auto;
+}
+
+.login-register-tab a {
+  background: var(--color-block-green);
+  border: 3px solid var(--color-black) !important;
+  padding: calc(var(--spacing-1) * 1.2) calc(var(--spacing-2) * 1.5);
+  box-shadow: 6px 6px 0 rgba(18, 20, 23, 0.2);
+  font-weight: 700;
+}
+
+.login-register-tab a:hover {
+  background: #3BA080;
+  box-shadow: 8px 8px 0 rgba(18, 20, 23, 0.25);
   transform: translate(-2px, -2px);
 }
 
@@ -116,6 +123,16 @@
   background: var(--color-block-yellow);
   bottom: -26px;
   right: calc(var(--spacing-3) * 0.8);
+}
+
+.home-logo {
+  width: 120px;
+  height: auto;
+  margin-bottom: var(--spacing-2);
+  border: 3px solid var(--color-black);
+  box-shadow: 8px 8px 0 rgba(18, 20, 23, 0.2);
+  background: var(--color-white);
+  padding: var(--spacing-2);
 }
 
 .project-title {
@@ -547,6 +564,7 @@
 }
 
 @media (max-width: 520px) {
+
   .logo-title,
   .game-console,
   .heading-section {
