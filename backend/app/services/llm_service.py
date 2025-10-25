@@ -112,7 +112,7 @@ class OpenAIProvider(LLMProvider):
         
         try:
             response = await self.client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-3.5-turbo",  # Using GPT-3.5-turbo for better compatibility
                 messages=[
                     {
                         "role": "system",
@@ -178,7 +178,7 @@ class OpenAIProvider(LLMProvider):
         
         try:
             response = await self.client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-3.5-turbo",  # Using GPT-3.5-turbo for better compatibility
                 messages=[
                     {
                         "role": "system",
@@ -192,6 +192,161 @@ class OpenAIProvider(LLMProvider):
                 temperature=0.7,
                 max_tokens=500,
                 timeout=15
+            )
+            
+            return response.choices[0].message.content
+        
+        except Exception as e:
+            logger.error(f"Executive summary generation failed: {e}")
+            raise
+    
+    def _prepare_vulnerability_summary(self, vulnerabilities: List[Dict]) -> str:
+        """Prepare vulnerability data for LLM analysis"""
+        summary = ""
+        for i, vuln in enumerate(vulnerabilities, 1):
+            summary += f"""
+{i}. {vuln.get('title', 'Unknown')}
+   Severity: {vuln.get('severity', 'Unknown')}
+   CVSS: {vuln.get('cvss_score', 'N/A')}
+   Location: {vuln.get('location', 'Unknown')}
+   Description: {vuln.get('description', 'No description')}
+"""
+        return summary
+
+
+class GroqProvider(LLMProvider):
+    """Groq AI integration - Fast, free, and powerful"""
+    
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key or os.getenv('GROQ_API_KEY')
+        if not self.api_key:
+            raise ValueError("GROQ_API_KEY environment variable not set")
+        
+        try:
+            from groq import AsyncGroq
+            self.client = AsyncGroq(api_key=self.api_key)
+        except ImportError:
+            raise ImportError("groq package not installed. Run: pip install groq")
+    
+    async def analyze_vulnerabilities(
+        self,
+        vulnerabilities: List[Dict[str, Any]],
+        target_url: str,
+        business_context: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Analyze vulnerabilities using Groq (Mixtral or Llama)
+        """
+        if not vulnerabilities:
+            return {"recommendations": [], "summary": "No vulnerabilities found"}
+        
+        vuln_summary = self._prepare_vulnerability_summary(vulnerabilities[:10])
+        
+        prompt = f"""
+        You are a senior security researcher analyzing vulnerability scan results.
+        
+        Target: {target_url}
+        {f'Business Context: {business_context}' if business_context else ''}
+        
+        Found Vulnerabilities:
+        {vuln_summary}
+        
+        For each vulnerability, provide:
+        1. Severity assessment (1-10 scale)
+        2. Specific remediation steps (2-3 actionable items)
+        3. Business impact if exploited
+        4. Estimated fix complexity (low/medium/high)
+        
+        Format as JSON with structure:
+        {{
+            "vulnerabilities": [
+                {{
+                    "title": "...",
+                    "remediation": ["step1", "step2", ...],
+                    "business_impact": "...",
+                    "fix_complexity": "...",
+                    "priority": 1-10
+                }},
+                ...
+            ],
+            "executive_summary": "..."
+        }}
+        """
+        
+        try:
+            response = await self.client.chat.completions.create(
+                model="llama-3.3-70b-versatile",  # Fast, capable, and free model
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a cybersecurity expert. Always respond with valid JSON."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0.7,
+                max_tokens=2000
+            )
+            
+            import json
+            result_text = response.choices[0].message.content
+            
+            # Parse JSON response
+            try:
+                result = json.loads(result_text)
+            except json.JSONDecodeError:
+                if "```json" in result_text:
+                    result_text = result_text.split("```json")[1].split("```")[0]
+                    result = json.loads(result_text)
+                else:
+                    raise
+            
+            logger.info(f"Groq analysis complete for {len(vulnerabilities)} vulnerabilities")
+            return result
+        
+        except Exception as e:
+            logger.error(f"Groq analysis failed: {e}")
+            raise
+    
+    async def generate_executive_summary(
+        self,
+        vulnerabilities: List[Dict[str, Any]],
+        risk_score: float,
+        risk_level: str
+    ) -> str:
+        """Generate executive summary using Groq"""
+        
+        prompt = f"""
+        Generate a concise executive summary (2-3 paragraphs) of security scan results.
+        
+        Total Vulnerabilities: {len(vulnerabilities)}
+        Risk Score: {risk_score}/10
+        Risk Level: {risk_level}
+        
+        Severity Breakdown:
+        - Critical: {sum(1 for v in vulnerabilities if v.get('severity') == 'critical')}
+        - High: {sum(1 for v in vulnerabilities if v.get('severity') == 'high')}
+        - Medium: {sum(1 for v in vulnerabilities if v.get('severity') == 'medium')}
+        - Low: {sum(1 for v in vulnerabilities if v.get('severity') == 'low')}
+        """
+        
+        try:
+            response = await self.client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a cybersecurity executive summarizing scan results."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0.7,
+                max_tokens=500
             )
             
             return response.choices[0].message.content
@@ -427,10 +582,19 @@ class LLMService:
     
     def _initialize_provider(self):
         """Initialize the appropriate LLM provider"""
-        if os.getenv('OPENAI_API_KEY'):
+        # Priority: Groq (free, fast) > OpenAI > Anthropic > Fallback
+        if os.getenv('GROQ_API_KEY'):
+            try:
+                self._provider = GroqProvider()
+                logger.info("LLM Service: Using Groq (Mixtral)")
+            except Exception as e:
+                logger.warning(f"Groq initialization failed: {e}, trying alternatives")
+                self._try_alternative_providers()
+        
+        elif os.getenv('OPENAI_API_KEY'):
             try:
                 self._provider = OpenAIProvider()
-                logger.info("LLM Service: Using OpenAI GPT-4")
+                logger.info("LLM Service: Using OpenAI GPT-3.5")
             except Exception as e:
                 logger.warning(f"OpenAI initialization failed: {e}, using fallback")
                 self._provider = FallbackProvider()
@@ -446,6 +610,27 @@ class LLMService:
         else:
             logger.warning("No LLM API keys configured, using fallback provider")
             self._provider = FallbackProvider()
+    
+    def _try_alternative_providers(self):
+        """Try alternative providers if primary fails"""
+        if os.getenv('OPENAI_API_KEY'):
+            try:
+                self._provider = OpenAIProvider()
+                logger.info("LLM Service: Fallback to OpenAI GPT-3.5")
+                return
+            except Exception:
+                pass
+        
+        if os.getenv('ANTHROPIC_API_KEY'):
+            try:
+                self._provider = AnthropicProvider()
+                logger.info("LLM Service: Fallback to Anthropic Claude")
+                return
+            except Exception:
+                pass
+        
+        logger.warning("All LLM providers failed, using fallback")
+        self._provider = FallbackProvider()
     
     async def analyze_vulnerabilities(
         self,

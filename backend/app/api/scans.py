@@ -10,7 +10,7 @@ from pydantic import BaseModel, HttpUrl, Field
 from datetime import datetime
 
 from app.services.comprehensive_scanner import ComprehensiveScanner
-from app.core.security import get_current_user
+from app.core.security import get_current_user_optional
 from app.database.supabase_client import supabase
 from app.core.config import settings
 
@@ -68,13 +68,13 @@ class VulnerabilityInfo(BaseModel):
 
 class RiskAssessment(BaseModel):
     """Risk assessment for vulnerabilities"""
-    overall_risk_score: float
-    risk_level: str
-    vulnerability_count: int
-    critical_count: int
-    high_count: int
-    medium_count: int
-    low_count: int
+    overall_risk_score: float = 0.0
+    risk_level: str = "Unknown"
+    vulnerability_count: int = 0
+    critical_count: int = 0
+    high_count: int = 0
+    medium_count: int = 0
+    low_count: int = 0
     risk_factors: Optional[List[Dict[str, Any]]] = None
 
 
@@ -123,7 +123,7 @@ active_connections: Dict[str, WebSocket] = {}
 async def start_comprehensive_scan(
     request: StartScanRequest,
     background_tasks: BackgroundTasks,
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_optional)
 ):
     """
     Start a comprehensive security scan
@@ -136,9 +136,10 @@ async def start_comprehensive_scan(
         scan_id = f"scan_{uuid.uuid4().hex[:12]}"
         
         # Create scan record
+        user_id = current_user.id if current_user else "anonymous"
         scan_record = {
             "scan_id": scan_id,
-            "user_id": current_user.id,
+            "user_id": user_id,
             "target_url": str(request.target_url),
             "scan_types": request.scan_types,
             "status": "pending",
@@ -157,7 +158,7 @@ async def start_comprehensive_scan(
             str(request.target_url),
             request.scan_types,
             request.options.dict(),
-            current_user.id
+            user_id  # Use the user_id we already determined above
         )
         
         logger.info(f"Scan {scan_id} initiated for {request.target_url}")
@@ -175,7 +176,7 @@ async def start_comprehensive_scan(
 @router.get("/comprehensive/{scan_id}/status")
 async def get_scan_status(
     scan_id: str,
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_optional)
 ):
     """Get the current status of a scan"""
     try:
@@ -201,7 +202,7 @@ async def get_scan_status(
 @router.get("/comprehensive/{scan_id}/result", response_model=ScanResultsResponse)
 async def get_scan_results(
     scan_id: str,
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_optional)
 ):
     """Get the complete results of a scan"""
     try:
@@ -233,13 +234,13 @@ async def get_scan_results(
                 for v in vulns
             ],
             risk_assessment=RiskAssessment(
-                overall_risk_score=scan.get("risk_score", 0.0),
-                risk_level=scan.get("risk_level", "Unknown"),
+                overall_risk_score=scan.get("risk_score") or scan.get("overall_risk_score") or 0.0,
+                risk_level=scan.get("risk_level") or "Unknown",
                 vulnerability_count=len(vulns),
-                critical_count=len([v for v in vulns if v.get("severity") == "critical"]),
-                high_count=len([v for v in vulns if v.get("severity") == "high"]),
-                medium_count=len([v for v in vulns if v.get("severity") == "medium"]),
-                low_count=len([v for v in vulns if v.get("severity") == "low"]),
+                critical_count=scan.get("critical_count") or len([v for v in vulns if v.get("severity") == "critical"]),
+                high_count=scan.get("high_count") or len([v for v in vulns if v.get("severity") == "high"]),
+                medium_count=scan.get("medium_count") or len([v for v in vulns if v.get("severity") == "medium"]),
+                low_count=scan.get("low_count") or len([v for v in vulns if v.get("severity") == "low"]),
                 risk_factors=scan.get("risk_factors")
             ),
             mitre_mapping=scan.get("mitre_mapping"),
@@ -257,7 +258,7 @@ async def get_scan_results(
 @router.get("/comprehensive/{scan_id}")
 async def get_scan_result_redirect(
     scan_id: str,
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_optional)
 ):
     """Alias for get_scan_results for backward compatibility"""
     return await get_scan_results(scan_id, current_user)
@@ -324,11 +325,12 @@ async def list_scans(
     skip: int = 0,
     limit: int = 10,
     status: Optional[str] = None,
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_optional)
 ):
     """List user's scans with optional filtering"""
     try:
-        scans = supabase.get_user_scans(current_user.id, status, limit, skip)
+        user_id = current_user.id if current_user else "anonymous"
+        scans = supabase.get_user_scans(user_id, status, limit, skip)
         return {
             "scans": scans,
             "total": len(scans),
@@ -343,7 +345,7 @@ async def list_scans(
 @router.post("/comprehensive/{scan_id}/cancel")
 async def cancel_scan(
     scan_id: str,
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_optional)
 ):
     """Cancel an in-progress scan"""
     try:

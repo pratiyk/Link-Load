@@ -1,0 +1,14 @@
+artifact_uri: file:///C:/prateek/projects/linkload/backend/mlruns/932511571775344746/db001baf5e8e4d489385881279cec744/artifacts
+end_time: 1761285419316
+entry_point_name: ''
+experiment_id: '932511571775344746'
+lifecycle_stage: active
+run_id: db001baf5e8e4d489385881279cec744
+run_name: ensemble_training_20251024_112624
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1761285384544
+status: 3
+tags: []
+user_id: GeeliPucchi

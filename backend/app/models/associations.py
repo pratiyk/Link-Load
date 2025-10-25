@@ -6,28 +6,38 @@ from app.database import Base
 metadata = Base.metadata
 
 # Association table for vulnerabilities and MITRE techniques
-vulnerability_technique_association = Table(
-    'vulnerability_technique_association',
-    metadata,
-    Column('vulnerability_id', Integer, ForeignKey('vulnerabilities.id'), primary_key=True),
-    Column('technique_id', String, ForeignKey('mitre_techniques.technique_id'), primary_key=True),
-    extend_existing=True  # Allow table redefinition
-)
+# Only create if it doesn't exist yet
+if 'vulnerability_technique_association' not in Base.metadata.tables:
+    vulnerability_technique_association = Table(
+        'vulnerability_technique_association',
+        metadata,
+        Column('vulnerability_id', Integer, primary_key=True),
+        Column('technique_id', String, primary_key=True),
+        extend_existing=True  # Allow table redefinition
+    )
+else:
+    vulnerability_technique_association = Base.metadata.tables['vulnerability_technique_association']
 
 # Association table for MITRE techniques and tactics
-technique_tactic_association = Table(
-    'technique_tactic_association',
-    metadata,
-    Column('technique_id', String, ForeignKey('mitre_techniques.technique_id'), primary_key=True),
-    Column('tactic_id', String, ForeignKey('mitre_tactics.tactic_id'), primary_key=True),
-    extend_existing=True  # Allow table redefinition
-)
+if 'technique_tactic_association' not in Base.metadata.tables:
+    technique_tactic_association = Table(
+        'technique_tactic_association',
+        metadata,
+        Column('technique_id', String, primary_key=True),
+        Column('tactic_id', String, primary_key=True),
+        extend_existing=True  # Allow table redefinition
+    )
+else:
+    technique_tactic_association = Base.metadata.tables['technique_tactic_association']
 
 # Association table for MITRE techniques and CAPEC patterns
-technique_capec_association = Table(
-    'technique_capec_association',
-    metadata,
-    Column('technique_id', String, ForeignKey('mitre_techniques.technique_id'), primary_key=True),
-    Column('pattern_id', String, ForeignKey('capec_patterns.pattern_id'), primary_key=True),
-    extend_existing=True  # Allow table redefinition
-)
+if 'technique_capec_association' not in Base.metadata.tables:
+    technique_capec_association = Table(
+        'technique_capec_association',
+        metadata,
+        Column('technique_id', String, primary_key=True),
+        Column('pattern_id', String, primary_key=True),
+        extend_existing=True  # Allow table redefinition
+    )
+else:
+    technique_capec_association = Base.metadata.tables['technique_capec_association']

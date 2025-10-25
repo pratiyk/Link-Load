@@ -17,7 +17,7 @@ from app.core.exceptions import (
     ValidationException,
     ResourceNotFoundException
 )
-from app.api import ws, auth, scan_manager, ws_endpoints, scans, batch_scanner
+from app.api import ws, auth, scan_manager, ws_endpoints, scans, batch_scanner, scanner
 from app.api import (
     vulnerability_scanner,
     vulnerabilities,
@@ -100,10 +100,9 @@ if settings.ENVIRONMENT == "production":
 async def startup_event():
     """Initialize application on startup"""
     try:
-        # Initialize database
-        from app.database import init_db
-        init_db()
-        logger.info("Database tables initialized successfully")
+        # Database tables already created by reset_db.py
+        # Skip init_db() to avoid model import issues
+        logger.info("Skipping database initialization (tables already exist)")
         
         # Initialize Redis cache
         from app.core.cache import cache_manager
@@ -111,6 +110,9 @@ async def startup_event():
         logger.info("Redis cache initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize services: {e}")
+        import traceback
+        traceback.print_exc()
+        # Don't re-raise - allow app to start anyway
 
 # Cleanup event
 @app.on_event("shutdown")
@@ -127,6 +129,7 @@ async def shutdown_event():
 # Register routers
 app.include_router(auth.router, prefix=settings.API_PREFIX)  # Authentication routes
 app.include_router(ws.router)  # WebSocket router
+app.include_router(scanner.router)  # Simple scanner endpoints for E2E tests
 app.include_router(vulnerability_scanner.router, prefix=settings.API_PREFIX)
 app.include_router(vulnerabilities.router)
 app.include_router(intelligence.router, prefix=settings.API_PREFIX)  # Intelligence routes

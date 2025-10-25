@@ -65,6 +65,7 @@ class Settings(BaseSettings):
     HF_API_KEY: Optional[str] = Field(default=None, description="Hugging Face API key")
     GROQ_API_KEY: Optional[str] = Field(default=None, description="Groq API key")
     SECURITYTRAILS_API_KEY: Optional[str] = Field(default=None, description="SecurityTrails API key")
+    OPENAI_API_KEY: Optional[str] = Field(default=None, description="OpenAI API key")
     
     model_config = SettingsConfigDict(
         case_sensitive=True,

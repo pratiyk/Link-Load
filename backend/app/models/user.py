@@ -5,12 +5,11 @@ import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, Boolean, DateTime, Integer, Text
 from sqlalchemy.sql import func
-from sqlalchemy.ext.declarative import declarative_base
 from pydantic import BaseModel, EmailStr, Field, validator
 from typing import Optional
 import re
 
-Base = declarative_base()
+from app.database import Base
 
 
 class User(Base):

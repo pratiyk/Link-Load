@@ -1,9 +1,22 @@
-from fastapi_cache import FastAPICache
-from fastapi_cache.backends.redis import RedisBackend
-from redis import asyncio as aioredis
+import logging
 from typing import Optional
 
+try:
+    from fastapi_cache import FastAPICache
+    from fastapi_cache.backends.redis import RedisBackend
+    CACHE_AVAILABLE = True
+except ImportError:
+    CACHE_AVAILABLE = False
+
+try:
+    from redis import asyncio as aioredis
+    REDIS_AVAILABLE = True
+except ImportError:
+    REDIS_AVAILABLE = False
+
 from .config import settings
+
+logger = logging.getLogger(__name__)
 
 class CacheManager:
     _instance: Optional['CacheManager'] = None
@@ -19,22 +32,35 @@ class CacheManager:
         if self._initialized:
             return
 
-        # Initialize Redis connection
-        self._redis = aioredis.Redis(
-            host=settings.REDIS_HOST,
-            port=settings.REDIS_PORT,
-            password=settings.REDIS_PASSWORD,
-            db=settings.REDIS_DB,
-            decode_responses=True,
-            encoding="utf-8"
-        )
+        if not CACHE_AVAILABLE or not REDIS_AVAILABLE:
+            logger.warning(
+                "Cache dependencies not available (fastapi-cache or redis-py missing). "
+                "Running without cache support."
+            )
+            self._initialized = True
+            return
 
-        # Initialize FastAPI Cache
-        FastAPICache.init(
-            RedisBackend(self._redis),
-            prefix="linkload_cache:",
-            expire=settings.CACHE_EXPIRE_IN_SECONDS
-        )
+        try:
+            # Initialize Redis connection
+            self._redis = aioredis.Redis(
+                host=settings.REDIS_HOST,
+                port=settings.REDIS_PORT,
+                password=settings.REDIS_PASSWORD,
+                db=settings.REDIS_DB,
+                decode_responses=True,
+                encoding="utf-8"
+            )
+
+            # Initialize FastAPI Cache
+            FastAPICache.init(
+                RedisBackend(self._redis),
+                prefix="linkload_cache:",
+                expire=settings.CACHE_EXPIRE_IN_SECONDS
+            )
+            logger.info("Cache initialized successfully")
+        except Exception as e:
+            logger.warning(f"Failed to initialize cache: {e}. Running without cache support.")
+            self._redis = None
 
         self._initialized = True
 
@@ -46,6 +72,10 @@ class CacheManager:
 
     async def close(self):
         if self._redis:
-            await self._redis.close()
+            try:
+                await self._redis.close()
+                logger.info("Cache connections closed")
+            except Exception as e:
+                logger.warning(f"Error closing cache: {e}")
 
 cache_manager = CacheManager()

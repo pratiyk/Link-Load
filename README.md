@@ -43,10 +43,21 @@
 - Connection resilience
 
 ### Professional UI
-- Game console-style interface
+- Retro geometric design system
+- Bold blocks with playful shadows
 - Tabbed results dashboard
 - Responsive design
-- Classy aesthetic
+- Game console-style interface
+
+---
+
+## Demo
+
+![alt text](image-1.png)
+
+![alt text](image-2.png)
+
+![alt text](image-3.png)
 
 ---
 
@@ -97,18 +108,6 @@ docker-compose exec backend alembic upgrade head
 # Frontend: http://localhost:3000
 # API: http://localhost:8000
 ```
-
----
-
-## 📚 Documentation
-
-| Document | Purpose |
-|----------|---------|
-| [SETUP_AND_CONFIG.md](./SETUP_AND_CONFIG.md) | Initial setup & scanner configuration |
-| [DEVELOPER_QUICKSTART.md](./DEVELOPER_QUICKSTART.md) | Developer reference & API usage |
-| [DOCKER_SETUP.md](./DOCKER_SETUP.md) | Docker operations & troubleshooting |
-| [PRODUCTION_DEPLOYMENT.md](./PRODUCTION_DEPLOYMENT.md) | Production deployment guide |
-| [PROJECT_COMPLETION_SUMMARY.md](./PROJECT_COMPLETION_SUMMARY.md) | Complete implementation overview |
 
 ---
 
@@ -243,30 +242,30 @@ npm test --prefix frontend
 
 ## Security
 
-- ✅ JWT authentication
-- ✅ CORS protection
-- ✅ Rate limiting
-- ✅ SQL injection prevention
-- ✅ XSS protection
-- ✅ SSL/TLS encryption
-- ✅ Row-level security
-- ✅ Secure password hashing
+- JWT authentication
+- CORS protection
+- Rate limiting
+- SQL injection prevention
+- XSS protection
+- SSL/TLS encryption
+- Row-level security
+- Secure password hashing
 
 ---
 
 ## Project Status
 
-**Status:** ✅ **PRODUCTION READY**
+**Status:**  **PRODUCTION READY**
 
 ### Implementation Complete
-- ✅ 8 Backend API endpoints
-- ✅ 3 Integrated scanners
-- ✅ 2 LLM providers (+ fallback)
-- ✅ Professional UI
-- ✅ Docker containerization
-- ✅ CI/CD pipelines
-- ✅ Production deployment
-- ✅ Complete documentation
+- 8 Backend API endpoints
+- 3 Integrated scanners
+- 2 LLM providers (+ fallback)
+- Professional UI
+- Docker containerization
+- CI/CD pipelines
+- Production deployment
+- Complete documentation
 
 ---
 
@@ -310,7 +309,7 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Author
 
-**Prateek Kumar** ([@pratiyk](https://github.com/pratiyk))
+**Prateek Shrivastava** ([@pratiyk](https://github.com/pratiyk))
 
 ---
 
@@ -325,4 +324,4 @@ For issues, features, or questions:
 
 **Built with ❤️ for web security**
 
-Latest Update: October 23, 2025 | Version: 1.0.0 | Status: Production Ready
+Latest Update: October 26, 2025 | Version: 1.0.0 | Status: Production Ready
