@@ -8,7 +8,10 @@ class ScannerService {
 
   async startScan(targetUrl, scanTypes, options = {}) {
     try {
-      const response = await apiClient.post(API_ENDPOINTS.scans.comprehensive.start, {
+      console.log('[ScannerService] Starting scan for URL:', targetUrl);
+      console.log('[ScannerService] API Endpoint:', API_ENDPOINTS.scans.comprehensive.start);
+
+      const payload = {
         target_url: targetUrl,
         scan_types: scanTypes,
         options: {
@@ -20,10 +23,26 @@ class ScannerService {
           business_context: options.business_context || null,
           compliance_frameworks: options.compliance_frameworks || null
         }
-      });
+      };
+      console.log('[ScannerService] Payload:', payload);
+
+      const response = await apiClient.post(API_ENDPOINTS.scans.comprehensive.start, payload);
+      console.log('[ScannerService] Response received:', response.data);
+
+      if (!response.data.scan_id) {
+        console.error('[ScannerService] Response does not contain scan_id:', response.data);
+        throw new Error('Invalid response: missing scan_id');
+      }
+
       return response.data;
     } catch (error) {
-      throw new Error(error?.response?.data?.detail || "Failed to start scan");
+      console.error('[ScannerService] Error:', error);
+      console.error('[ScannerService] Error details:', {
+        message: error.message,
+        response: error?.response?.data,
+        status: error?.response?.status
+      });
+      throw new Error(error?.response?.data?.detail || error.message || "Failed to start scan");
     }
   }
 
@@ -71,10 +90,12 @@ class ScannerService {
     try {
       // Construct WebSocket URL
       const wsUrl = `${WS_BASE_URL}/api/v1/scans/ws/${scanId}`;
+      console.log('[WebSocket] Connecting to:', wsUrl);
+
       const ws = new WebSocket(wsUrl);
-      
+
       ws.onopen = () => {
-        console.log(`WebSocket connected for scan ${scanId}`);
+        console.log('[WebSocket] Connected for scan:', scanId);
         this.activeConnections.add(scanId);
         if (callbacks.onOpen) {
           callbacks.onOpen();
@@ -83,28 +104,31 @@ class ScannerService {
 
       ws.onmessage = (event) => {
         try {
+          console.log('[WebSocket] Message received:', event.data);
           const data = JSON.parse(event.data);
-          
+
           if (data.type === "progress" && callbacks.onProgress) {
+            console.log('[WebSocket] Progress update:', data.status);
             callbacks.onProgress(data.status);
           } else if (data.type === "result" && callbacks.onComplete) {
+            console.log('[WebSocket] Scan completed:', data.results);
             callbacks.onComplete(data.results);
             this.closeWebSocket(scanId);
           }
         } catch (error) {
-          console.error("Error parsing WebSocket message:", error);
+          console.error("[WebSocket] Error parsing message:", error, event.data);
         }
       };
 
       ws.onerror = (error) => {
-        console.error(`WebSocket error for scan ${scanId}:`, error);
+        console.error(`[WebSocket] Error for scan ${scanId}:`, error);
         if (callbacks.onError) {
           callbacks.onError(error);
         }
       };
 
       ws.onclose = () => {
-        console.log(`WebSocket disconnected for scan ${scanId}`);
+        console.log(`[WebSocket] Disconnected for scan ${scanId}`);
         this.activeConnections.delete(scanId);
         if (callbacks.onClose) {
           callbacks.onClose();
@@ -114,7 +138,7 @@ class ScannerService {
       this.websockets.set(scanId, ws);
       return ws;
     } catch (error) {
-      console.error("Failed to setup WebSocket:", error);
+      console.error("[WebSocket] Failed to setup WebSocket:", error);
       if (callbacks.onError) {
         callbacks.onError(error);
       }

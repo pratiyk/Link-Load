@@ -33,12 +33,53 @@ class ComprehensiveScanner:
                 port=int(settings.ZAP_BASE_URL.split(":")[-1]) if settings.ZAP_BASE_URL else 8080
             )
             
+            import os
+            import sys
+
+            def _repo_root() -> str:
+                here = os.path.abspath(os.path.dirname(__file__))
+                return os.path.abspath(os.path.join(here, "..", "..", ".."))
+
+            def _resolve_binary(default_value: str, tool_folder: str, binary_name: str) -> str:
+                # 1) Absolute path that exists
+                if default_value and os.path.isabs(default_value) and os.path.exists(default_value):
+                    return default_value
+                # 2) Check repo tools folder
+                repo = _repo_root()
+                candidate = os.path.join(repo, tool_folder, binary_name)
+                if sys.platform.startswith("win") and not os.path.exists(candidate):
+                    candidate_exe = candidate + ".exe"
+                    if os.path.exists(candidate_exe):
+                        return candidate_exe
+                if os.path.exists(candidate):
+                    return candidate
+                # 3) Fallback to value (PATH)
+                return default_value
+
+            templates_dir = getattr(settings, "NUCLEI_TEMPLATES_PATH", "") or ""
+            if templates_dir and not os.path.exists(templates_dir):
+                # Avoid passing an invalid templates path
+                templates_dir = ""
+
+            nuclei_binary = _resolve_binary(settings.NUCLEI_BINARY_PATH or "nuclei", os.path.join("tools", "nuclei"), "nuclei")
             nuclei_config = NucleiScannerConfig(
-                binary_path=settings.NUCLEI_BINARY_PATH or "nuclei"
+                binary_path=nuclei_binary,
+                templates_dir=templates_dir
             )
             
+            # For Wapiti, try virtual environment first, then settings, then PATH
+            wapiti_binary = settings.WAPITI_BINARY_PATH
+            if not wapiti_binary or not os.path.exists(wapiti_binary):
+                # Try virtual environment Scripts folder
+                venv_wapiti = os.path.join(sys.prefix, "Scripts", "wapiti.exe" if sys.platform.startswith("win") else "wapiti")
+                if os.path.exists(venv_wapiti):
+                    wapiti_binary = venv_wapiti
+                else:
+                    # Fall back to resolve_binary helper
+                    wapiti_binary = _resolve_binary("wapiti", os.path.join("tools", "wapiti"), "wapiti")
+            
             wapiti_config = WapitiScannerConfig(
-                binary_path=settings.WAPITI_BINARY_PATH or "wapiti"
+                binary_path=wapiti_binary
             )
             
             self.scanners = {
@@ -101,19 +142,42 @@ class ComprehensiveScanner:
                     if isinstance(result, list):
                         all_vulnerabilities.extend(result)
 
+            # Normalize vulnerability data for consistent field names
+            normalized_vulns = []
+            for vuln in all_vulnerabilities:
+                normalized = {
+                    "title": vuln.get("title") or vuln.get("name") or "Unknown",
+                    "name": vuln.get("name") or vuln.get("title") or "Unknown",
+                    "description": vuln.get("description") or "",
+                    "severity": (vuln.get("severity") or "medium").lower(),
+                    "confidence": vuln.get("confidence") or "medium",
+                    "url": vuln.get("url") or "",
+                    "path": vuln.get("path") or vuln.get("url") or "",
+                    "location": vuln.get("location") or vuln.get("url") or vuln.get("path") or "",
+                    "parameter": vuln.get("parameter") or "",
+                    "evidence": vuln.get("evidence") or "",
+                    "solution": vuln.get("solution") or vuln.get("recommendation") or "",
+                    "recommendation": vuln.get("recommendation") or vuln.get("solution") or "",
+                    "references": vuln.get("references") or [],
+                    "tags": vuln.get("tags") or [],
+                    "cwe_id": vuln.get("cwe_id"),
+                    "raw_finding": vuln.get("raw_finding")
+                }
+                normalized_vulns.append(normalized)
+
             # Store vulnerabilities
-            if all_vulnerabilities:
-                count = supabase.insert_vulnerabilities(scan_id, all_vulnerabilities)
+            if normalized_vulns:
+                count = supabase.insert_vulnerabilities(scan_id, normalized_vulns)
                 logger.info(f"Inserted {count} vulnerabilities for scan {scan_id}")
 
             # Perform AI analysis
-            await self._perform_ai_analysis(scan_id, all_vulnerabilities, options)
+            await self._perform_ai_analysis(scan_id, normalized_vulns, options)
 
             # Perform MITRE mapping
-            await self._perform_mitre_mapping(scan_id, all_vulnerabilities)
+            await self._perform_mitre_mapping(scan_id, normalized_vulns)
 
             # Calculate risk score
-            await self._calculate_risk_assessment(scan_id, all_vulnerabilities)
+            await self._calculate_risk_assessment(scan_id, normalized_vulns)
 
             # Update scan to completed
             await self._update_scan_progress(
@@ -186,12 +250,29 @@ class ComprehensiveScanner:
             # Get scan results
             result = await scanner.get_scan_results(scan_task_id)
             vulnerabilities = result.vulnerabilities if result and hasattr(result, 'vulnerabilities') else []
+
+            # Persist scanner diagnostics for troubleshooting
+            try:
+                scan_record = supabase.fetch_scan(scan_id) or {}
+                debug_map = dict(scan_record.get("scanner_debug") or {})
+                debug_map[scanner_type] = getattr(result, 'raw_findings', {})
+                supabase.update_scan(scan_id, {"scanner_debug": debug_map})
+            except Exception as _:
+                pass
             
             logger.info(f"{scanner_type} scanner found {len(vulnerabilities)} vulnerabilities")
             return vulnerabilities
 
         except Exception as e:
             logger.error(f"Error running {scanner_type} scanner: {e}")
+            # Persist error details for troubleshooting
+            try:
+                scan_record = supabase.fetch_scan(scan_id) or {}
+                debug_map = dict(scan_record.get("scanner_debug") or {})
+                debug_map[scanner_type] = {"error": str(e)}
+                supabase.update_scan(scan_id, {"scanner_debug": debug_map})
+            except Exception:
+                pass
             return []
 
     async def _perform_ai_analysis(
@@ -257,7 +338,7 @@ class ComprehensiveScanner:
         scan_id: str,
         vulnerabilities: List[Dict[str, Any]]
     ) -> None:
-        """Map vulnerabilities to MITRE ATT&CK techniques."""
+        """Map vulnerabilities to MITRE ATT&CK techniques using advanced ML ensemble."""
         try:
             logger.info(f"Performing MITRE mapping for scan {scan_id}")
             
@@ -267,44 +348,128 @@ class ComprehensiveScanner:
                 stage="Mapping to MITRE ATT&CK"
             )
 
-            # Simple MITRE mapping (in production, use ML model)
-            mitre_mapping = []
-            
-            for vuln in vulnerabilities:
-                # Map vulnerability types to MITRE techniques
-                vuln_type = vuln.get("title", "").lower()
+            # Use advanced MITRE mapper if available
+            try:
+                from sqlalchemy.orm import Session
+                from app.database import SessionLocal
+                from app.services.intelligence_mapping.mitre_mapper import MITREMapper
                 
-                if "sql injection" in vuln_type:
-                    technique = {"id": "T1190", "name": "Exploit Public-Facing Application", "tactic": "Initial Access"}
-                elif "xss" in vuln_type or "cross-site scripting" in vuln_type:
-                    technique = {"id": "T1059", "name": "Command and Scripting Interpreter", "tactic": "Execution"}
-                elif "authentication" in vuln_type:
-                    technique = {"id": "T1110", "name": "Brute Force", "tactic": "Credential Access"}
-                else:
-                    continue
+                db: Session = SessionLocal()
+                mitre_mapper = MITREMapper(db)
                 
-                mitre_mapping.append(technique)
+                all_techniques = []
+                all_ttps = []
+                all_capec = []
+                
+                for vuln in vulnerabilities[:20]:  # Process top 20 vulnerabilities
+                    description = f"{vuln.get('title', '')} {vuln.get('description', '')}"
+                    cve_id = vuln.get('cve_id')
+                    
+                    try:
+                        mapping_result = await mitre_mapper.map_vulnerability(description, cve_id)
+                        
+                        # Extract techniques with confidence scores
+                        for tech in mapping_result.get('techniques', [])[:3]:  # Top 3 per vuln
+                            technique_data = {
+                                "id": tech['technique_id'],
+                                "name": tech.get('name', 'Unknown'),
+                                "confidence": tech.get('confidence', 0.0),
+                                "method": tech.get('method', 'unknown'),
+                                "vulnerability_id": vuln.get('vulnerability_id'),
+                                "tactic": tech.get('tactic', 'Unknown')
+                            }
+                            all_techniques.append(technique_data)
+                        
+                        # Collect TTPs
+                        all_ttps.extend(mapping_result.get('ttps', []))
+                        
+                        # Collect CAPEC patterns
+                        all_capec.extend(mapping_result.get('capec_patterns', []))
+                        
+                    except Exception as ve:
+                        logger.debug(f"MITRE mapping failed for vulnerability {vuln.get('title')}: {ve}")
+                        continue
+                
+                db.close()
+                
+                # Remove duplicates and sort by confidence
+                seen_techniques = {}
+                for tech in all_techniques:
+                    tech_id = tech['id']
+                    if tech_id not in seen_techniques or tech['confidence'] > seen_techniques[tech_id]['confidence']:
+                        seen_techniques[tech_id] = tech
+                
+                unique_mapping = list(seen_techniques.values())
+                unique_mapping.sort(key=lambda x: x.get('confidence', 0), reverse=True)
+                
+                # Prepare comprehensive MITRE data
+                mitre_data = {
+                    "techniques": unique_mapping[:15],  # Top 15 techniques
+                    "ttps": all_ttps[:10],  # Top 10 TTPs
+                    "capec_patterns": all_capec[:10],  # Top 10 CAPEC patterns
+                    "mapping_confidence": sum(t.get('confidence', 0) for t in unique_mapping) / len(unique_mapping) if unique_mapping else 0,
+                    "total_techniques_found": len(unique_mapping),
+                    "tactics_coverage": list(set([t.get('tactic', 'Unknown') for t in unique_mapping]))
+                }
+                
+                supabase.update_scan(scan_id, {"mitre_mapping": unique_mapping})
+                logger.info(f"Advanced MITRE mapping completed: {len(unique_mapping)} techniques, avg confidence: {mitre_data['mapping_confidence']:.2f}")
+                
+            except ImportError as ie:
+                logger.warning(f"Advanced MITRE mapper not available: {ie}, falling back to basic mapping")
+                # Fallback to simple mapping
+                mitre_mapping = []
+                
+                for vuln in vulnerabilities:
+                    vuln_type = vuln.get("title", "").lower()
+                    
+                    if "sql injection" in vuln_type:
+                        technique = {"id": "T1190", "name": "Exploit Public-Facing Application", "tactic": "Initial Access", "confidence": 0.8}
+                    elif "xss" in vuln_type or "cross-site scripting" in vuln_type:
+                        technique = {"id": "T1059", "name": "Command and Scripting Interpreter", "tactic": "Execution", "confidence": 0.7}
+                    elif "authentication" in vuln_type:
+                        technique = {"id": "T1110", "name": "Brute Force", "tactic": "Credential Access", "confidence": 0.75}
+                    elif "command injection" in vuln_type:
+                        technique = {"id": "T1059", "name": "Command and Scripting Interpreter", "tactic": "Execution", "confidence": 0.85}
+                    elif "file upload" in vuln_type:
+                        technique = {"id": "T1105", "name": "Ingress Tool Transfer", "tactic": "Command and Control", "confidence": 0.7}
+                    elif "path traversal" in vuln_type or "directory traversal" in vuln_type:
+                        technique = {"id": "T1083", "name": "File and Directory Discovery", "tactic": "Discovery", "confidence": 0.75}
+                    elif "ssrf" in vuln_type:
+                        technique = {"id": "T1557", "name": "Adversary-in-the-Middle", "tactic": "Collection", "confidence": 0.7}
+                    elif "xxe" in vuln_type:
+                        technique = {"id": "T1203", "name": "Exploitation for Client Execution", "tactic": "Execution", "confidence": 0.75}
+                    elif "deserialization" in vuln_type:
+                        technique = {"id": "T1204", "name": "User Execution", "tactic": "Execution", "confidence": 0.8}
+                    elif "csrf" in vuln_type:
+                        technique = {"id": "T1539", "name": "Steal Web Session Cookie", "tactic": "Credential Access", "confidence": 0.7}
+                    else:
+                        continue
+                    
+                    mitre_mapping.append(technique)
 
-            # Remove duplicates
-            seen = set()
-            unique_mapping = []
-            for t in mitre_mapping:
-                if t["id"] not in seen:
-                    seen.add(t["id"])
-                    unique_mapping.append(t)
+                # Remove duplicates
+                seen = set()
+                unique_mapping = []
+                for t in mitre_mapping:
+                    if t["id"] not in seen:
+                        seen.add(t["id"])
+                        unique_mapping.append(t)
 
-            supabase.update_scan(scan_id, {"mitre_mapping": unique_mapping})
-            logger.info(f"MITRE mapping completed for scan {scan_id}")
+                supabase.update_scan(scan_id, {"mitre_mapping": unique_mapping})
+                logger.info(f"Basic MITRE mapping completed for scan {scan_id}: {len(unique_mapping)} techniques")
 
         except Exception as e:
             logger.error(f"MITRE mapping failed: {e}")
+            import traceback
+            traceback.print_exc()
 
     async def _calculate_risk_assessment(
         self,
         scan_id: str,
         vulnerabilities: List[Dict[str, Any]]
     ) -> None:
-        """Calculate risk score and assessment."""
+        """Calculate comprehensive risk score and assessment with business context."""
         try:
             logger.info(f"Calculating risk assessment for scan {scan_id}")
             
@@ -314,30 +479,94 @@ class ComprehensiveScanner:
                 stage="Calculating risk score"
             )
 
-            # Calculate vulnerability counts
-            critical_count = len([v for v in vulnerabilities if v.get("severity") == "critical"])
-            high_count = len([v for v in vulnerabilities if v.get("severity") == "high"])
-            medium_count = len([v for v in vulnerabilities if v.get("severity") == "medium"])
-            low_count = len([v for v in vulnerabilities if v.get("severity") == "low"])
+            # Calculate vulnerability counts (case-insensitive)
+            critical_count = len([v for v in vulnerabilities if (v.get("severity") or "").lower() == "critical"])
+            high_count = len([v for v in vulnerabilities if (v.get("severity") or "").lower() == "high"])
+            medium_count = len([v for v in vulnerabilities if (v.get("severity") or "").lower() == "medium"])
+            low_count = len([v for v in vulnerabilities if (v.get("severity") or "").lower() == "low"])
+            info_count = len([v for v in vulnerabilities if (v.get("severity") or "").lower() == "info"])
 
-            # Calculate risk score (0-10 scale)
-            # This is a simplified model; use ML in production
-            risk_score = min(
-                10.0,
-                (critical_count * 2.0) + (high_count * 1.5) + (medium_count * 0.8) + (low_count * 0.2)
-            )
+            # Try to use enhanced risk analyzer
+            try:
+                from app.services.intelligence.enhanced_risk_analyzer import EnhancedRiskAnalyzer, IndustryType
+                
+                risk_analyzer = EnhancedRiskAnalyzer()
+                
+                # Get scan record for business context
+                scan_record = supabase.client.table('owasp_scans').select('*').eq('scan_id', scan_id).execute()
+                scan_data = scan_record.data[0] if scan_record.data else {}
+                target_url = scan_data.get('target_url', '') if scan_data else ''
+                
+                # Build business context (can be enhanced with user input)
+                business_context = {
+                    'asset_criticality': 'high' if critical_count > 0 else 'medium',
+                    'sensitive_data': any('data' in v.get('title', '').lower() or 'password' in v.get('title', '').lower() for v in vulnerabilities),
+                    'customer_facing': 'api' in target_url or 'www' in target_url,
+                    'revenue_impact': critical_count > 0 or high_count > 2,
+                    'compliance_required': True,
+                    'compliance_frameworks': ['owasp_top_10', 'pci_dss'] if any('payment' in v.get('title', '').lower() for v in vulnerabilities) else ['owasp_top_10'],
+                    'industry': IndustryType.TECHNOLOGY.value,
+                    'data_classification': 'confidential' if critical_count > 0 else 'internal',
+                    'public_facing': True,
+                    'estimated_breach_cost': 100000
+                }
+                
+                # Get MITRE mapping for context
+                mitre_techniques = scan_data.get('mitre_mapping', []) if scan_data else []
+                
+                # Analyze highest risk vulnerability
+                if vulnerabilities:
+                    highest_risk_vuln = max(vulnerabilities, key=lambda v: v.get('cvss_score', 0) or 0)
+                    
+                    comprehensive_risk = await risk_analyzer.analyze_comprehensive_risk(
+                        vulnerability=highest_risk_vuln,
+                        business_context=business_context,
+                        mitre_techniques=mitre_techniques if isinstance(mitre_techniques, list) else [],
+                        threat_intel=None  # Can be enhanced with real-time threat intel
+                    )
+                    
+                    risk_score = comprehensive_risk['risk_score']
+                    risk_level = comprehensive_risk['risk_level'].title()
+                    
+                    # Store comprehensive risk analysis
+                    remediation_strategies = {
+                        'priority_matrix': comprehensive_risk.get('remediation_priority'),
+                        'cost_benefit': comprehensive_risk.get('cost_benefit_analysis'),
+                        'recommendations': comprehensive_risk.get('recommendations'),
+                        'resource_allocation': comprehensive_risk.get('resource_allocation'),
+                        'timeline': comprehensive_risk.get('timeline')
+                    }
+                    
+                    supabase.update_scan(scan_id, {
+                        "remediation_strategies": remediation_strategies
+                    })
+                    
+                    logger.info(f"Enhanced risk assessment: Score={risk_score}, Priority={comprehensive_risk['remediation_priority']['priority']}")
+                
+                else:
+                    # No vulnerabilities found
+                    risk_score = 0.0
+                    risk_level = "Minimal"
+                    
+            except ImportError as ie:
+                logger.warning(f"Enhanced risk analyzer not available: {ie}, using basic calculation")
+                # Fallback to basic calculation
+                risk_score = min(
+                    10.0,
+                    (critical_count * 2.0) + (high_count * 1.5) + (medium_count * 0.8) + (low_count * 0.2)
+                )
 
-            # Determine risk level
-            if risk_score >= 8:
-                risk_level = "Critical"
-            elif risk_score >= 6:
-                risk_level = "High"
-            elif risk_score >= 4:
-                risk_level = "Medium"
-            elif risk_score >= 2:
-                risk_level = "Low"
-            else:
-                risk_level = "Minimal"
+                # Determine risk level
+                if risk_score >= 8:
+                    risk_level = "Critical"
+                elif risk_score >= 6:
+                    risk_level = "High"
+                elif risk_score >= 4:
+                    risk_level = "Medium"
+                elif risk_score >= 2:
+                    risk_level = "Low"
+                else:
+                    risk_level = "Minimal"
 
             # Update scan with risk assessment
             supabase.update_scan(
@@ -356,6 +585,8 @@ class ComprehensiveScanner:
 
         except Exception as e:
             logger.error(f"Risk assessment calculation failed: {e}")
+            import traceback
+            traceback.print_exc()
 
     async def _update_scan_progress(
         self,

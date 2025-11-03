@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     LEAK_LOOKUP_API_KEY: Optional[str] = Field(default=None, description="LeakLookup API key")
     RAPIDAPI_KEY: Optional[str] = Field(default=None, description="RapidAPI key")
     GOOGLE_API_KEY: Optional[str] = Field(default=None, description="Google Cloud API key")
+    GOOGLE_API_CX: Optional[str] = Field(default=None, description="Google Programmable Search Engine CX (Search Engine ID)")
     WHOIS_API_KEY: Optional[str] = Field(default=None, description="WHOIS API key")
     HF_API_KEY: Optional[str] = Field(default=None, description="Hugging Face API key")
     GROQ_API_KEY: Optional[str] = Field(default=None, description="Groq API key")

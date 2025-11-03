@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+import uuid
 from enum import Enum
 from supabase import create_client, Client
 from sqlalchemy import create_engine, text
@@ -30,6 +31,9 @@ class SupabaseClient:
         # Initialize Supabase clients
         self.client: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
         self.admin: Client  = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)
+        # In-memory fallback stores (used when DB is unavailable)
+        self._memory_scans: Dict[str, Dict[str, Any]] = {}
+        self._memory_vulns: Dict[str, List[Dict[str, Any]]] = {}
         
         # Initialize SQLAlchemy engine for raw SQL operations
         self.engine = create_engine(
@@ -108,11 +112,20 @@ class SupabaseClient:
         try:
             res = self.admin.table("owasp_scans").insert(self._normalize_record(record)).execute()
             if not res.data:
+                # Still mirror to memory store
+                self._memory_scans[record.get("scan_id")] = dict(record)
                 return None
-            return res.data[0]
+            created = res.data[0]
+            # Mirror to memory store for resilience
+            self._memory_scans[created.get("scan_id")] = dict(created)
+            return created
         except Exception as e:
             logger.error(f"Failed to create scan: {str(e)}", exc_info=True)
-            raise
+            # Fallback to memory store
+            scan_id = record.get("scan_id") or f"mem_{uuid.uuid4().hex[:12]}"
+            record["scan_id"] = scan_id
+            self._memory_scans[scan_id] = dict(record)
+            return record
 
     def update_scan(self, scan_id: str, update: Dict) -> Optional[Dict[str, Any]]:
         """Update scan record identified by scan_id"""
@@ -125,6 +138,8 @@ class SupabaseClient:
                 'scan_id', 'user_id', 'target_url', 'status', 'progress', 'current_stage',
                 'started_at', 'completed_at', 'scan_types', 'options', 'risk_score', 
                 'risk_level', 'ai_analysis', 'mitre_mapping', 'remediation_strategies',
+                # allow storing per-scan diagnostics for troubleshooting
+                'scanner_debug',
                 'created_at', 'updated_at'
             }
             
@@ -133,25 +148,45 @@ class SupabaseClient:
             
             # Try with filtered update
             res = self.admin.table("owasp_scans").update(filtered_update).eq("scan_id", scan_id).execute()
-            if not res.data:
-                return None
-            if len(res.data) == 0:
-                return None
-            return res.data[0]
+            # Mirror full update to memory store regardless of DB result (preserve extra fields)
+            mem = self._memory_scans.get(scan_id, {})
+            mem.update(self._normalize_record(update))
+            if not res.data or len(res.data) == 0:
+                # No DB echo, keep enriched memory
+                self._memory_scans[scan_id] = mem
+                return mem or None
+            updated = res.data[0]
+            # Merge DB response into memory but PRESERVE extra fields (like scanner_debug)
+            merged = dict(mem)
+            merged.update(updated)
+            self._memory_scans[scan_id] = merged
+            return merged
         except Exception as e:
             logger.error(f"Failed to update scan {scan_id}: {str(e)}", exc_info=True)
-            return None
+            # Fallback to memory
+            mem = self._memory_scans.get(scan_id, {})
+            mem.update(self._normalize_record(update))
+            self._memory_scans[scan_id] = mem
+            return mem
 
     def fetch_scan(self, scan_id: str) -> Optional[Dict[str, Any]]:
         """Retrieve a single scan record"""
         try:
-            res = self.client.table("owasp_scans").select("*").eq("scan_id", scan_id).single().execute()
-            if not res.data:
-                return None
-            return res.data
+            res = self.client.table("owasp_scans").select("*").eq("scan_id", scan_id).execute()
+            if not res.data or len(res.data) == 0:
+                # Fallback to memory
+                return self._memory_scans.get(scan_id)
+            # Use first result if multiple
+            scan_data = res.data[0] if isinstance(res.data, list) else res.data
+            # Merge DB data into existing memory (preserve extra debug fields)
+            existing = self._memory_scans.get(scan_id, {})
+            merged = dict(existing)
+            merged.update(scan_data)
+            self._memory_scans[scan_id] = dict(merged)
+            return merged
         except Exception as e:
-            logger.error(f"Failed to fetch scan {scan_id}: {str(e)}", exc_info=True)
-            return None
+            logger.debug(f"Failed to fetch scan {scan_id} from DB: {str(e)}")
+            return self._memory_scans.get(scan_id)
 
     def insert_vulnerabilities(self, scan_id: str, vulns: List[Dict[str, Any]]) -> int:
         """Bulk insert vulnerabilities; adds scan_id to each record"""
@@ -163,20 +198,38 @@ class SupabaseClient:
                     v["discovered_at"] = v["discovered_at"].isoformat()
                     
             normalized = [self._normalize_record(v) for v in vulns]
-            res = self.admin.table("owasp_vulnerabilities").insert(normalized).execute()
-            return len(res.data) if res.data else 0
+            # Always mirror to memory
+            self._memory_vulns.setdefault(scan_id, []).extend(normalized)
+            # Try DB insert best-effort
+            try:
+                res = self.admin.table("owasp_vulnerabilities").insert(normalized).execute()
+                if res.data:
+                    return len(res.data)
+            except Exception as db_err:
+                logger.warning(f"DB insert_vulnerabilities failed, using memory store: {db_err}")
+            return len(self._memory_vulns.get(scan_id, []))
         except Exception as e:
             logger.error(f"Failed to insert vulnerabilities for {scan_id}: {str(e)}", exc_info=True)
-            return 0
+            # Still preserve in memory if normalization failed partially
+            try:
+                self._memory_vulns.setdefault(scan_id, []).extend(vulns)
+            except Exception:
+                pass
+            return len(self._memory_vulns.get(scan_id, []))
 
     def fetch_vulnerabilities(self, scan_id: str) -> List[Dict[str, Any]]:
         """Retrieve all vulnerabilities for a given scan_id"""
         try:
             res = self.client.table("owasp_vulnerabilities").select("*").eq("scan_id", scan_id).execute()
-            return res.data if res.data else []
+            if res.data:
+                # Sync memory cache
+                self._memory_vulns[scan_id] = list(res.data)
+                return res.data
+            # Fallback to memory
+            return self._memory_vulns.get(scan_id, [])
         except Exception as e:
             logger.error(f"Failed to fetch vulnerabilities for {scan_id}: {str(e)}", exc_info=True)
-            return []
+            return self._memory_vulns.get(scan_id, [])
 
     def revoke_token(self, jti: str, expires: datetime):
         """Add token to revocation list"""

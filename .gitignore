@@ -233,8 +233,6 @@ dist
 
 # Gatsby files
 .cache/
-public
-
 # Storybook build outputs
 .out
 .storybook-out
@@ -533,10 +531,18 @@ certificates/
 reports/
 analytics_data/
 
+# Scanner temporary results
+nuclei_results_*/
+wapiti_results_*/
+*.jsonl
+tmp_*.json
+
 # ML Models (too large for git)
 models/*.pkl
 models/*.h5
 models/*.model
+mlruns/
+ml_models/
 
 # Scan cache
 .scan_cache/
@@ -544,6 +550,34 @@ models/*.model
 # User generated content
 uploads/
 static/user_content/
+
+# Test and debug files
+test_*.py
+check_*.py
+demo_*.py
+mock_*.py
+add_*.py
+fix_*.py
+update_*.py
+verify_*.py
+validate_*.py
+*_debug.json
+
+# Redundant documentation (keep only README.md)
+CODE_CHANGES_REFERENCE.md
+DIAGNOSTIC_REPORT.md
+FIXES_APPLIED.md
+FIX_VISUAL_GUIDE.md
+FRONTEND_BACKEND_INTEGRATION_GUIDE.md
+FRONTEND_FIXES.md
+FRONTEND_INTEGRATION_COMPLETE.md
+SCANNER_TOOLS_INSTALLATION.md
+IMPLEMENTATION_COMPLETE.md
+SCANNER_SETUP_QUICKFIX.md
+TESTING_CHECKLIST.md
+TESTING_GUIDE.md
+TODO_COMPLETION_SUMMARY.md
+WAPITI_FIXED.md
 
 # ========================
 # DOCUMENTATION BUILD
