@@ -35,7 +35,7 @@ class ThreatIntelResponse(BaseModel):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class RiskScoreResponse(BaseModel):
     """Risk score response model."""
@@ -50,7 +50,7 @@ class RiskScoreResponse(BaseModel):
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class MITREMappingResponse(BaseModel):
     """MITRE mapping response model."""
@@ -61,7 +61,7 @@ class MITREMappingResponse(BaseModel):
     similarity_score: float
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 @router.get("/threat-intel/{vuln_id}", response_model=List[ThreatIntelResponse])
 @limiter.limit("30/minute")

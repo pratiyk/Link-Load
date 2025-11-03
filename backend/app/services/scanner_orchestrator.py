@@ -9,7 +9,7 @@ from contextlib import suppress
 from datetime import datetime
 from typing import List, Optional, Dict, Callable
 from collections import defaultdict
-from fpdf import FPDF
+from fpdf import FPDF  # fpdf2 package
 import tempfile
 
 # Import scanner implementations directly to avoid circular imports through app.services

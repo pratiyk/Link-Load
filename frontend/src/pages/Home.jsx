@@ -40,6 +40,8 @@ const Home = () => {
     setCurrentStage('Initializing...');
 
     try {
+      console.log('Starting scan for URL:', scanUrl);
+
       // Start the scan
       const result = await scannerService.startScan(scanUrl, ['owasp', 'nuclei', 'wapiti'], {
         enable_ai_analysis: true,
@@ -47,15 +49,42 @@ const Home = () => {
         include_low_risk: true
       });
 
+      console.log('Scan started, response:', result);
       const scanId = result.scan_id;
+
+      if (!scanId) {
+        throw new Error('No scan ID returned from backend');
+      }
+
+      console.log('Setting up WebSocket for scan:', scanId);
+
+      // Create a timeout for WebSocket connection
+      let websocketConnected = false;
+      let scanCompleted = false;
+      const wsTimeout = setTimeout(() => {
+        if (!websocketConnected && !scanCompleted) {
+          console.warn('WebSocket did not connect within 5 seconds');
+          setError('Scan started but lost connection. Check console for details.');
+          setIsScanActive(false);
+        }
+      }, 5000);
 
       // Setup WebSocket for real-time updates
       scannerService.setupWebSocket(scanId, {
+        onOpen: () => {
+          console.log('WebSocket connected for scan:', scanId);
+          websocketConnected = true;
+          clearTimeout(wsTimeout);
+        },
         onProgress: (status) => {
+          console.log('Scan progress:', status);
           setScanProgress(status.progress || 0);
           setCurrentStage(status.current_stage || 'Processing');
         },
         onComplete: (results) => {
+          console.log('Scan completed:', results);
+          scanCompleted = true;
+          clearTimeout(wsTimeout);
           setScanProgress(100);
           setCurrentStage('Completed');
           setIsScanActive(false);
@@ -64,11 +93,17 @@ const Home = () => {
         },
         onError: (error) => {
           console.error('WebSocket error:', error);
-          setError('Connection error during scan');
+          clearTimeout(wsTimeout);
+          setError('Connection error during scan. Please check the browser console.');
           setIsScanActive(false);
         },
         onClose: () => {
-          console.log('WebSocket connection closed');
+          console.log('WebSocket connection closed for scan:', scanId);
+          clearTimeout(wsTimeout);
+          if (!scanCompleted) {
+            // WebSocket closed without completion - this might be expected if scan is still running
+            console.log('WebSocket closed but scan may still be running. Scan ID:', scanId);
+          }
         }
       });
     } catch (error) {

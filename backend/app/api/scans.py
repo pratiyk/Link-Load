@@ -98,6 +98,8 @@ class ScanResultsResponse(BaseModel):
     mitre_mapping: Optional[List[Dict[str, Any]]] = None
     ai_analysis: Optional[List[AIAnalysisResult]] = None
     remediation_strategies: Optional[List[Dict[str, Any]]] = None
+    # Optional diagnostics when debug=1 is requested
+    debug: Optional[Dict[str, Any]] = None
 
 
 class StartScanResponse(BaseModel):
@@ -199,9 +201,24 @@ async def get_scan_status(
         raise HTTPException(status_code=500, detail="Error fetching scan status")
 
 
+def _normalize_vulnerability(v: Dict[str, Any]) -> VulnerabilityInfo:
+    """Normalize vulnerability data from various scanner formats to VulnerabilityInfo format"""
+    return VulnerabilityInfo(
+        id=v.get("vuln_id") or v.get("id") or uuid.uuid4().hex[:8],
+        title=v.get("title") or v.get("name") or "Unknown",
+        description=v.get("description") or "",
+        severity=(v.get("severity") or "medium").lower(),
+        cvss_score=v.get("cvss_score") or v.get("cvss") or 0.0,
+        location=v.get("location") or v.get("url") or v.get("path") or "",
+        recommendation=v.get("recommendation") or v.get("solution") or None,
+        mitre_techniques=v.get("mitre_techniques") or []
+    )
+
+
 @router.get("/comprehensive/{scan_id}/result", response_model=ScanResultsResponse)
 async def get_scan_results(
     scan_id: str,
+    debug: Optional[bool] = False,
     current_user = Depends(get_current_user_optional)
 ):
     """Get the complete results of a scan"""
@@ -216,36 +233,28 @@ async def get_scan_results(
         # Build response
         return ScanResultsResponse(
             scan_id=scan_id,
-            target_url=scan.get("target_url"),
-            status=scan.get("status"),
-            started_at=scan.get("started_at"),
+            target_url=str(scan.get("target_url") or ""),
+            status=str(scan.get("status") or "unknown"),
+            started_at=scan.get("started_at") or datetime.utcnow(),
             completed_at=scan.get("completed_at"),
             vulnerabilities=[
-                VulnerabilityInfo(
-                    id=v.get("vuln_id", uuid.uuid4().hex[:8]),
-                    title=v.get("title", "Unknown"),
-                    description=v.get("description", ""),
-                    severity=v.get("severity", "unknown"),
-                    cvss_score=v.get("cvss_score", 0.0),
-                    location=v.get("location", ""),
-                    recommendation=v.get("recommendation"),
-                    mitre_techniques=v.get("mitre_techniques", [])
-                )
+                _normalize_vulnerability(v)
                 for v in vulns
             ],
             risk_assessment=RiskAssessment(
                 overall_risk_score=scan.get("risk_score") or scan.get("overall_risk_score") or 0.0,
                 risk_level=scan.get("risk_level") or "Unknown",
                 vulnerability_count=len(vulns),
-                critical_count=scan.get("critical_count") or len([v for v in vulns if v.get("severity") == "critical"]),
-                high_count=scan.get("high_count") or len([v for v in vulns if v.get("severity") == "high"]),
-                medium_count=scan.get("medium_count") or len([v for v in vulns if v.get("severity") == "medium"]),
-                low_count=scan.get("low_count") or len([v for v in vulns if v.get("severity") == "low"]),
+                critical_count=scan.get("critical_count") or len([v for v in vulns if (v.get("severity") or "").lower() == "critical"]),
+                high_count=scan.get("high_count") or len([v for v in vulns if (v.get("severity") or "").lower() == "high"]),
+                medium_count=scan.get("medium_count") or len([v for v in vulns if (v.get("severity") or "").lower() == "medium"]),
+                low_count=scan.get("low_count") or len([v for v in vulns if (v.get("severity") or "").lower() == "low"]),
                 risk_factors=scan.get("risk_factors")
             ),
             mitre_mapping=scan.get("mitre_mapping"),
             ai_analysis=scan.get("ai_analysis"),
-            remediation_strategies=scan.get("remediation_strategies")
+            remediation_strategies=scan.get("remediation_strategies"),
+            debug=scan.get("scanner_debug") if debug else None
         )
         
     except HTTPException:
@@ -261,7 +270,7 @@ async def get_scan_result_redirect(
     current_user = Depends(get_current_user_optional)
 ):
     """Alias for get_scan_results for backward compatibility"""
-    return await get_scan_results(scan_id, current_user)
+    return await get_scan_results(scan_id, debug=False, current_user=current_user)
 
 
 @router.websocket("/ws/{scan_id}")

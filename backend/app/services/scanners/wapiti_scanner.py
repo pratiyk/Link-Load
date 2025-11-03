@@ -5,6 +5,9 @@ import asyncio
 import json
 import uuid
 import os
+import sys
+import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from pydantic import BaseModel
 import xml.etree.ElementTree as ET
 
@@ -12,41 +15,73 @@ from .base_scanner import BaseScanner, ScannerConfig, ScanResult, Vulnerability
 
 logger = logging.getLogger(__name__)
 
+# Fix for Windows asyncio event loop policy
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 class WapitiScannerConfig(BaseModel):
     binary_path: str = "wapiti"
     max_scan_time: int = 3600  # 1 hour
     max_parameters: int = 1000
     verify_ssl: bool = True
     debug: bool = False
+    # Smaller, fast, high-signal default module set; can be overridden via env WAPITI_MODULES (comma-separated)
     modules: List[str] = [
-        "backup", "brute_login_form", "cookieflags", "csp", "csrf", "exec",
-        "file", "htaccess", "http_headers", "https_redirect", "log4shell", 
-        "methods", "permanentxss", "redirect", "shellshock", "sql", "ssl", 
-        "ssrf", "takeover", "timesql", "wapp", "wp_enumeration", "xss", "xxe"
+        "xss", "sql", "csrf", "ssrf", "redirect", "http_headers", "cookieflags"
     ]
 
 class WapitiScanner(BaseScanner):
     def __init__(self, config: Optional[WapitiScannerConfig] = None):
+        import os as _os
         self.config = config or WapitiScannerConfig()
+        # Optional: allow overriding modules via env var without code changes
+        env_modules = _os.getenv("WAPITI_MODULES")
+        if env_modules:
+            try:
+                parsed = [m.strip() for m in env_modules.split(",") if m.strip()]
+                if parsed:
+                    self.config.modules = parsed
+                    logger.info(f"Wapiti modules overridden via env: {self.config.modules}")
+            except Exception as e:
+                logger.warning(f"Failed to parse WAPITI_MODULES env var: {e}")
         self.active_scans: Dict[str, Dict[str, Any]] = {}
+        self.executor = ThreadPoolExecutor(max_workers=4)
+        self.is_windows = sys.platform == 'win32'
         
     async def initialize(self) -> bool:
         """Initialize Wapiti scanner"""
         try:
             # Test wapiti installation
-            proc = await asyncio.create_subprocess_exec(
-                self.config.binary_path,
-                '--version',
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await proc.communicate()
-            
-            if proc.returncode != 0:
-                logger.error(f"Wapiti not found or error: {stderr.decode()}")
-                return False
+            if self.is_windows:
+                # Use subprocess.run for Windows
+                result = await asyncio.get_event_loop().run_in_executor(
+                    self.executor,
+                    lambda: subprocess.run(
+                        [self.config.binary_path, '--version'],
+                        capture_output=True,
+                        text=True,
+                        timeout=10
+                    )
+                )
+                if result.returncode != 0:
+                    logger.error(f"Wapiti not found or error: {result.stderr}")
+                    return False
+                version = result.stdout.strip()
+            else:
+                # Use asyncio subprocess for Linux/Mac
+                proc = await asyncio.create_subprocess_exec(
+                    self.config.binary_path,
+                    '--version',
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                stdout, stderr = await proc.communicate()
                 
-            version = stdout.decode().strip()
+                if proc.returncode != 0:
+                    logger.error(f"Wapiti not found or error: {stderr.decode()}")
+                    return False
+                version = stdout.decode().strip()
+            
             logger.info(f"Successfully initialized Wapiti {version}")
             return True
             
@@ -63,6 +98,8 @@ class WapitiScanner(BaseScanner):
             output_dir = f"wapiti_results_{scan_id}"
             os.makedirs(output_dir, exist_ok=True)
             
+            logger.info(f"Starting Wapiti scan {scan_id} for {config.target_url}")
+            
             # Build wapiti command
             cmd = [
                 self.config.binary_path,
@@ -73,26 +110,56 @@ class WapitiScanner(BaseScanner):
                 '--max-parameters', str(self.config.max_parameters)
             ]
             
-            # Add enabled modules
+            # Add enabled modules (use -m with comma-separated list)
             if self.config.modules:
-                cmd.extend(['--module'] + self.config.modules)
+                cmd.extend(['-m', ','.join(self.config.modules)])
             
             if not self.config.verify_ssl:
                 cmd.append('--no-check-certificate')
+            
+            logger.info(f"Wapiti command: {' '.join(cmd)}")
                 
-            # Start wapiti process
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
+            # Start wapiti process - use different approach for Windows
+            if self.is_windows:
+                # Windows: Use Popen directly in thread pool
+                def run_wapiti_windows():
+                    try:
+                        # Set environment to avoid asyncio issues on Windows
+                        env = os.environ.copy()
+                        env['PYTHONASYNCIODEBUG'] = '0'
+                        
+                        proc = subprocess.Popen(
+                            cmd,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            cwd=os.getcwd(),
+                            env=env
+                        )
+                        logger.info(f"Wapiti process started with PID: {proc.pid}")
+                        return proc
+                    except Exception as e:
+                        logger.error(f"Failed to start Wapiti process: {e}")
+                        raise
+                
+                proc = await asyncio.get_event_loop().run_in_executor(
+                    self.executor,
+                    run_wapiti_windows
+                )
+            else:
+                # Linux/Mac: Use asyncio subprocess
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
             
             self.active_scans[scan_id] = {
                 'process': proc,
                 'output_dir': output_dir,
                 'start_time': datetime.utcnow(),
                 'config': config.dict(),
-                'cmd': cmd
+                'cmd': cmd,
+                'is_windows': self.is_windows
             }
             
             return scan_id
@@ -105,21 +172,64 @@ class WapitiScanner(BaseScanner):
         """Get current status of Wapiti scan"""
         try:
             if scan_id not in self.active_scans:
+                logger.warning(f"Wapiti scan {scan_id} not found in active scans")
                 return {'status': 'not_found'}
                 
             scan_info = self.active_scans[scan_id]
             proc = scan_info['process']
+            is_windows = scan_info.get('is_windows', False)
+            output_dir = scan_info['output_dir']
+            results_file = f"{output_dir}/results.json"
             
             # Check if process is still running
-            if proc.returncode is None:
+            if is_windows:
+                # Windows Popen object
+                return_code = proc.poll()
+            else:
+                # Asyncio subprocess
+                return_code = proc.returncode
+            
+            if return_code is None:
+                # Still running
                 return {
                     'status': 'running',
                     'start_time': scan_info['start_time'].isoformat()
                 }
-            elif proc.returncode == 0:
-                return {'status': 'completed'}
             else:
-                return {'status': 'failed'}
+                # Process has finished - check if we have results
+                # Wapiti sometimes exits with non-zero even when it found vulnerabilities
+                if os.path.exists(results_file) and os.path.getsize(results_file) > 0:
+                    # We have output, consider it completed
+                    logger.info(f"Wapiti scan {scan_id} produced results (exit code: {return_code})")
+                    return {'status': 'completed'}
+                elif return_code == 0:
+                    # Completed successfully but no results file yet
+                    logger.info(f"Wapiti scan {scan_id} completed successfully")
+                    return {'status': 'completed'}
+                else:
+                    # Failed with error and no results
+                    logger.error(f"Wapiti scan {scan_id} failed with return code: {return_code}")
+                    
+                    # Try to get error output
+                    try:
+                        if is_windows:
+                            # For Windows Popen, stderr might already be consumed
+                            # Try to read any remaining data
+                            if proc.stderr:
+                                stderr = proc.stderr.read()
+                            else:
+                                stderr = b''
+                        else:
+                            stderr = b''
+                        
+                        if stderr:
+                            error_msg = stderr.decode('utf-8', errors='ignore')
+                            logger.error(f"Wapiti stderr: {error_msg}")
+                            return {'status': 'failed', 'error': error_msg}
+                    except Exception as e:
+                        logger.debug(f"Could not read stderr: {e}")
+                    
+                    return {'status': 'failed', 'return_code': return_code}
                 
         except Exception as e:
             logger.error(f"Error getting Wapiti scan status: {str(e)}")
@@ -133,31 +243,90 @@ class WapitiScanner(BaseScanner):
 
             scan_info = self.active_scans[scan_id]
             results_file = f"{scan_info['output_dir']}/results.json"
+            is_windows = scan_info.get('is_windows', False)
             
             vulnerabilities = []
+            stderr_tail_lines: List[str] = []
+            stdout_tail_lines: List[str] = []
+            return_code: Optional[int] = None
+            
+            # Drain process pipes to capture any errors
+            proc = scan_info.get('process')
+            try:
+                if proc is not None:
+                    # Handle Windows vs Linux process
+                    if is_windows:
+                        # Windows Popen - use communicate in thread pool
+                        def wait_for_process():
+                            stdout, stderr = proc.communicate()
+                            return stdout, stderr, proc.returncode
+                        
+                        out, err, return_code = await asyncio.get_event_loop().run_in_executor(
+                            self.executor,
+                            wait_for_process
+                        )
+                    else:
+                        # Linux/Mac asyncio subprocess
+                        out, err = await proc.communicate()
+                        return_code = proc.returncode
+                    
+                    if out:
+                        lines = out.decode(errors='ignore').splitlines()
+                        stdout_tail_lines = lines[-50:]
+                    if err:
+                        lines = err.decode(errors='ignore').splitlines()
+                        stderr_tail_lines = lines[-50:]
+            except Exception as e:
+                logger.debug(f"Failed to read Wapiti stdout/stderr: {e}")
             
             # Read and parse results
             if os.path.exists(results_file):
-                with open(results_file) as f:
-                    results = json.load(f)
+                try:
+                    file_size = os.path.getsize(results_file)
+                    logger.info(f"Reading Wapiti results file: {results_file} ({file_size} bytes)")
                     
-                    # Parse vulnerabilities from each module's findings
-                    for module_name, module_results in results.get('vulnerabilities', {}).items():
-                        for finding in module_results:
-                            vuln = Vulnerability(
-                                name=finding.get('name', module_name),
-                                description=finding.get('description'),
-                                severity=self._map_severity(finding.get('level', 'medium')),
-                                confidence='high',  # Wapiti doesn't provide confidence levels
-                                url=finding.get('url'),
-                                parameter=finding.get('parameter'),
-                                evidence=finding.get('info'),
-                                solution=finding.get('solution'),
-                                references=finding.get('references', []),
-                                tags=[module_name],
-                                raw_finding=finding
-                            )
-                            vulnerabilities.append(vuln.dict())
+                    if file_size == 0:
+                        logger.warning(f"Wapiti results file is empty")
+                    else:
+                        with open(results_file, 'r', encoding='utf-8') as f:
+                            results = json.load(f)
+                            
+                            # Parse vulnerabilities from each module's findings
+                            for module_name, module_results in results.get('vulnerabilities', {}).items():
+                                for finding in module_results:
+                                    # Get the classification details from the classifications section
+                                    classification = results.get('classifications', {}).get(module_name, {})
+                                    description = classification.get('desc', finding.get('info', 'Unknown vulnerability'))
+                                    solution = classification.get('sol', finding.get('solution', 'No specific solution provided'))
+                                    
+                                    # Build references from classification
+                                    references = []
+                                    if 'ref' in classification:
+                                        references = list(classification['ref'].values())
+                                    
+                                    vuln = Vulnerability(
+                                        name=module_name,  # Use category name as title
+                                        description=description,
+                                        severity=self._map_severity(finding.get('level', 2)),
+                                        confidence='high',  # Wapiti doesn't provide confidence levels
+                                        url=finding.get('path', ''),  # Use path as the affected URL
+                                        parameter=finding.get('parameter', ''),
+                                        evidence=finding.get('info', ''),
+                                        solution=solution,
+                                        references=references,
+                                        tags=[finding.get('module', module_name)],
+                                        cwe_id=None,  # Wapiti doesn't provide CWE directly
+                                        raw_finding=finding
+                                    )
+                                    vulnerabilities.append(vuln.dict())
+                            
+                            logger.info(f"Parsed {len(vulnerabilities)} vulnerabilities from Wapiti results")
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse Wapiti JSON results: {e}")
+                except Exception as e:
+                    logger.error(f"Error reading Wapiti results: {e}")
+            else:
+                logger.warning(f"Wapiti results file not found: {results_file}")
 
             return ScanResult(
                 scan_id=scan_id,
@@ -166,10 +335,18 @@ class WapitiScanner(BaseScanner):
                 end_time=datetime.utcnow(),
                 status='completed',
                 vulnerabilities=vulnerabilities,
-                raw_findings=results if os.path.exists(results_file) else {},
+                raw_findings={
+                    **(results if os.path.exists(results_file) else {}),
+                    "process": {
+                        "return_code": return_code,
+                        "stderr_tail": stderr_tail_lines,
+                        "stdout_tail": stdout_tail_lines,
+                    }
+                },
                 scan_log=[
                     f"Scan completed with {len(vulnerabilities)} findings",
-                    f"Command executed: {' '.join(scan_info['cmd'])}"
+                    f"Command executed: {' '.join(scan_info['cmd'])}",
+                    *( ["--- STDERR (tail) ---"] + stderr_tail_lines if stderr_tail_lines else [] ),
                 ]
             )
 
@@ -177,8 +354,11 @@ class WapitiScanner(BaseScanner):
             logger.error(f"Error getting Wapiti scan results: {str(e)}")
             raise
 
-    def _map_severity(self, wapiti_level: str) -> str:
+    def _map_severity(self, wapiti_level) -> str:
         """Map Wapiti severity levels to standardized levels"""
+        # Convert to string if it's an integer
+        level_str = str(wapiti_level) if isinstance(wapiti_level, int) else wapiti_level
+        
         severity_map = {
             '1': 'info',
             '2': 'low',
@@ -191,7 +371,7 @@ class WapitiScanner(BaseScanner):
             'high': 'high',
             'critical': 'critical'
         }
-        return severity_map.get(wapiti_level.lower(), 'medium')
+        return severity_map.get(level_str.lower() if isinstance(level_str, str) else level_str, 'medium')
 
     async def stop_scan(self, scan_id: str) -> bool:
         """Stop a running Wapiti scan"""

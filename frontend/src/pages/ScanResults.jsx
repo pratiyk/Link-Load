@@ -24,9 +24,35 @@ const ScanResults = () => {
   useEffect(() => {
     const fetchResults = async () => {
       try {
+        console.log('🔍 Fetching scan results for ID:', scanId);
         const data = await scannerService.getScanResults(scanId);
-        setResults(data);
+        console.log('📊 Received scan results:', data);
+        console.log('📊 Vulnerabilities count:', data?.vulnerabilities?.length || 0);
+        console.log('📊 Risk assessment:', data?.risk_assessment);
+        console.log('📊 MITRE mapping count:', data?.mitre_mapping?.length || 0);
+        console.log('📊 AI analysis count:', data?.ai_analysis?.length || 0);
+
+        // Ensure data structure is correct
+        const normalizedData = {
+          ...data,
+          vulnerabilities: data?.vulnerabilities || [],
+          risk_assessment: data?.risk_assessment || {
+            overall_risk_score: 0,
+            risk_level: 'Unknown',
+            vulnerability_count: 0,
+            critical_count: 0,
+            high_count: 0,
+            medium_count: 0,
+            low_count: 0
+          },
+          mitre_mapping: data?.mitre_mapping || [],
+          ai_analysis: data?.ai_analysis || []
+        };
+
+        console.log('✅ Normalized data:', normalizedData);
+        setResults(normalizedData);
       } catch (error) {
+        console.error('❌ Error fetching scan results:', error);
         setError(error.message);
       } finally {
         setLoading(false);
@@ -51,9 +77,13 @@ const ScanResults = () => {
     return (
       <Layout>
         <div className="error-container">
-          <h2>Error Loading Results</h2>
+          <h2>⚠ Error Loading Results</h2>
           <p>{error}</p>
-          <button onClick={() => navigate('/')}>Back to Home</button>
+          <p style={{ fontSize: '0.9rem', color: '#666', marginTop: '1rem' }}>
+            Scan ID: {scanId}
+          </p>
+          <button onClick={() => window.location.reload()}>Retry</button>
+          <button onClick={() => navigate('/')} style={{ marginLeft: '1rem' }}>Back to Home</button>
         </div>
       </Layout>
     );
@@ -63,8 +93,13 @@ const ScanResults = () => {
     return (
       <Layout>
         <div className="error-container">
-          <h2>No Results Found</h2>
-          <button onClick={() => navigate('/')}>Back to Home</button>
+          <h2>⚠ No Results Found</h2>
+          <p>The scan results could not be loaded. The scan may still be in progress.</p>
+          <p style={{ fontSize: '0.9rem', color: '#666', marginTop: '1rem' }}>
+            Scan ID: {scanId}
+          </p>
+          <button onClick={() => window.location.reload()}>Refresh</button>
+          <button onClick={() => navigate('/')} style={{ marginLeft: '1rem' }}>Back to Home</button>
         </div>
       </Layout>
     );
@@ -83,6 +118,7 @@ const ScanResults = () => {
 
   const renderVulnerabilitySection = () => {
     const vulns = results.vulnerabilities || [];
+    console.log('🔍 Rendering vulnerability section with', vulns.length, 'vulnerabilities');
     const colorMap = ['cyan', 'coral', 'green', 'pink', 'yellow'];
 
     return (
@@ -96,13 +132,16 @@ const ScanResults = () => {
             {vulns.map((vuln, index) => {
               const colorKey = colorMap[index % colorMap.length];
               return (
-                <div key={index} className={`timeline-item ${colorKey}-bg`}>
+                <div key={vuln.id || index} className={`timeline-item ${colorKey}-bg`}>
                   <div className="timeline-marker">
                     <div className="marker-label">{index + 1}</div>
                   </div>
                   <div className="timeline-content">
                     <div className="timeline-time">
-                      <span className="severity-badge ${vuln.severity?.toLowerCase()}">
+                      <span
+                        className={`severity-badge ${vuln.severity ? vuln.severity.toLowerCase() : ''
+                          }`}
+                      >
                         {vuln.severity || 'Unknown'}
                       </span>
                     </div>
@@ -139,6 +178,7 @@ const ScanResults = () => {
 
   const renderMITRESection = () => {
     const techniques = results.mitre_mapping || [];
+    console.log('🔍 Rendering MITRE section with', techniques.length, 'techniques');
 
     return (
       <section className="results-section mitre-section">
@@ -177,6 +217,7 @@ const ScanResults = () => {
   const renderRiskSection = () => {
     const risk = results.risk_assessment || {};
     const vulns = results.vulnerabilities || [];
+    console.log('🔍 Rendering risk section. Risk:', risk, 'Vulnerabilities:', vulns.length);
 
     const overviewItems = [
       {
@@ -241,6 +282,7 @@ const ScanResults = () => {
   const renderAIAnalysis = () => {
     const aiInsights = results.ai_analysis || [];
     const vulns = results.vulnerabilities || [];
+    console.log('🔍 Rendering AI analysis. AI insights:', aiInsights.length, 'Vulnerabilities:', vulns.length);
 
     // Create remediation timeline based on severity
     const criticalVulns = vulns.filter(v => v.severity?.toLowerCase() === 'critical');
@@ -340,6 +382,232 @@ const ScanResults = () => {
     );
   };
 
+  const renderRemediationStrategies = () => {
+    const strategies = results.remediation_strategies || {};
+    const recommendations = strategies.recommendations || [];
+    const priorityMatrix = strategies.priority_matrix || {};
+    const timeline = strategies.timeline || {};
+    const costBenefit = strategies.cost_benefit || {};
+    const resourceAllocation = strategies.resource_allocation || {};
+
+    console.log('🔍 Rendering remediation strategies:', strategies);
+
+    return (
+      <section className="results-section remediation-section">
+        <div className="section-header-box pink">
+          <h2>Remediation Strategy</h2>
+          <div className="count-badge">{recommendations.length}</div>
+        </div>
+
+        {/* Priority Matrix */}
+        {Object.keys(priorityMatrix).length > 0 && (
+          <div className="strategy-subsection">
+            <h3>📊 Priority Matrix</h3>
+            <div className="priority-matrix-grid">
+              {Object.entries(priorityMatrix).map(([priority, items]) => (
+                <div key={priority} className={`priority-card ${priority.toLowerCase()}-priority`}>
+                  <div className="priority-header">
+                    <span className={`priority-badge ${priority.toLowerCase()}`}>
+                      {priority.toUpperCase()}
+                    </span>
+                    <span className="item-count">{items.length || 0} items</span>
+                  </div>
+                  {items && items.length > 0 && (
+                    <ul className="priority-items">
+                      {items.slice(0, 5).map((item, idx) => (
+                        <li key={idx}>{item.title || item}</li>
+                      ))}
+                      {items.length > 5 && <li>...and {items.length - 5} more</li>}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Timeline */}
+        {Object.keys(timeline).length > 0 && (
+          <div className="strategy-subsection">
+            <h3>📅 Remediation Timeline</h3>
+            <div className="timeline-overview">
+              {timeline.immediate_action && (
+                <div className="timeline-phase critical-phase">
+                  <h4>⚡ Immediate Action (0-7 days)</h4>
+                  <p>{timeline.immediate_action.description}</p>
+                  <div className="timeline-items">
+                    {timeline.immediate_action.items && timeline.immediate_action.items.map((item, idx) => (
+                      <div key={idx} className="timeline-item-card">
+                        <strong>{item.title || item}</strong>
+                        {item.estimated_hours && <span className="time-estimate">{item.estimated_hours}h</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {timeline.short_term && (
+                <div className="timeline-phase high-phase">
+                  <h4>🎯 Short Term (1-4 weeks)</h4>
+                  <p>{timeline.short_term.description}</p>
+                  <div className="timeline-items">
+                    {timeline.short_term.items && timeline.short_term.items.map((item, idx) => (
+                      <div key={idx} className="timeline-item-card">
+                        <strong>{item.title || item}</strong>
+                        {item.estimated_hours && <span className="time-estimate">{item.estimated_hours}h</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {timeline.medium_term && (
+                <div className="timeline-phase medium-phase">
+                  <h4>📆 Medium Term (1-3 months)</h4>
+                  <p>{timeline.medium_term.description}</p>
+                  <div className="timeline-items">
+                    {timeline.medium_term.items && timeline.medium_term.items.map((item, idx) => (
+                      <div key={idx} className="timeline-item-card">
+                        <strong>{item.title || item}</strong>
+                        {item.estimated_hours && <span className="time-estimate">{item.estimated_hours}h</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {timeline.long_term && (
+                <div className="timeline-phase low-phase">
+                  <h4>🔄 Long Term (3+ months)</h4>
+                  <p>{timeline.long_term.description}</p>
+                  <div className="timeline-items">
+                    {timeline.long_term.items && timeline.long_term.items.map((item, idx) => (
+                      <div key={idx} className="timeline-item-card">
+                        <strong>{item.title || item}</strong>
+                        {item.estimated_hours && <span className="time-estimate">{item.estimated_hours}h</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Cost-Benefit Analysis */}
+        {Object.keys(costBenefit).length > 0 && (
+          <div className="strategy-subsection">
+            <h3>💰 Cost-Benefit Analysis</h3>
+            <div className="cost-benefit-grid">
+              <div className="cost-card">
+                <div className="cost-label">Estimated Remediation Cost</div>
+                <div className="cost-value">
+                  ${(costBenefit.total_remediation_cost || costBenefit.remediation_cost || 0).toLocaleString()}
+                </div>
+                {costBenefit.effort_hours && (
+                  <div className="cost-detail">{costBenefit.effort_hours} hours of effort</div>
+                )}
+              </div>
+              <div className="cost-card">
+                <div className="cost-label">Potential Loss (if not fixed)</div>
+                <div className="cost-value risk">
+                  ${(costBenefit.potential_breach_cost || costBenefit.potential_loss || 0).toLocaleString()}
+                </div>
+                {costBenefit.probability && (
+                  <div className="cost-detail">Probability: {(costBenefit.probability * 100).toFixed(0)}%</div>
+                )}
+              </div>
+              <div className="cost-card">
+                <div className="cost-label">Net Benefit</div>
+                <div className="cost-value benefit">
+                  ${(costBenefit.net_benefit || 0).toLocaleString()}
+                </div>
+                {costBenefit.roi_percentage && (
+                  <div className="cost-detail">ROI: {costBenefit.roi_percentage.toFixed(0)}%</div>
+                )}
+              </div>
+            </div>
+            {costBenefit.recommendation && (
+              <div className="cost-recommendation">
+                <strong>💡 Recommendation:</strong> {costBenefit.recommendation}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Resource Allocation */}
+        {Object.keys(resourceAllocation).length > 0 && (
+          <div className="strategy-subsection">
+            <h3>👥 Resource Allocation</h3>
+            <div className="resource-grid">
+              {resourceAllocation.team_composition && (
+                <div className="resource-card">
+                  <h4>Team Composition</h4>
+                  <ul>
+                    {Object.entries(resourceAllocation.team_composition).map(([role, count]) => (
+                      <li key={role}>
+                        <strong>{role}:</strong> {count}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {resourceAllocation.estimated_timeline && (
+                <div className="resource-card">
+                  <h4>Estimated Timeline</h4>
+                  <p>{resourceAllocation.estimated_timeline}</p>
+                </div>
+              )}
+              {resourceAllocation.budget_range && (
+                <div className="resource-card">
+                  <h4>Budget Range</h4>
+                  <p>{resourceAllocation.budget_range}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Recommendations List */}
+        {recommendations.length > 0 && (
+          <div className="strategy-subsection">
+            <h3>✅ Actionable Recommendations</h3>
+            <div className="recommendations-list">
+              {recommendations.map((rec, index) => (
+                <div key={index} className={`recommendation-card ${rec.priority?.toLowerCase() || 'medium'}-priority`}>
+                  <div className="rec-header">
+                    <span className={`rec-badge ${rec.priority?.toLowerCase() || 'medium'}`}>
+                      {rec.priority || 'Medium'}
+                    </span>
+                    {rec.category && <span className="rec-category">{rec.category}</span>}
+                  </div>
+                  <h4>{rec.title || `Recommendation ${index + 1}`}</h4>
+                  <p>{rec.description || rec.recommendation}</p>
+                  {rec.action_items && rec.action_items.length > 0 && (
+                    <div className="action-items">
+                      <strong>Action Items:</strong>
+                      <ul>
+                        {rec.action_items.map((action, idx) => (
+                          <li key={idx}>{action}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {rec.estimated_effort && (
+                    <div className="rec-effort">Effort: {rec.estimated_effort}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {recommendations.length === 0 && Object.keys(strategies).length === 0 && (
+          <div className="no-results">
+            <p>No remediation strategies available yet. Strategies will be generated after scan completion.</p>
+          </div>
+        )}
+      </section>
+    );
+  };
+
   const getRiskColor = (score) => {
     if (!score) return '#999';
     if (score >= 8) return '#ff4444';
@@ -348,6 +616,12 @@ const ScanResults = () => {
     if (score >= 2) return '#00C851';
     return '#2db92d';
   };
+
+  // Log rendering state
+  console.log('🎨 Rendering ScanResults component');
+  console.log('  - Active tab:', activeTab);
+  console.log('  - Results loaded:', !!results);
+  console.log('  - Results data:', results);
 
   return (
     <Layout>
@@ -390,6 +664,12 @@ const ScanResults = () => {
             MITRE Mapping
           </button>
           <button
+            className={`tab ${activeTab === 'remediation' ? 'active' : ''}`}
+            onClick={() => setActiveTab('remediation')}
+          >
+            Remediation Strategy
+          </button>
+          <button
             className={`tab ${activeTab === 'ai' ? 'active' : ''}`}
             onClick={() => setActiveTab('ai')}
           >
@@ -401,6 +681,7 @@ const ScanResults = () => {
           {activeTab === 'overview' && renderRiskSection()}
           {activeTab === 'vulnerabilities' && renderVulnerabilitySection()}
           {activeTab === 'mitre' && renderMITRESection()}
+          {activeTab === 'remediation' && renderRemediationStrategies()}
           {activeTab === 'ai' && renderAIAnalysis()}
         </div>
       </div>

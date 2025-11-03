@@ -63,7 +63,7 @@ class VulnerabilityResponse(BaseModel):
     raw_data: Optional[dict]
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 @router.post("/", response_model=VulnerabilityResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("30/minute")

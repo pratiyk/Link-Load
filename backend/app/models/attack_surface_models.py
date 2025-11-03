@@ -75,7 +75,7 @@ class ScanResponse(BaseModel):
     high_risk_assets: int
     error_message: Optional[str]
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class AssetResponse(BaseModel):
     id: str
@@ -89,7 +89,7 @@ class AssetResponse(BaseModel):
     discovered_at: datetime
     asset_metadata: Optional[Dict[str,Any]]
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class ScanSummaryResponse(BaseModel):
     scan: ScanResponse
