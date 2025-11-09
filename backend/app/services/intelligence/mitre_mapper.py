@@ -4,7 +4,9 @@ import os
 from loguru import logger
 import aiohttp
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+from app.utils.datetime_utils import utc_now
 
 class MITREMapper:
     def __init__(self):
@@ -22,7 +24,9 @@ class MITREMapper:
                     cache = json.load(f)
                     
                 cache_time = datetime.fromisoformat(cache.get('timestamp', '2000-01-01'))
-                if datetime.utcnow() - cache_time < self.cache_ttl:
+                if cache_time.tzinfo is None:
+                    cache_time = cache_time.replace(tzinfo=timezone.utc)
+                if utc_now() - cache_time < self.cache_ttl:
                     self.techniques = cache.get('techniques', {})
                     self.tactics = cache.get('tactics', {})
                     return
@@ -60,7 +64,7 @@ class MITREMapper:
                 
                 # Update cache
                 cache = {
-                    'timestamp': datetime.utcnow().isoformat(),
+                    'timestamp': utc_now().isoformat(),
                     'techniques': self.techniques,
                     'tactics': self.tactics
                 }

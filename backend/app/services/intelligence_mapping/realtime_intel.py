@@ -1,13 +1,15 @@
 """WebSocket-based real-time threat intelligence streaming service."""
-from typing import Dict, Any, Optional, List, Set
+from typing import Dict, Any, Optional, List, Set, cast
 from fastapi import WebSocket, WebSocketDisconnect
 import asyncio
-from app.core.security import verify_token
-from app.models.threat_intel_models import ThreatIntelligence
-from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import logging
 from collections import defaultdict
+
+from app.core.security import verify_token
+from app.models.threat_intel_models import ThreatIntelligence
+from sqlalchemy.orm import Session
+from app.utils.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +47,7 @@ class ThreatIntelManager:
         target_clients: Optional[List[str]] = None
     ):
         """Broadcast threat intelligence to connected clients."""
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = utc_now().isoformat()
         payload = dict(intel_data)
         payload.setdefault("timestamp", timestamp)
         message = {
@@ -121,7 +123,7 @@ class RealTimeIntelligence:
                 await websocket.send_json({
                     "type": "historical",
                     "data": intel,
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": utc_now().isoformat()
                 })
             
             # Start receiving messages
@@ -170,7 +172,8 @@ class RealTimeIntelligence:
             self.db.refresh(intel)
 
             # Determine interested clients based on subscriptions
-            target_clients = self._subscribers_for_type(intel.threat_type)
+            threat_type_value = cast(Optional[str], intel.threat_type)
+            target_clients = self._subscribers_for_type(threat_type_value)
 
             # Broadcast to relevant clients
             await self.intel_manager.broadcast_intelligence({
@@ -182,7 +185,7 @@ class RealTimeIntelligence:
                 "confidence": intel.confidence_score,
                 "severity": intel.severity,
                 "indicators": intel.indicators,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": utc_now().isoformat()
             }, target_clients=target_clients or None)
             
             # Trigger model retraining if needed
@@ -216,7 +219,7 @@ class RealTimeIntelligence:
                     await conn.send_json({
                         "type": "query_result",
                         "data": results,
-                        "timestamp": datetime.utcnow().isoformat()
+                        "timestamp": utc_now().isoformat()
                     })
                 except Exception as e:
                     logger.error(f"Error sending query results: {e}")
@@ -262,7 +265,7 @@ class RealTimeIntelligence:
                 "confidence": item.confidence_score,
                 "severity": item.severity,
                 "indicators": item.indicators,
-                "timestamp": (item.created_at or datetime.utcnow()).isoformat(),
+                "timestamp": (item.created_at or utc_now()).isoformat(),
             }
             for item in results
         ]
@@ -290,7 +293,7 @@ class RealTimeIntelligence:
         else:
             return None
 
-        return datetime.utcnow() - delta
+        return utc_now() - delta
 
     def _subscribers_for_type(self, threat_type: Optional[str]) -> List[str]:
         """Determine which clients should receive a threat type broadcast."""

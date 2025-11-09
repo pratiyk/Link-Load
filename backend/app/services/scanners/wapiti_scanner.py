@@ -1,5 +1,4 @@
 from typing import Dict, Any, List, Optional
-from datetime import datetime
 import logging
 import asyncio
 import json
@@ -12,6 +11,7 @@ from pydantic import BaseModel
 import xml.etree.ElementTree as ET
 
 from .base_scanner import BaseScanner, ScannerConfig, ScanResult, Vulnerability
+from app.utils.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +156,7 @@ class WapitiScanner(BaseScanner):
             self.active_scans[scan_id] = {
                 'process': proc,
                 'output_dir': output_dir,
-                'start_time': datetime.utcnow(),
+                'start_time': utc_now(),
                 'config': config.dict(),
                 'cmd': cmd,
                 'is_windows': self.is_windows
@@ -332,7 +332,7 @@ class WapitiScanner(BaseScanner):
                 scan_id=scan_id,
                 target_url=scan_info['config']['target_url'],
                 start_time=scan_info['start_time'],
-                end_time=datetime.utcnow(),
+                end_time=utc_now(),
                 status='completed',
                 vulnerabilities=vulnerabilities,
                 raw_findings={

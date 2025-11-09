@@ -7,7 +7,7 @@ import uuid
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from typing import Dict, Any, Optional
 from pydantic import BaseModel, HttpUrl
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.core.security import get_current_user
 from app.database.supabase_client import supabase
@@ -85,7 +85,7 @@ async def start_scan(
             "target_url": target_url,
             "status": "pending",
             "progress": 0,
-            "started_at": datetime.utcnow().isoformat(),
+            "started_at": datetime.now(timezone.utc).isoformat(),
         }
         
         # Try Supabase first, fall back to in-memory storage for tests
@@ -271,7 +271,7 @@ def _run_scan_task(scan_id: str, target_url: str, current_user):
         _update_scan(scan_id, {
             "status": "completed",
             "progress": 100,
-            "completed_at": datetime.utcnow().isoformat(),
+            "completed_at": datetime.now(timezone.utc).isoformat(),
             "risk_score": risk_score,
             "mitigations": mitigations
         })
@@ -287,7 +287,7 @@ def _run_scan_task(scan_id: str, target_url: str, current_user):
                 "cvss_score": vuln.get("cvss_score", 0.0),
                 "location": vuln.get("url", target_url),
                 "recommendation": vuln.get("recommendation", ""),
-                "discovered_at": datetime.utcnow()
+                "discovered_at": datetime.now(timezone.utc)
             }
             vuln_records.append(vuln_data)
         
@@ -308,7 +308,7 @@ def _run_scan_task(scan_id: str, target_url: str, current_user):
             _update_scan(scan_id, {
                 "status": "failed",
                 "error": str(e),
-                "completed_at": datetime.utcnow().isoformat()
+                "completed_at": datetime.now(timezone.utc).isoformat()
             })
         except Exception as update_error:
             logger.error(f"Failed to update scan status: {update_error}")

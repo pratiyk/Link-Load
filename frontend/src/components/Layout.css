@@ -6,14 +6,15 @@
 
 .sidebar {
   width: 280px;
-  background-color: #000000;
+  background: var(--color-black, #121417);
   padding: 2rem 0;
-  color: #ffffff;
+  color: var(--color-white, #fff7df);
   display: flex;
   flex-direction: column;
   gap: 2rem;
   position: fixed;
   height: 100vh;
+  border-right: 3px solid var(--color-black, #000);
 }
 
 .logo-container {
@@ -42,13 +43,15 @@
 }
 
 .folder-item {
+  font-family: var(--font-sans, 'Inter', sans-serif);
   display: flex;
   align-items: center;
   padding: 0.75rem 2rem;
   cursor: pointer;
   transition: background-color 0.3s ease;
-  font-family: "SF Mono", monospace;
-  font-size: 14px;
+  font-size: 0.875rem;
+  letter-spacing: 0.02em;
+  font-weight: 500;
 }
 
 .folder-item:hover {
@@ -87,7 +90,8 @@
   justify-content: space-between;
   align-items: center;
   padding: 2rem;
-  background-color: #ffffff;
+  background: rgba(255, 247, 223, 0.94);
+  border-bottom: 3px solid var(--color-black, #000);
 }
 
 .nav-links {
@@ -96,12 +100,14 @@
 }
 
 .nav-link {
-  color: #000000;
+  font-family: var(--font-display, 'DotGothic16', monospace);
+  color: var(--color-black, #000);
   text-decoration: none;
-  font-family: "SF Mono", monospace;
-  font-size: 14px;
-  letter-spacing: 0.05em;
+  font-size: 0.875rem;
+  letter-spacing: 0.08em;
   transition: color 0.3s ease;
+  text-transform: uppercase;
+  font-weight: 700;
 }
 
 .nav-link:hover {
@@ -121,6 +127,7 @@
   flex-grow: 1;
   padding: 2rem;
   overflow-y: auto;
+  background: var(--color-white, #fff7df);
 }
 
 /* Responsive Design */

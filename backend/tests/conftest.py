@@ -4,9 +4,15 @@ from pathlib import Path
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+from passlib.context import CryptContext
 
 import app.database as db_module
 from app.database import Base
+from app.core import security as security_module
+
+
+security_module.pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
 
 
 class _TestWebSocket:
@@ -57,10 +63,13 @@ def set_test_env():
 def db_session(monkeypatch):
     """Provide an isolated in-memory database session for tests."""
     database_url = os.environ.get("DATABASE_URL", "sqlite+pysqlite:///:memory:")
-    engine = create_engine(
-        database_url,
-        connect_args={"check_same_thread": False},
-    )
+    engine_kwargs = {}
+    if database_url.startswith("sqlite"):
+        engine_kwargs["connect_args"] = {"check_same_thread": False}
+        if database_url.endswith(":memory:"):
+            engine_kwargs["poolclass"] = StaticPool
+
+    engine = create_engine(database_url, **engine_kwargs)
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
     # Redirect the application database bindings to the in-memory engine
@@ -69,6 +78,7 @@ def db_session(monkeypatch):
     Base.metadata.bind = engine
 
     # Ensure all relevant models are registered before creating tables
+    import app.models.user  # noqa: F401
     import app.models.threat_intel_models  # noqa: F401
     import app.models.mitre_models  # noqa: F401
     import app.models.vulnerability_models  # noqa: F401
@@ -126,32 +136,6 @@ def mitre_mapper(db_session):
 def anyio_backend():
     """Restrict pytest-anyio to the asyncio backend for all async tests."""
     return "asyncio"
-
-
-@pytest.fixture
-def mock_websocket():
-    """Provide a minimal WebSocket double."""
-
-    return _TestWebSocket()
-
-
-@pytest.fixture
-def realtime_intel(db_session, monkeypatch):
-    """Instantiate RealTimeIntelligence with patched token verification."""
-
-    from app.services.intelligence_mapping.realtime_intel import RealTimeIntelligence
-
-    async def _fake_verify(token: str):
-        if token == "invalid_token":
-            return None
-        return "test_client"
-
-    monkeypatch.setattr(
-        "app.services.intelligence_mapping.realtime_intel.verify_token",
-        _fake_verify,
-    )
-
-    return RealTimeIntelligence(db_session)
 
 
 @pytest.fixture

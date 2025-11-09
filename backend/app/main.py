@@ -18,7 +18,7 @@ from app.core.exceptions import (
     ValidationException,
     ResourceNotFoundException
 )
-from app.api import ws, auth, scan_manager, ws_endpoints, scans, batch_scanner, scanner, risk_analysis
+from app.api import ws, auth, scan_manager, ws_endpoints, scans, batch_scanner, scanner, risk_analysis, remediation
 from app.api import (
     vulnerability_scanner,
     vulnerabilities,
@@ -135,6 +135,7 @@ app.include_router(vulnerability_scanner.router, prefix=settings.API_PREFIX)
 app.include_router(vulnerabilities.router)
 app.include_router(intelligence.router, prefix=settings.API_PREFIX)  # Intelligence routes
 app.include_router(risk_analysis.router)  # Enhanced risk analysis endpoints
+app.include_router(remediation.router, prefix=settings.API_PREFIX)  # Remediation guidance
 app.include_router(scan_manager.router, prefix=settings.API_PREFIX)  # Scan management
 app.include_router(scans.router)  # Comprehensive scanning endpoints
 app.include_router(ws_endpoints.router, prefix=settings.API_PREFIX)  # WebSocket endpoints

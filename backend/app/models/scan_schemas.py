@@ -3,7 +3,7 @@ Pydantic models for security scanning API schemas.
 """
 
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 from enum import Enum
 
@@ -52,7 +52,7 @@ class ScanProgress(BaseModel):
     scanned_urls: int = 0
     total_urls: int = 0
     vulnerabilities_found: int = 0
-    last_updated: datetime = Field(default_factory=datetime.utcnow)
+    last_updated: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ScanSummary(BaseModel):
     """Summary of scan results"""

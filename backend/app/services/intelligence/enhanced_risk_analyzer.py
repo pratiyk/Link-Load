@@ -7,6 +7,8 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 from enum import Enum
 
+from app.utils.datetime_utils import utc_now
+
 logger = logging.getLogger(__name__)
 
 
@@ -315,7 +317,7 @@ class EnhancedRiskAnalyzer:
                     'tactics': list(set([t.get('tactic', 'Unknown') for t in mitre_techniques])),
                     'attack_patterns': [t.get('name', 'Unknown') for t in mitre_techniques[:3]]
                 },
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             }
 
         except Exception as e:
@@ -324,7 +326,7 @@ class EnhancedRiskAnalyzer:
                 'risk_score': 0.0,
                 'risk_level': RiskLevel.INFO.value,
                 'error': str(e),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             }
 
     def _calculate_base_risk(self, vulnerability: Dict[str, Any]) -> float:
@@ -567,7 +569,7 @@ class EnhancedRiskAnalyzer:
             priority_score += 0.5
 
         # Determine priority level and SLA
-        now = datetime.utcnow()
+        now = utc_now()
         
         if priority_score >= 9.0:
             priority = RemediationPriority.P0_IMMEDIATE

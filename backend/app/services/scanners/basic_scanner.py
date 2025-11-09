@@ -1,8 +1,9 @@
 from typing import Dict, List, Any
-from datetime import datetime
-from app.services.scanners.base_scanner import BaseScanner
 import aiohttp
 import logging
+
+from app.services.scanners.base_scanner import BaseScanner
+from app.utils.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +23,8 @@ class BasicVulnerabilityScanner(BaseScanner):
         if not self.initialized:
             await self.initialize()
         
-        self.scan_id = f"scan_{datetime.utcnow().timestamp()}"
-        self.start_time = datetime.utcnow()
+        self.scan_id = f"scan_{utc_now().timestamp()}"
+        self.start_time = utc_now()
         
         return self.scan_id
 
@@ -38,7 +39,7 @@ class BasicVulnerabilityScanner(BaseScanner):
         if scan_id != self.scan_id:
             return []
         
-        self.end_time = datetime.utcnow()
+        self.end_time = utc_now()
         
         # This is a placeholder implementation
         # In a real scanner, this would return actual scan results

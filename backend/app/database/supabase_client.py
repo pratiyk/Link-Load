@@ -7,12 +7,23 @@ from supabase import create_client, Client
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.engine.url import make_url
 from app.core.config import settings
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 from contextlib import contextmanager
 
+from app.utils.datetime_utils import utc_now
+
 logger = logging.getLogger(__name__)
+
+_DEFAULT_CVSS_BY_SEVERITY = {
+    "critical": 9.5,
+    "high": 8.0,
+    "medium": 5.0,
+    "low": 2.5,
+    "info": 0.1,
+}
 
 class DatabaseError(Exception):
     """Base class for database errors"""
@@ -36,15 +47,55 @@ class SupabaseClient:
         self._memory_vulns: Dict[str, List[Dict[str, Any]]] = {}
         
         # Initialize SQLAlchemy engine for raw SQL operations
-        self.engine = create_engine(
-            f"postgresql://{settings.SUPABASE_USER}:{settings.SUPABASE_PASSWORD}@"
-            f"{settings.SUPABASE_HOST}:{settings.SUPABASE_PORT}/{settings.SUPABASE_DB}",
-            pool_size=10, 
-            max_overflow=20,
-            pool_pre_ping=True
-        )
+        db_url = os.getenv("DATABASE_URL")
+        if not db_url:
+            db_url = (
+                f"postgresql://{settings.SUPABASE_USER}:{settings.SUPABASE_PASSWORD}@"
+                f"{settings.SUPABASE_HOST}:{settings.SUPABASE_PORT}/{settings.SUPABASE_DB}"
+            )
+
+        connect_args = self._build_connect_args(db_url)
+
+        engine_kwargs: Dict[str, Any] = {"pool_pre_ping": True}
+
+        if connect_args:
+            engine_kwargs["connect_args"] = connect_args
+
+        backend_name = None
+        try:
+            backend_name = make_url(db_url).get_backend_name()
+        except Exception:
+            backend_name = None
+
+        if backend_name and backend_name.startswith("postgres"):
+            engine_kwargs.update({"pool_size": 10, "max_overflow": 20})
+        elif backend_name and backend_name.startswith("sqlite"):
+            sqlite_args = dict(engine_kwargs.get("connect_args", {}))
+            sqlite_args.setdefault("check_same_thread", False)
+            engine_kwargs["connect_args"] = sqlite_args
+
+        self.engine = create_engine(db_url, **engine_kwargs)
         self.Session = sessionmaker(bind=self.engine)
         logger.info("Supabase client initialized")
+
+    def _build_connect_args(self, database_url: str) -> Dict[str, Any]:
+        """Build connection arguments with sensible defaults for Supabase."""
+        try:
+            url = make_url(database_url)
+        except Exception:
+            return {}
+
+        host = (url.host or "").lower()
+        query = url.query if hasattr(url, "query") and url.query else {}
+
+        if isinstance(query, dict) and "sslmode" in query:
+            return {}
+
+        if host and host not in {"localhost", "127.0.0.1"} and not host.startswith("localhost"):
+            ssl_mode = os.getenv("SUPABASE_SSLMODE", "require")
+            return {"sslmode": ssl_mode}
+
+        return {}
 
     def health_check(self) -> bool:
         """Simple health check against database"""
@@ -107,56 +158,151 @@ class SupabaseClient:
                 normalized[key] = value
         return normalized
 
+    def _prepare_vulnerability_record(self, scan_id: str, vulnerability: Any) -> Dict[str, Any]:
+        """Normalize scanner output into the minimal schema expected by the DB."""
+        if vulnerability is None:
+            return {"scan_id": scan_id, "title": "Unknown", "severity": "medium"}
+
+        if hasattr(vulnerability, "dict"):
+            raw = vulnerability.dict()
+        else:
+            raw = dict(vulnerability)
+
+        record: Dict[str, Any] = dict(raw)
+        record["scan_id"] = scan_id
+
+        # Ensure core fields exist so DB constraints pass even if scanners omit them.
+        title = record.get("title") or record.get("name") or record.get("vulnerability")
+        if not title:
+            logger.debug("Vulnerability missing title; defaulting to Unknown", extra={"scanner_source": record.get("scanner_source")})
+            title = "Unknown"
+        record["title"] = title
+
+        if not record.get("description"):
+            record["description"] = record.get("details") or ""
+
+        severity = record.get("severity") or "medium"
+        severity = str(severity).lower()
+        record["severity"] = severity
+
+        cvss_score = record.get("cvss_score")
+        if cvss_score is None:
+            cvss_score = _DEFAULT_CVSS_BY_SEVERITY.get(severity, 0.0)
+        else:
+            try:
+                cvss_score = float(cvss_score)
+            except (TypeError, ValueError):
+                cvss_score = _DEFAULT_CVSS_BY_SEVERITY.get(severity, 0.0)
+        record["cvss_score"] = cvss_score
+
+        # Align location/recommendation defaults with what the API expects to return.
+        location = record.get("location") or record.get("url") or record.get("path") or ""
+        record["location"] = location
+
+        if not record.get("recommendation"):
+            record["recommendation"] = record.get("solution") or ""
+
+        scanner_source = record.get("scanner_source") or record.get("source") or "unknown"
+        record["scanner_source"] = scanner_source
+
+        scanner_id = record.get("scanner_id") or record.get("vuln_id") or record.get("id")
+        record["scanner_id"] = scanner_id
+
+        references = record.get("references")
+        if isinstance(references, dict):
+            references = list(references.values())
+        record["references"] = references or []
+
+        tags = record.get("tags")
+        if isinstance(tags, dict):
+            tags = list(tags.values())
+        record["tags"] = tags or []
+
+        mitre = record.get("mitre_techniques")
+        if isinstance(mitre, set):
+            mitre = list(mitre)
+        record["mitre_techniques"] = mitre or []
+
+        discovered_at = record.get("discovered_at")
+        if isinstance(discovered_at, str):
+            try:
+                discovered_at = datetime.fromisoformat(discovered_at)
+            except ValueError:
+                discovered_at = None
+        if not isinstance(discovered_at, datetime):
+            discovered_at = utc_now()
+        record["discovered_at"] = discovered_at
+
+        return record
+
+    def cache_vulnerabilities(self, scan_id: str, vulns: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Persist vulnerabilities in the in-memory fallback store."""
+        prepared = [self._prepare_vulnerability_record(scan_id, vuln) for vuln in vulns]
+        cached = [self._normalize_record(record) for record in prepared]
+
+        if cached:
+            self._memory_vulns[scan_id] = cached
+        else:
+            self._memory_vulns.pop(scan_id, None)
+        return cached
+
     def create_scan(self, record: Dict) -> Optional[Dict[str, Any]]:
         """Insert a new scan record"""
         try:
-            res = self.admin.table("owasp_scans").insert(self._normalize_record(record)).execute()
+            normalized = self._normalize_record(record)
+            res = self.admin.table("owasp_scans").insert(normalized).execute()
             if not res.data:
-                # Still mirror to memory store
-                self._memory_scans[record.get("scan_id")] = dict(record)
+                self._memory_scans[normalized.get("scan_id")] = dict(normalized)
                 return None
+
             created = res.data[0]
-            # Mirror to memory store for resilience
             self._memory_scans[created.get("scan_id")] = dict(created)
             return created
         except Exception as e:
             logger.error(f"Failed to create scan: {str(e)}", exc_info=True)
-            # Fallback to memory store
             scan_id = record.get("scan_id") or f"mem_{uuid.uuid4().hex[:12]}"
             record["scan_id"] = scan_id
-            self._memory_scans[scan_id] = dict(record)
+            self._memory_scans[scan_id] = self._normalize_record(record)
             return record
 
     def update_scan(self, scan_id: str, update: Dict) -> Optional[Dict[str, Any]]:
         """Update scan record identified by scan_id"""
         try:
             normalized = self._normalize_record(update)
-            
-            # Filter out columns that might not exist in schema yet (for Supabase cache issues)
-            # Known safe columns
+
             safe_columns = {
-                'scan_id', 'user_id', 'target_url', 'status', 'progress', 'current_stage',
-                'started_at', 'completed_at', 'scan_types', 'options', 'risk_score', 
-                'risk_level', 'ai_analysis', 'mitre_mapping', 'remediation_strategies',
-                # allow storing per-scan diagnostics for troubleshooting
-                'scanner_debug',
-                'created_at', 'updated_at'
+                "scan_id",
+                "user_id",
+                "target_url",
+                "status",
+                "progress",
+                "current_stage",
+                "started_at",
+                "completed_at",
+                "scan_types",
+                "options",
+                "risk_score",
+                "risk_level",
+                "ai_analysis",
+                "mitre_mapping",
+                "remediation_strategies",
+                "executive_summary",
+                "scanner_debug",
+                "created_at",
+                "updated_at",
             }
-            
-            # Filter update to only include safe columns initially
+
             filtered_update = {k: v for k, v in normalized.items() if k in safe_columns}
-            
-            # Try with filtered update
             res = self.admin.table("owasp_scans").update(filtered_update).eq("scan_id", scan_id).execute()
-            # Mirror full update to memory store regardless of DB result (preserve extra fields)
+
             mem = self._memory_scans.get(scan_id, {})
-            mem.update(self._normalize_record(update))
-            if not res.data or len(res.data) == 0:
-                # No DB echo, keep enriched memory
-                self._memory_scans[scan_id] = mem
+            mem.update(normalized)
+            self._memory_scans[scan_id] = dict(mem)
+
+            if not res.data:
                 return mem or None
+
             updated = res.data[0]
-            # Merge DB response into memory but PRESERVE extra fields (like scanner_debug)
             merged = dict(mem)
             merged.update(updated)
             self._memory_scans[scan_id] = merged
@@ -191,20 +337,34 @@ class SupabaseClient:
     def insert_vulnerabilities(self, scan_id: str, vulns: List[Dict[str, Any]]) -> int:
         """Bulk insert vulnerabilities; adds scan_id to each record"""
         try:
-            for v in vulns:
-                v["scan_id"] = scan_id
-                # Convert discovered_at to ISO if present
-                if isinstance(v.get("discovered_at"), datetime):
-                    v["discovered_at"] = v["discovered_at"].isoformat()
-                    
-            normalized = [self._normalize_record(v) for v in vulns]
-            # Always mirror to memory
-            self._memory_vulns.setdefault(scan_id, []).extend(normalized)
+            normalized = self.cache_vulnerabilities(scan_id, vulns)
+            if not normalized:
+                return 0
+
             # Try DB insert best-effort
             try:
-                res = self.admin.table("owasp_vulnerabilities").insert(normalized).execute()
-                if res.data:
-                    return len(res.data)
+                allowed_columns = {
+                    "scan_id",
+                    "title",
+                    "description",
+                    "severity",
+                    "cvss_score",
+                    "location",
+                    "recommendation",
+                    "mitre_techniques",
+                    "scanner_source",
+                    "scanner_id",
+                    "discovered_at"
+                }
+                db_records = [
+                    {k: record[k] for k in allowed_columns if k in record and record[k] is not None}
+                    for record in normalized
+                ]
+
+                if db_records:
+                    res = self.admin.table("owasp_vulnerabilities").insert(db_records).execute()
+                    if res.data:
+                        return len(res.data)
             except Exception as db_err:
                 logger.warning(f"DB insert_vulnerabilities failed, using memory store: {db_err}")
             return len(self._memory_vulns.get(scan_id, []))
@@ -212,7 +372,7 @@ class SupabaseClient:
             logger.error(f"Failed to insert vulnerabilities for {scan_id}: {str(e)}", exc_info=True)
             # Still preserve in memory if normalization failed partially
             try:
-                self._memory_vulns.setdefault(scan_id, []).extend(vulns)
+                self.cache_vulnerabilities(scan_id, vulns)
             except Exception:
                 pass
             return len(self._memory_vulns.get(scan_id, []))

@@ -1,5 +1,4 @@
 from typing import Dict, Any, List, Optional
-from datetime import datetime
 import logging
 import asyncio
 import json
@@ -11,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pydantic import BaseModel
 
 from .base_scanner import BaseScanner, ScannerConfig, ScanResult
+from app.utils.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -154,7 +154,7 @@ class NucleiScanner(BaseScanner):
             self.active_scans[scan_id] = {
                 'process': proc,
                 'output_dir': output_dir,
-                'start_time': datetime.utcnow(),
+                'start_time': utc_now(),
                 'config': config.dict(),
                 'cmd': cmd,
                 'results_file': results_file,
@@ -296,7 +296,7 @@ class NucleiScanner(BaseScanner):
                             'references': info.get('reference', []) if isinstance(info.get('reference'), list) else ([info.get('reference')] if info.get('reference') else []),
                             'tags': info.get('tags', []),
                             'cwe_id': classification.get('cwe-id') or classification.get('cwe_id'),
-                            'discovered_at': datetime.utcnow(),
+                            'discovered_at': utc_now(),
                             'raw_finding': finding
                         }
                         vulnerabilities.append(vuln)
@@ -333,7 +333,7 @@ class NucleiScanner(BaseScanner):
                         'references': info.get('reference', []) if isinstance(info.get('reference'), list) else ([info.get('reference')] if info.get('reference') else []),
                         'tags': info.get('tags', []),
                         'cwe_id': classification.get('cwe-id') or classification.get('cwe_id'),
-                        'discovered_at': datetime.utcnow(),
+                        'discovered_at': utc_now(),
                         'raw_finding': finding
                     }
                     vulnerabilities.append(vuln)
@@ -349,7 +349,7 @@ class NucleiScanner(BaseScanner):
                 scan_id=scan_id,
                 target_url=scan_info['config']['target_url'],
                 start_time=scan_info['start_time'],
-                end_time=datetime.utcnow(),
+                end_time=utc_now(),
                 status='completed',
                 vulnerabilities=vulnerabilities,
                 raw_findings={

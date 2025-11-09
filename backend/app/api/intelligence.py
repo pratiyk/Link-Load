@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 import logging
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v1/intelligence", tags=["intelligence"])
+router = APIRouter(prefix="/intelligence", tags=["intelligence"])
 
 class ThreatIntelResponse(BaseModel):
     """Threat intelligence response model."""
@@ -143,6 +143,8 @@ async def get_risk_score(
             
         return risk_score
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error calculating risk score: {str(e)}")
         raise HTTPException(
@@ -189,7 +191,7 @@ async def get_mitre_mapping(
         if not vuln.description:
             return []
             
-        description = db.scalar(vuln.description) if vuln.description else ""
+        description = vuln.description or ""
         mappings = risk_engine.map_to_mitre_techniques(
             description,
             threshold=threshold
@@ -206,6 +208,8 @@ async def get_mitre_mapping(
         
         return mappings
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error mapping to MITRE ATT&CK: {str(e)}")
         raise HTTPException(
@@ -237,6 +241,8 @@ async def get_comprehensive_analysis(
         analysis = await risk_engine.analyze_vulnerability(vuln)
         return analysis
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error performing vulnerability analysis: {str(e)}")
         raise HTTPException(

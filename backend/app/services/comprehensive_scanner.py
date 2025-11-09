@@ -1,13 +1,22 @@
 """Comprehensive security scanner orchestrator with AI analysis."""
 import asyncio
 import logging
+import uuid
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.core.config import settings
 from app.database.supabase_client import supabase
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_CVSS_BY_SEVERITY = {
+    "critical": 9.5,
+    "high": 8.0,
+    "medium": 5.0,
+    "low": 2.5,
+    "info": 0.1,
+}
 
 
 class ComprehensiveScanner:
@@ -16,26 +25,43 @@ class ComprehensiveScanner:
     def __init__(self):
         """Initialize scanner components."""
         self.scanners = {}
+        self._last_debug: Dict[str, Any] = {}
         self._initialize_scanners()
 
     def _initialize_scanners(self):
         """Initialize all available scanners."""
+        available_scanners = {}
+        
+        # Try to initialize OWASP ZAP
         try:
-            # Import scanner modules and configurations
             from app.services.scanners.zap_scanner import OWASPZAPScanner, ZAPScannerConfig
-            from app.services.scanners.nuclei_scanner import NucleiScanner, NucleiScannerConfig
-            from app.services.scanners.wapiti_scanner import WapitiScanner, WapitiScannerConfig
             
-            # Create configurations from settings
             zap_config = ZAPScannerConfig(
                 api_key=settings.ZAP_API_KEY or "",
                 host=settings.ZAP_BASE_URL.split("://")[1].split(":")[0] if settings.ZAP_BASE_URL else "127.0.0.1",
                 port=int(settings.ZAP_BASE_URL.split(":")[-1]) if settings.ZAP_BASE_URL else 8080
             )
             
+            zap_scanner = OWASPZAPScanner(zap_config)
+            # ZAP initialization will be done lazily on first scan
+            # For now, just check if ZAP library is available
+            try:
+                from zapv2 import ZAPv2
+                if ZAPv2 is not None:
+                    available_scanners["owasp"] = zap_scanner
+                    logger.info("[OK] OWASP ZAP scanner configured (will connect on first scan)")
+                else:
+                    logger.warning("[WARN] OWASP ZAP library not available")
+            except ImportError:
+                logger.warning("[WARN] OWASP ZAP library not installed")
+        except Exception as e:
+            logger.warning(f"[WARN] OWASP ZAP scanner configuration failed: {e}")
+        
+        # Try to initialize Nuclei
+        try:
             import os
             import sys
-
+            
             def _repo_root() -> str:
                 here = os.path.abspath(os.path.dirname(__file__))
                 return os.path.abspath(os.path.join(here, "..", "..", ".."))
@@ -55,10 +81,11 @@ class ComprehensiveScanner:
                     return candidate
                 # 3) Fallback to value (PATH)
                 return default_value
-
+            
+            from app.services.scanners.nuclei_scanner import NucleiScanner, NucleiScannerConfig
+            
             templates_dir = getattr(settings, "NUCLEI_TEMPLATES_PATH", "") or ""
             if templates_dir and not os.path.exists(templates_dir):
-                # Avoid passing an invalid templates path
                 templates_dir = ""
 
             nuclei_binary = _resolve_binary(settings.NUCLEI_BINARY_PATH or "nuclei", os.path.join("tools", "nuclei"), "nuclei")
@@ -67,7 +94,32 @@ class ComprehensiveScanner:
                 templates_dir=templates_dir
             )
             
-            # For Wapiti, try virtual environment first, then settings, then PATH
+            nuclei_scanner = NucleiScanner(nuclei_config)
+            # Test if Nuclei binary is available
+            import subprocess
+            try:
+                result = subprocess.run(
+                    [nuclei_binary, "-version"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if result.returncode == 0:
+                    available_scanners["nuclei"] = nuclei_scanner
+                    logger.info("[OK] Nuclei scanner initialized")
+                else:
+                    logger.warning(f"[WARN] Nuclei binary found but not working: {result.stderr}")
+            except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+                logger.warning(f"[WARN] Nuclei binary not found or not executable: {e}")
+        except Exception as e:
+            logger.warning(f"[WARN] Nuclei scanner not available: {e}")
+        
+        # Try to initialize Wapiti
+        try:
+            import os
+            import sys
+            from app.services.scanners.wapiti_scanner import WapitiScanner, WapitiScannerConfig
+            
             wapiti_binary = settings.WAPITI_BINARY_PATH
             if not wapiti_binary or not os.path.exists(wapiti_binary):
                 # Try virtual environment Scripts folder
@@ -75,21 +127,45 @@ class ComprehensiveScanner:
                 if os.path.exists(venv_wapiti):
                     wapiti_binary = venv_wapiti
                 else:
-                    # Fall back to resolve_binary helper
-                    wapiti_binary = _resolve_binary("wapiti", os.path.join("tools", "wapiti"), "wapiti")
+                    wapiti_binary = "wapiti"  # Try PATH
             
             wapiti_config = WapitiScannerConfig(
                 binary_path=wapiti_binary
             )
             
-            self.scanners = {
-                "owasp": OWASPZAPScanner(zap_config),
-                "nuclei": NucleiScanner(nuclei_config),
-                "wapiti": WapitiScanner(wapiti_config)
-            }
-            logger.info("Scanners initialized successfully")
+            wapiti_scanner = WapitiScanner(wapiti_config)
+            # Test if Wapiti is available
+            try:
+                # Check if wapitiCore module is importable (library-based)
+                import wapitiCore
+                available_scanners["wapiti"] = wapiti_scanner
+                logger.info("[OK] Wapiti scanner initialized")
+            except ImportError:
+                # Try binary approach
+                import subprocess
+                try:
+                    result = subprocess.run(
+                        [wapiti_binary, "--version"],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    if result.returncode == 0:
+                        available_scanners["wapiti"] = wapiti_scanner
+                        logger.info("[OK] Wapiti scanner initialized (binary)")
+                    else:
+                        logger.warning(f"[WARN] Wapiti binary found but not working")
+                except (FileNotFoundError, subprocess.TimeoutExpired):
+                    logger.warning("[WARN] Wapiti not available (neither library nor binary)")
         except Exception as e:
-            logger.warning(f"Some scanners failed to initialize: {e}")
+            logger.warning(f"[WARN] Wapiti scanner not available: {e}")
+        
+        self.scanners = available_scanners
+        
+        if not self.scanners:
+            logger.warning("[WARN] No scanners available! Install at least one: ZAP, Nuclei, or Wapiti")
+        else:
+            logger.info(f"[OK] Initialized {len(self.scanners)} scanner(s): {', '.join(self.scanners.keys())}")
 
     async def start_scan(
         self,
@@ -120,6 +196,8 @@ class ComprehensiveScanner:
             all_vulnerabilities = []
             
             tasks = []
+            task_scanners: List[str] = []
+            scanner_counts: Dict[str, int] = {}
             for scanner_type in scan_types:
                 if scanner_type.lower() in self.scanners:
                     tasks.append(
@@ -130,27 +208,79 @@ class ComprehensiveScanner:
                             options
                         )
                     )
+                    task_scanners.append(scanner_type.lower())
 
             # Execute scanners concurrently
             if tasks:
                 results = await asyncio.gather(*tasks, return_exceptions=True)
-                
-                for result in results:
+
+                result_types: Dict[str, str] = {}
+                for scanner_name, result in zip(task_scanners, results):
                     if isinstance(result, Exception):
-                        logger.error(f"Scanner error: {result}")
+                        logger.error(f"Scanner {scanner_name} raised error: {result}")
                         continue
                     if isinstance(result, list):
+                        logger.info(
+                            "Scanner %s produced %d findings before normalization",
+                            scanner_name,
+                            len(result)
+                        )
                         all_vulnerabilities.extend(result)
+                        scanner_counts[scanner_name] = len(result)
+                    else:
+                        logger.warning(
+                            "Scanner %s returned unexpected payload type %s",
+                            scanner_name,
+                            type(result)
+                        )
+                        result_types[scanner_name] = type(result).__name__
+
+            logger.info(
+                "Scan %s aggregated %d raw findings across scanners: %s",
+                scan_id,
+                len(all_vulnerabilities),
+                scanner_counts
+            )
 
             # Normalize vulnerability data for consistent field names
-            normalized_vulns = []
+            normalized_vulns: List[Dict[str, Any]] = []
+            severity_tally: Dict[str, int] = {}
             for vuln in all_vulnerabilities:
+                severity = (vuln.get("severity") or "medium").lower()
+                severity_tally[severity] = severity_tally.get(severity, 0) + 1
+
+                cvss_score = vuln.get("cvss_score")
+                if cvss_score is None:
+                    cvss_score = _DEFAULT_CVSS_BY_SEVERITY.get(severity, 0.0)
+                else:
+                    try:
+                        cvss_score = float(cvss_score)
+                    except (TypeError, ValueError):
+                        cvss_score = _DEFAULT_CVSS_BY_SEVERITY.get(severity, 0.0)
+
+                references = vuln.get("references") or []
+                if isinstance(references, dict):
+                    references = list(references.values())
+
+                tags = vuln.get("tags") or []
+                if isinstance(tags, dict):
+                    tags = list(tags.values())
+
+                discovered_at = vuln.get("discovered_at")
+                if isinstance(discovered_at, str):
+                    try:
+                        discovered_at = datetime.fromisoformat(discovered_at)
+                    except ValueError:
+                        discovered_at = None
+
                 normalized = {
+                    "vuln_id": vuln.get("vuln_id") or vuln.get("id") or str(uuid.uuid4()),
                     "title": vuln.get("title") or vuln.get("name") or "Unknown",
                     "name": vuln.get("name") or vuln.get("title") or "Unknown",
                     "description": vuln.get("description") or "",
-                    "severity": (vuln.get("severity") or "medium").lower(),
+                    "severity": severity,
                     "confidence": vuln.get("confidence") or "medium",
+                    "cvss_score": cvss_score,
                     "url": vuln.get("url") or "",
                     "path": vuln.get("path") or vuln.get("url") or "",
                     "location": vuln.get("location") or vuln.get("url") or vuln.get("path") or "",
@@ -158,17 +288,53 @@ class ComprehensiveScanner:
                     "evidence": vuln.get("evidence") or "",
                     "solution": vuln.get("solution") or vuln.get("recommendation") or "",
                     "recommendation": vuln.get("recommendation") or vuln.get("solution") or "",
-                    "references": vuln.get("references") or [],
-                    "tags": vuln.get("tags") or [],
+                    "references": references,
+                    "tags": tags,
                     "cwe_id": vuln.get("cwe_id"),
+                    "mitre_techniques": vuln.get("mitre_techniques") or [],
+                    "scanner_source": vuln.get("scanner_source") or vuln.get("source") or "unknown",
+                    "scanner_id": vuln.get("scanner_id") or vuln.get("id") or vuln.get("vuln_id"),
+                    "discovered_at": discovered_at or datetime.now(timezone.utc),
                     "raw_finding": vuln.get("raw_finding")
                 }
                 normalized_vulns.append(normalized)
 
+            logger.info(
+                "Normalization for scan %s produced %d findings (severity breakdown: %s)",
+                scan_id,
+                len(normalized_vulns),
+                severity_tally
+            )
+
             # Store vulnerabilities
             if normalized_vulns:
+                cached_records = supabase.cache_vulnerabilities(scan_id, normalized_vulns)
+                logger.info(
+                    "Cached %d normalized findings for scan %s before DB insert",
+                    len(cached_records),
+                    scan_id
+                )
                 count = supabase.insert_vulnerabilities(scan_id, normalized_vulns)
                 logger.info(f"Inserted {count} vulnerabilities for scan {scan_id}")
+            # Capture last run diagnostics for in-process inspection
+            self._last_debug = {
+                "scanner_counts": dict(scanner_counts),
+                "normalized_count": len(normalized_vulns),
+                "result_types": result_types,
+            }
+            # Persist per-scan diagnostics with counts for troubleshooting
+            try:
+                scan_record = supabase.fetch_scan(scan_id) or {}
+                debug_map = dict(scan_record.get("scanner_debug") or {})
+                summary = debug_map.get("__summary", {})
+                summary.update({
+                    "normalized_count": len(normalized_vulns),
+                    "scanner_counts": scanner_counts
+                })
+                debug_map["__summary"] = summary
+                supabase.update_scan(scan_id, {"scanner_debug": debug_map})
+            except Exception:
+                logger.debug("Failed to persist scanner summary", exc_info=True)
 
             # Perform AI analysis
             await self._perform_ai_analysis(scan_id, normalized_vulns, options)
@@ -250,6 +416,15 @@ class ComprehensiveScanner:
             # Get scan results
             result = await scanner.get_scan_results(scan_task_id)
             vulnerabilities = result.vulnerabilities if result and hasattr(result, 'vulnerabilities') else []
+            enriched_vulnerabilities: List[Dict[str, Any]] = []
+            for vuln in vulnerabilities or []:
+                if isinstance(vuln, dict):
+                    enriched = dict(vuln)
+                    enriched.setdefault("scanner_source", scanner_type)
+                    enriched_vulnerabilities.append(enriched)
+                else:
+                    enriched_vulnerabilities.append(vuln)
+            vulnerabilities = enriched_vulnerabilities
 
             # Persist scanner diagnostics for troubleshooting
             try:
@@ -605,7 +780,7 @@ class ComprehensiveScanner:
             if stage:
                 update_data["current_stage"] = stage
             if status == "completed":
-                update_data["completed_at"] = datetime.utcnow().isoformat()
+                update_data["completed_at"] = datetime.now(timezone.utc).isoformat()
             
             if update_data:
                 supabase.update_scan(scan_id, update_data)

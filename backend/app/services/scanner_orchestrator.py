@@ -6,7 +6,7 @@ import csv
 import threading
 import hashlib
 from contextlib import suppress
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Dict, Callable
 from collections import defaultdict
 from fpdf import FPDF  # fpdf2 package
@@ -17,6 +17,7 @@ from app.services.scanners import zap_scanner, nuclei_scanner, wapiti_scanner
 from app.database.supabase_client import supabase
 from app.models.scan_models import ScanRequest, ScanResult, Vulnerability, ScanProgress, ScanStatus, ScanSummary
 from app.core.config import settings
+from app.utils.datetime_utils import utc_now
 logger = logging.getLogger(__name__)
 
 class OWASPOrchestrator:
@@ -102,7 +103,7 @@ class OWASPOrchestrator:
                 supabase.insert_vulnerabilities(scan_id, [v.dict() for v in vulns])
                 supabase.update_scan(scan_id, {
                     "status": ScanStatus.COMPLETED,
-                    "completed_at": datetime.utcnow(),
+                    "completed_at": utc_now(),
                     "duration": 0,  # Cached result
                     "summary": summary.dict()
                 })
@@ -233,9 +234,11 @@ class OWASPOrchestrator:
             self.update_progress(scan_id, progress)
             
             # Mark scan completed
-            end_time = datetime.utcnow()
+            end_time = utc_now()
             scan_data = supabase.fetch_scan(scan_id)
-            start_time = datetime.fromisoformat(scan_data["started_at"]) if scan_data else datetime.utcnow()
+            start_time = datetime.fromisoformat(scan_data["started_at"]) if scan_data else utc_now()
+            if start_time.tzinfo is None:
+                start_time = start_time.replace(tzinfo=timezone.utc)
             
             update_data = {
                 "status": ScanStatus.COMPLETED,

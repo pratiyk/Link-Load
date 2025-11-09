@@ -184,7 +184,7 @@ export const refreshAccessToken = async () => {
   }
 };
 
-  // Export API endpoints configuration
+// Export API endpoints configuration
 export const API_ENDPOINTS = {
   base: API_BASE_URL,
   ws: WS_BASE_URL,
@@ -208,6 +208,7 @@ export const API_ENDPOINTS = {
       start: "/api/v1/scans/comprehensive/start",
       status: (id) => `/api/v1/scans/comprehensive/${id}/status`,
       result: (id) => `/api/v1/scans/comprehensive/${id}/result`,
+      summary: (id) => `/api/v1/scans/comprehensive/${id}/summary`,
       list: "/api/v1/scans/comprehensive/list",
       cancel: (id) => `/api/v1/scans/comprehensive/${id}/cancel`,
       ws: (id) => `/api/v1/scans/ws/${id}`,

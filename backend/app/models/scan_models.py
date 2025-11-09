@@ -1,7 +1,8 @@
-from pydantic import BaseModel, HttpUrl, Field, validator, model_validator
-from typing import List, Optional, Dict, Any
+from datetime import datetime, timezone
 from enum import Enum
-from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, ValidationInfo, field_validator, model_validator
 
 class ScanType(str, Enum):
     ZAP_BASELINE   = "zap_baseline"
@@ -35,7 +36,7 @@ class SeverityLevel(str, Enum):
 
 class ScanRequest(BaseModel):
     target_url: HttpUrl = Field(..., description="Target URL to scan")
-    scan_types: List[ScanType] = Field(..., min_items=1, description="Types of scans to perform")
+    scan_types: List[ScanType] = Field(..., min_length=1, description="Types of scans to perform")
     include_low_risk: bool = Field(False, description="Include low-risk findings")
     max_scan_time: int = Field(3600, ge=300, le=7200, description="Maximum scan time in seconds")
 
@@ -63,9 +64,10 @@ class ScanRequest(BaseModel):
     notification_email: Optional[str] = Field(None, description="Email for notifications")
     notification_webhook: Optional[HttpUrl] = Field(None, description="Webhook URL for notifications")
 
-    @validator("auth_password")
-    def validate_auth_password(cls, v, values):
-        if values.get("authenticated") and not v:
+    @field_validator("auth_password")
+    @classmethod
+    def validate_auth_password(cls, v: Optional[str], info: ValidationInfo) -> Optional[str]:
+        if info.data.get("authenticated") and not v:
             raise ValueError("Password required for authenticated scans")
         return v
 
@@ -76,8 +78,7 @@ class BatchScanConfig(ScanRequest):
         description="Target URL supplied per batch item",
     )
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 class Vulnerability(BaseModel):
     id: str = Field(..., description="Unique vulnerability ID")
@@ -109,7 +110,7 @@ class Vulnerability(BaseModel):
     risk_score: Optional[float] = Field(None, ge=0, le=10, description="CVSS-like risk score")
 
     # Timestamps
-    discovered_at: datetime = Field(default_factory=datetime.utcnow)
+    discovered_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     first_seen: Optional[datetime] = Field(None, description="First time this vuln was seen")
     last_seen: Optional[datetime] = Field(None, description="Last time this vuln was confirmed")
 
@@ -117,8 +118,7 @@ class Vulnerability(BaseModel):
     status: str = Field("open", description="Vulnerability status")
     false_positive: bool = Field(False, description="Marked as false positive")
 
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
 class ScanProgress(BaseModel):
     scan_id: str
@@ -128,7 +128,7 @@ class ScanProgress(BaseModel):
     scanned_urls: int = 0
     total_urls: int = 0
     vulnerabilities_found: int = 0
-    last_updated: datetime = Field(default_factory=datetime.utcnow)
+    last_updated: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ScanSummary(BaseModel):
     total_vulnerabilities: int = 0
@@ -164,8 +164,7 @@ class ScanResult(BaseModel):
     shared: bool = Field(False, description="Whether scan is shared")
     tags: List[str] = Field(default_factory=list, description="User-defined tags")
 
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
 class ScanFilter(BaseModel):
     status: Optional[List[ScanStatus]] = None
@@ -184,7 +183,7 @@ class ScanExport(BaseModel):
     custom_branding: bool = Field(False)
 
 class BatchScanRequest(BaseModel):
-    targets: List[HttpUrl] = Field(..., min_items=1, description="List of target URLs to scan")
+    targets: List[HttpUrl] = Field(..., min_length=1, description="List of target URLs to scan")
     scan_config: BatchScanConfig = Field(..., description="Scan configuration to apply to all targets")
     concurrent_scans: int = Field(5, ge=1, le=20, description="Number of concurrent scans")
     notify_on_completion: bool = Field(False, description="Send notification when batch completes")

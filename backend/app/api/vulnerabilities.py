@@ -8,7 +8,7 @@ from app.models.vulnerability_models import VulnerabilityData, VulnerabilityMiti
 from app.models.asset_models import DiscoveredAsset
 from app.services.processors.vulnerability_processor import VulnerabilityProcessor
 from sqlalchemy import and_, or_, desc
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.core.security import get_current_user_id
 from app.core.rate_limiter import limiter
 from app.core.exceptions import (
@@ -38,8 +38,9 @@ class VulnerabilityCreate(BaseModel):
     raw_data: Optional[dict] = None
     asset_id: int
 
-    @validator('severity')
-    def validate_severity(cls, v):
+    @field_validator('severity')
+    @classmethod
+    def validate_severity(cls, v: float) -> float:
         if not 0.0 <= v <= 10.0:
             raise ValueError('Severity must be between 0 and 10')
         return v
@@ -62,8 +63,7 @@ class VulnerabilityResponse(BaseModel):
     mitigations: Optional[List[dict]]
     raw_data: Optional[dict]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 @router.post("/", response_model=VulnerabilityResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("30/minute")
@@ -148,9 +148,9 @@ async def list_vulnerabilities(
     severity_min: Optional[float] = Query(None, ge=0.0, le=10.0),
     severity_max: Optional[float] = Query(None, ge=0.0, le=10.0),
     asset_id: Optional[int] = None,
-    status: Optional[str] = Query(None, regex="^(open|in_progress|resolved|false_positive)$"),
+    status: Optional[str] = Query(None, pattern="^(open|in_progress|resolved|false_positive)$"),
     search: Optional[str] = Query(None, min_length=3, max_length=100),
-    sort_by: Optional[str] = Query(None, regex="^(severity|created_at|updated_at)$"),
+    sort_by: Optional[str] = Query(None, pattern="^(severity|created_at|updated_at)$"),
     sort_desc: bool = True,
     from_date: Optional[datetime] = None,
     to_date: Optional[datetime] = None,

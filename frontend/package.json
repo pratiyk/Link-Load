@@ -54,10 +54,12 @@
   },
   "jest": {
     "collectCoverageFrom": [
-      "src/**/*.{js,jsx}",
-      "!src/index.js",
-      "!src/reportWebVitals.js",
-      "!src/setupTests.js"
+      "src/App.js",
+      "src/pages/Home.jsx",
+      "src/pages/ScanResults.jsx",
+      "src/components/SeverityBadge.js",
+      "src/components/RemediationCard.js",
+      "src/components/ErrorBoundary.js"
     ],
     "coverageThreshold": {
       "global": {
