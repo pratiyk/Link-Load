@@ -1,6 +1,7 @@
-from typing import List, Dict, Any, Optional
-from pydantic import BaseModel, HttpUrl, constr, confloat, conint, validator
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, HttpUrl, ValidationInfo, field_validator
 
 class ScanConfig(BaseModel):
     scan_depth: str = "normal"
@@ -12,40 +13,46 @@ class ScanConfig(BaseModel):
     custom_headers: Dict[str, str] = {}
     scan_timeout: int = 3600  # 5 minutes to 24 hours
 
-    @validator('concurrent_requests')
-    def validate_concurrent_requests(cls, v):
+    @field_validator('concurrent_requests')
+    @classmethod
+    def validate_concurrent_requests(cls, v: int) -> int:
         if not 1 <= v <= 50:
             raise ValueError('concurrent_requests must be between 1 and 50')
         return v
 
-    @validator('request_delay')
-    def validate_request_delay(cls, v):
+    @field_validator('request_delay')
+    @classmethod
+    def validate_request_delay(cls, v: float) -> float:
         if not 0 <= v <= 5.0:
             raise ValueError('request_delay must be between 0 and 5.0 seconds')
         return v
 
-    @validator('scan_timeout')
-    def validate_scan_timeout(cls, v):
+    @field_validator('scan_timeout')
+    @classmethod
+    def validate_scan_timeout(cls, v: int) -> int:
         if not 300 <= v <= 86400:
             raise ValueError('scan_timeout must be between 300 and 86400 seconds')
         return v
 
-    @validator('scan_depth')
-    def validate_scan_depth(cls, v):
+    @field_validator('scan_depth')
+    @classmethod
+    def validate_scan_depth(cls, v: str) -> str:
         allowed = ['quick', 'normal', 'deep']
         if v not in allowed:
             raise ValueError(f'scan_depth must be one of {allowed}')
         return v
 
-    @validator('excluded_paths')
-    def validate_paths(cls, v):
+    @field_validator('excluded_paths')
+    @classmethod
+    def validate_paths(cls, v: List[str]) -> List[str]:
         for path in v:
             if not path.startswith('/'):
                 raise ValueError(f'Path must start with /: {path}')
         return v
 
-    @validator('custom_headers')
-    def validate_headers(cls, v):
+    @field_validator('custom_headers')
+    @classmethod
+    def validate_headers(cls, v: Dict[str, str]) -> Dict[str, str]:
         disallowed = ['cookie', 'authorization']
         for header in v.keys():
             if header.lower() in disallowed:
@@ -57,8 +64,9 @@ class ScanRequest(BaseModel):
     scan_types: List[str]
     scan_config: ScanConfig = ScanConfig()
 
-    @validator('scan_types')
-    def validate_scan_types(cls, v):
+    @field_validator('scan_types')
+    @classmethod
+    def validate_scan_types(cls, v: List[str]) -> List[str]:
         allowed = ['zap', 'nuclei', 'wapiti']
         for scan_type in v:
             if scan_type not in allowed:
@@ -83,15 +91,17 @@ class Finding(BaseModel):
     exploit_available: bool = False
     remediation_steps: Optional[str] = None
 
-    @validator('severity')
-    def validate_severity(cls, v):
+    @field_validator('severity')
+    @classmethod
+    def validate_severity(cls, v: str) -> str:
         allowed = ['critical', 'high', 'medium', 'low', 'info']
         if v.lower() not in allowed:
             raise ValueError(f'Invalid severity: {v}')
         return v.lower()
 
-    @validator('cvss_score')
-    def validate_cvss(cls, v):
+    @field_validator('cvss_score')
+    @classmethod
+    def validate_cvss(cls, v: Optional[float]) -> Optional[float]:
         if v is not None and not 0 <= v <= 10:
             raise ValueError('CVSS score must be between 0 and 10')
         return v
@@ -107,24 +117,29 @@ class ScanSchedule(BaseModel):
     end_date: Optional[datetime] = None
     enabled: bool = True
 
-    @validator('schedule_type')
-    def validate_schedule_type(cls, v):
+    @field_validator('schedule_type')
+    @classmethod
+    def validate_schedule_type(cls, v: str) -> str:
         if v not in ['cron', 'interval']:
             raise ValueError('Schedule type must be either cron or interval')
         return v
 
-    @validator('interval_seconds')
-    def validate_interval(cls, v, values):
-        if values['schedule_type'] == 'interval':
+    @field_validator('interval_seconds')
+    @classmethod
+    def validate_interval(cls, v: Optional[int], info: ValidationInfo) -> Optional[int]:
+        schedule_type = info.data.get('schedule_type')
+        if schedule_type == 'interval':
             if v is None:
                 raise ValueError('interval_seconds required for interval schedule')
             if v < 3600:  # Minimum 1 hour
                 raise ValueError('Interval must be at least 3600 seconds (1 hour)')
         return v
 
-    @validator('cron_expression')
-    def validate_cron(cls, v, values):
-        if values['schedule_type'] == 'cron' and not v:
+    @field_validator('cron_expression')
+    @classmethod
+    def validate_cron(cls, v: Optional[str], info: ValidationInfo) -> Optional[str]:
+        schedule_type = info.data.get('schedule_type')
+        if schedule_type == 'cron' and not v:
             raise ValueError('cron_expression required for cron schedule')
         return v
 
@@ -139,15 +154,17 @@ class BusinessContext(BaseModel):
     technical_owner: Optional[str] = None
     business_owner: Optional[str] = None
 
-    @validator('asset_criticality')
-    def validate_criticality(cls, v):
+    @field_validator('asset_criticality')
+    @classmethod
+    def validate_criticality(cls, v: str) -> str:
         allowed = ['critical', 'high', 'medium', 'low']
         if v.lower() not in allowed:
             raise ValueError(f'Invalid criticality level: {v}')
         return v.lower()
 
-    @validator('data_classification')
-    def validate_classification(cls, v):
+    @field_validator('data_classification')
+    @classmethod
+    def validate_classification(cls, v: str) -> str:
         allowed = ['public', 'internal', 'confidential', 'restricted']
         if v.lower() not in allowed:
             raise ValueError(f'Invalid data classification: {v}')

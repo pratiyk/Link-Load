@@ -1,10 +1,11 @@
 """ML pipeline management and orchestration."""
 from typing import Dict, Any, List, Optional
 import os
-from datetime import datetime
 from contextlib import nullcontext
 import pandas as pd
 import numpy as np
+
+from app.utils.datetime_utils import utc_now
 
 try:
     import mlflow  # type: ignore
@@ -98,7 +99,7 @@ class MLPipeline:
                 mlflow.log_metrics(metrics)
             
             # Save model
-            run_id = getattr(getattr(run, "info", None), "run_id", datetime.utcnow().strftime("%Y%m%d%H%M%S"))
+            run_id = getattr(getattr(run, "info", None), "run_id", utc_now().strftime("%Y%m%d%H%M%S"))
             model_path = os.path.join(self.model_dir, f"model_{run_id}.joblib")
             self.model.save_model(model_path)
             if mlflow is not None:
@@ -125,7 +126,7 @@ class MLPipeline:
             "confidence": 1.0 - min(1.0, float(std_pred[0])),
             "uncertainty": float(std_pred[0]),
             "feature_importance": self._format_feature_importance(explanations),
-            "prediction_time": datetime.utcnow().isoformat()
+            "prediction_time": utc_now().isoformat()
         }
 
     def _format_feature_importance(self, explanations: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -151,7 +152,7 @@ class MLPipeline:
         return {
             "current_performance": latest_metrics,
             "training_history": training_history,
-            "last_update": datetime.utcnow().isoformat()
+            "last_update": utc_now().isoformat()
         }
 
     def check_model_drift(self, recent_data: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -176,7 +177,7 @@ class MLPipeline:
             "mean_prediction": float(np.mean(predictions)),
             "std_prediction": float(np.std(predictions)),
             "drift_score": self._calculate_drift_score(predictions),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": utc_now().isoformat()
         }
         
         return {

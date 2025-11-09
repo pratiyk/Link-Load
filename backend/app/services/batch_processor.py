@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import inspect
-from datetime import datetime
 from typing import Any, Dict, Iterable, Optional, cast
 from uuid import uuid4
 
@@ -14,6 +13,7 @@ from pydantic import ValidationError
 from app.database.supabase_client import supabase
 from app.models.scan_models import BatchScanStatus, ScanRequest
 from app.services.scanner_orchestrator import OWASPOrchestrator
+from app.utils.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ class BatchProcessor:
             self.set_concurrency(concurrency)
 
         config_payload = self._normalize_scan_config(scan_config)
-        now = datetime.utcnow()
+        now = utc_now()
 
         supabase.insert_batch_scan(
             {
@@ -84,7 +84,7 @@ class BatchProcessor:
             batch_id,
             {
                 "status": BatchScanStatus.RUNNING,
-                "started_at": datetime.utcnow(),
+                "started_at": utc_now(),
             },
         )
 
@@ -149,7 +149,7 @@ class BatchProcessor:
                 "status": final_status,
                 "completed_targets": completed,
                 "failed_targets": failed,
-                "completed_at": datetime.utcnow(),
+                "completed_at": utc_now(),
             },
         )
 
@@ -168,7 +168,7 @@ class BatchProcessor:
             batch_id,
             {
                 "status": status,
-                "updated_at": datetime.utcnow(),
+                "updated_at": utc_now(),
             },
         )
         return result is not None

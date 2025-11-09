@@ -1,29 +1,27 @@
 import { render, screen } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
 
-const createTestQueryClient = () => new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: false,
-    },
-  },
+jest.mock('./services/scannerService', () => {
+  const mockService = {
+    listScans: jest.fn().mockResolvedValue({ scans: [] }),
+    startScan: jest.fn(),
+    setupWebSocket: jest.fn(),
+    getScanResults: jest.fn(),
+    getScanSummary: jest.fn(),
+    getScanStatus: jest.fn(),
+    cancelScan: jest.fn(),
+    closeWebSocket: jest.fn(),
+    closeAllWebSockets: jest.fn()
+  };
+  return { __esModule: true, default: mockService };
 });
 
-test('renders Link Scanner page', () => {
-  const queryClient = createTestQueryClient();
-  render(
-    <QueryClientProvider client={queryClient}>
-      <App />
-    </QueryClientProvider>
-  );
+test('renders Link&Load home experience', () => {
+  render(<App />);
 
-  // Get all instances of "Link Scanner" text
-  const linkElements = screen.getAllByText(/Link Scanner/i);
-  expect(linkElements).toHaveLength(2); // One in nav, one in heading
-  expect(linkElements[1]).toBeInTheDocument();
-  
-  // Check description is present
-  const description = screen.getByText(/Analyze URLs for potential security threats and malicious content/i);
-  expect(description).toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: /Scan Results/i })).not.toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: /Link&Load/i })).toBeInTheDocument();
+  expect(screen.getByText(/Link\. Load\. Defend\. Repeat\./i)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /start scan/i })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: /Login \/ Register/i })).toBeInTheDocument();
 });

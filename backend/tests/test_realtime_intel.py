@@ -8,7 +8,7 @@ import asyncio
 from fastapi import WebSocket
 from typing import Dict, Any
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 @pytest.mark.asyncio
 async def test_client_connection(realtime_intel, mock_websocket):
@@ -101,7 +101,7 @@ async def test_intelligence_query(realtime_intel, mock_websocket, db_session):
         {
             "type": "malware",
             "name": f"Test{i}",
-            "timestamp": datetime.utcnow() - timedelta(hours=i)
+            "timestamp": datetime.now(timezone.utc) - timedelta(hours=i)
         }
         for i in range(5)
     ]
@@ -148,7 +148,7 @@ async def test_buffer_management(realtime_intel):
         {
             "type": "test",
             "name": f"Test{i}",
-            "timestamp": datetime.utcnow()
+            "timestamp": datetime.now(timezone.utc)
         }
         for i in range(buffer_size + 10)
     ]

@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import Mock, patch
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 from types import SimpleNamespace
 
@@ -58,7 +58,7 @@ def test_get_batch_status(client, mock_batch_processor):
             "status": BatchScanStatus.RUNNING,
             "total_targets": 2,
             "completed_targets": 1,
-            "started_at": datetime.utcnow().isoformat()
+            "started_at": datetime.now(timezone.utc).isoformat()
         }
         
         response = client.get(f"/api/v1/batch/scan/{batch_id}")

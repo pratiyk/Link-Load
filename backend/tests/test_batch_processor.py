@@ -1,17 +1,17 @@
 import os
 import pytest
 from unittest.mock import Mock, patch
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 from pathlib import Path
-from pydantic import HttpUrl
 
 from app.models.scan_models import (
     BatchScanRequest, 
+    BatchScanConfig,
     BatchScanStatus, 
     ScanType, 
-    ScanRequest
 )
+from pydantic import HttpUrl, TypeAdapter
 from app.services.batch_processor import BatchProcessor
 
 # Set test environment file before importing any app modules
@@ -31,12 +31,13 @@ def mock_supabase():
 
 @pytest.fixture
 def sample_batch_request():
-    target1 = HttpUrl("https://example1.com")
-    target2 = HttpUrl("https://example2.com")
-    target3 = HttpUrl("https://example.com")
+    http_url = TypeAdapter(HttpUrl)
+    target1 = http_url.validate_python("https://example1.com")
+    target2 = http_url.validate_python("https://example2.com")
+    target3 = http_url.validate_python("https://example.com")
     return BatchScanRequest(
         targets=[target1, target2],
-        scan_config=ScanRequest(
+        scan_config=BatchScanConfig(
             target_url=target3,
             scan_types=[ScanType.COMPREHENSIVE],
             include_low_risk=False,
@@ -56,11 +57,11 @@ def sample_batch_request():
             nuclei_tags=None,
             nuclei_severity=None,
             notification_email=None,
-            notification_webhook=None
+            notification_webhook=None,
         ),
         concurrent_scans=2,
         notify_on_completion=False,
-        force_new_scan=False
+        force_new_scan=False,
     )
 
 @pytest.mark.asyncio
@@ -132,7 +133,7 @@ async def test_get_batch_status(batch_processor, mock_supabase):
             "completed_targets": 2,
             "failed_targets": 0,
             "scan_config": {},
-            "started_at": datetime.utcnow().isoformat()
+            "started_at": datetime.now(timezone.utc).isoformat()
         }
         mock_supabase.fetch_batch_scan.return_value = mock_batch
         mock_supabase.fetch_batch_scan_results.return_value = [

@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, Boolean, DateTime, Integer, Text
 from sqlalchemy.sql import func
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, ValidationInfo, field_validator
 from typing import Optional
 import re
 
@@ -50,9 +50,10 @@ class UserBase(BaseModel):
     email: EmailStr
     username: str = Field(..., min_length=3, max_length=50)
     full_name: Optional[str] = Field(None, max_length=100)
-    
-    @validator('username')
-    def validate_username(cls, v):
+
+    @field_validator('username')
+    @classmethod
+    def validate_username(cls, v: str) -> str:
         """Validate username format"""
         if not re.match(r'^[a-zA-Z0-9_-]+$', v):
             raise ValueError('Username can only contain letters, numbers, underscores, and hyphens')
@@ -63,9 +64,10 @@ class UserCreate(UserBase):
     """Model for user registration"""
     password: str = Field(..., min_length=8, max_length=100)
     confirm_password: str = Field(..., min_length=8, max_length=100)
-    
-    @validator('password')
-    def validate_password_strength(cls, v):
+
+    @field_validator('password')
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
         """Validate password meets security requirements"""
         if len(v) < 8:
             raise ValueError('Password must be at least 8 characters long')
@@ -78,11 +80,13 @@ class UserCreate(UserBase):
         if not re.search(r'[!@#$%^&*(),.?":{}|<>]', v):
             raise ValueError('Password must contain at least one special character')
         return v
-    
-    @validator('confirm_password')
-    def passwords_match(cls, v, values):
+
+    @field_validator('confirm_password')
+    @classmethod
+    def passwords_match(cls, v: str, info: ValidationInfo) -> str:
         """Validate passwords match"""
-        if 'password' in values and v != values['password']:
+        password = info.data.get('password')
+        if password and v != password:
             raise ValueError('Passwords do not match')
         return v
 
@@ -97,9 +101,10 @@ class UserUpdate(BaseModel):
     """Model for updating user profile"""
     full_name: Optional[str] = Field(None, max_length=100)
     username: Optional[str] = Field(None, min_length=3, max_length=50)
-    
-    @validator('username')
-    def validate_username(cls, v):
+
+    @field_validator('username')
+    @classmethod
+    def validate_username(cls, v: Optional[str]) -> Optional[str]:
         """Validate username format"""
         if v and not re.match(r'^[a-zA-Z0-9_-]+$', v):
             raise ValueError('Username can only contain letters, numbers, underscores, and hyphens')
@@ -111,9 +116,10 @@ class PasswordChange(BaseModel):
     current_password: str
     new_password: str = Field(..., min_length=8, max_length=100)
     confirm_new_password: str = Field(..., min_length=8, max_length=100)
-    
-    @validator('new_password')
-    def validate_password_strength(cls, v):
+
+    @field_validator('new_password')
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
         """Validate password meets security requirements"""
         if len(v) < 8:
             raise ValueError('Password must be at least 8 characters long')
@@ -126,11 +132,13 @@ class PasswordChange(BaseModel):
         if not re.search(r'[!@#$%^&*(),.?":{}|<>]', v):
             raise ValueError('Password must contain at least one special character')
         return v
-    
-    @validator('confirm_new_password')
-    def passwords_match(cls, v, values):
+
+    @field_validator('confirm_new_password')
+    @classmethod
+    def passwords_match(cls, v: str, info: ValidationInfo) -> str:
         """Validate passwords match"""
-        if 'new_password' in values and v != values['new_password']:
+        new_password = info.data.get('new_password')
+        if new_password and v != new_password:
             raise ValueError('Passwords do not match')
         return v
 
@@ -146,8 +154,7 @@ class UserResponse(BaseModel):
     created_at: datetime
     last_login: Optional[datetime]
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TokenResponse(BaseModel):

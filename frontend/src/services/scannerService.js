@@ -55,6 +55,15 @@ class ScannerService {
     }
   }
 
+  async getScanSummary(scanId) {
+    try {
+      const response = await apiClient.get(API_ENDPOINTS.scans.comprehensive.summary(scanId));
+      return response.data;
+    } catch (error) {
+      throw new Error(error?.response?.data?.detail || "Failed to generate scan summary");
+    }
+  }
+
   async getScanStatus(scanId) {
     try {
       const response = await apiClient.get(API_ENDPOINTS.scans.comprehensive.status(scanId));

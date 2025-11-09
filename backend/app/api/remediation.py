@@ -1,10 +1,10 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 from fastapi.responses import StreamingResponse
 import io
 
-router = APIRouter()
+router = APIRouter(prefix="/remediation", tags=["Remediation"])
 
 class Vulnerability(BaseModel):
     id: str
@@ -16,6 +16,21 @@ class RemediationResult(Vulnerability):
     risk_level: str
     fix_command: Optional[str] = None
     fixable: bool = False
+
+
+class RemediationSuggestionRequest(BaseModel):
+    title: str
+    description: Optional[str] = None
+    severity: str = Field(..., description="Severity label (critical/high/medium/low)")
+    affected_components: List[str] = Field(default_factory=list)
+
+
+class RemediationSuggestionResponse(BaseModel):
+    summary: str
+    steps: List[str]
+    commands: List[str]
+    priority: str
+    references: List[str] = Field(default_factory=list)
 
 def classify_risk(score: float) -> str:
     if score >= 9.0:
@@ -37,6 +52,58 @@ def generate_fix_command(ecosystem: str, package: str) -> Optional[str]:
         "crates.io": f"cargo update -p {package}",
     }
     return commands.get(ecosystem)
+
+
+def _severity_priority(severity: str) -> str:
+    mapping = {
+        "critical": "immediate",
+        "high": "high",
+        "medium": "medium",
+        "low": "low",
+        "info": "informational",
+    }
+    return mapping.get(severity.lower(), "medium")
+
+
+def _build_commands(components: List[str]) -> List[str]:
+    commands: List[str] = []
+    if any("package.json" in comp or "yarn.lock" in comp for comp in components):
+        commands.append("npm audit fix")
+    if any(comp.endswith("requirements.txt") for comp in components):
+        commands.append("pip install -r requirements.txt --upgrade")
+    if not commands:
+        commands.append("echo 'Review manual remediation steps'")
+    return commands
+
+
+@router.post("/suggest", response_model=RemediationSuggestionResponse)
+def suggest_remediation(payload: RemediationSuggestionRequest) -> RemediationSuggestionResponse:
+    try:
+        priority = _severity_priority(payload.severity)
+        components = payload.affected_components or []
+        steps = [
+            f"Validate findings for: {payload.title}",
+            "Review vendor advisories and changelogs",
+            "Schedule remediation window with stakeholders",
+            "Verify fixes in staging before production rollout",
+        ]
+        if components:
+            steps.insert(1, f"Assess impact on components: {', '.join(components)}")
+
+        commands = _build_commands(components)
+
+        return RemediationSuggestionResponse(
+            summary=(payload.description or payload.title),
+            steps=steps,
+            commands=commands,
+            priority=priority,
+            references=[
+                "https://owasp.org/www-project-top-ten/",
+                "https://nvd.nist.gov/general/nvd-dashboard",
+            ],
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Remediation suggestion failed: {str(exc)}")
 
 @router.post("/remediate", response_model=List[RemediationResult])
 def remediate_vulnerabilities(vulns: List[Vulnerability]):

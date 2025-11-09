@@ -1,9 +1,10 @@
-from typing import Dict, List, Optional
+from typing import Dict
 from fastapi import WebSocket, WebSocketDisconnect
-from datetime import datetime
 import json
 import asyncio
 from collections import defaultdict
+
+from app.utils.datetime_utils import utc_now
 
 class ScanProgressManager:
     def __init__(self):
@@ -35,7 +36,7 @@ class ScanProgressManager:
         self.scan_progress[scan_id] = {
             "type": "progress",
             "scan_id": scan_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now().isoformat(),
             "data": progress_data
         }
         
@@ -56,7 +57,7 @@ class ScanProgressManager:
         message = {
             "type": "finding",
             "scan_id": scan_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now().isoformat(),
             "data": finding
         }
         
@@ -77,7 +78,7 @@ class ScanProgressManager:
         message = {
             "type": "completion",
             "scan_id": scan_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now().isoformat(),
             "data": summary
         }
         

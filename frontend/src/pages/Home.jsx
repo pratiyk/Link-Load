@@ -231,18 +231,59 @@ const Home = () => {
           </section>
         )}
 
-        {/* Executive Summary */}
-        <section className="summary-section" id="intelligence">
-          <div className="heading-section">
-            <h2 className="large-heading">Proactive</h2>
-            <h2 className="large-heading">Threat</h2>
-            <h2 className="large-heading">Intelligence</h2>
-            <p className="heading-description">
-              Transform vulnerability data into actionable intelligence with
-              our AI-powered analysis and decision support system.
-            </p>
+        {/* Features Section */}
+        <section className="features-section" id="features">
+          <div className="features-header">
+            <h4 className="section-title-large">Hack No More</h4>
+            <p className="section-subtitle">Link fast. Load smart. Defend stronger. Hackers? Not anymore.</p>
+          </div>
+
+          <div className="features-grid">
+            <div className="feature-card card-coral">
+              <div className="feature-number">01</div>
+              <h3>OWASP ZAP</h3>
+              <p>Industry-standard dynamic application security testing with comprehensive vulnerability scanning</p>
+              <div className="feature-badge">Active</div>
+            </div>
+
+            <div className="feature-card card-blue">
+              <div className="feature-number">02</div>
+              <h3>Nuclei Templates</h3>
+              <p>Fast and customizable vulnerability scanner with community-driven templates</p>
+              <div className="feature-badge">Active</div>
+            </div>
+
+            <div className="feature-card card-green">
+              <div className="feature-number">03</div>
+              <h3>Wapiti Scanner</h3>
+              <p>Web application vulnerability scanner detecting injection flaws and configuration issues</p>
+              <div className="feature-badge">Active</div>
+            </div>
+
+            <div className="feature-card card-yellow">
+              <div className="feature-number">04</div>
+              <h3>AI Analysis</h3>
+              <p>LLM-powered vulnerability analysis providing intelligent insights and remediation strategies</p>
+              <div className="feature-badge">AI</div>
+            </div>
+
+            <div className="feature-card card-pink">
+              <div className="feature-number">05</div>
+              <h3>MITRE ATT&CK</h3>
+              <p>Automated mapping of vulnerabilities to adversary tactics, techniques, and procedures</p>
+              <div className="feature-badge">Intel</div>
+            </div>
+
+            <div className="feature-card card-coral">
+              <div className="feature-number">06</div>
+              <h3>Risk Assessment</h3>
+              <p>Comprehensive risk scoring with business context and compliance framework alignment</p>
+              <div className="feature-badge">Analytics</div>
+            </div>
           </div>
         </section>
+
+
       </div>
     </Layout>
   );

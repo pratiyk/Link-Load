@@ -1,7 +1,7 @@
-from typing import List, Dict, Any, Optional
-from datetime import datetime
+from typing import List, Dict, Any, Optional, cast
 import asyncio
 import logging
+
 from app.services.scanners.base_scanner import BaseScanner
 from app.services.scanners.zap_scanner import ZAPScanner
 from app.services.scanners.nuclei_scanner import NucleiScanner
@@ -9,6 +9,7 @@ from app.services.scanners.wapiti_scanner import WapitiScanner
 from app.database import get_db_context
 from app.api.ws_manager import progress_manager
 from sqlalchemy import text
+from app.utils.datetime_utils import utc_now_naive
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ class ScannerOrchestrator:
         }
         self.active_scans: Dict[str, Dict[str, Any]] = {}
     
-    def _update_scan_status(self, db, scan_id: str, status: str, progress: Dict = None):
+    def _update_scan_status(self, db, scan_id: str, status: str, progress: Optional[Dict] = None):
         """Update scan status in database"""
         stmt = text(
             "UPDATE security_scans SET status = :status WHERE id = :scan_id"
@@ -75,7 +76,7 @@ class ScannerOrchestrator:
                         logger.warning(f"Scanner {scanner_type} not found")
                         continue
                     
-                    scanner = self.scanners[scanner_type]
+                    scanner = cast(Any, self.scanners[scanner_type])
                     
                     try:
                         # Initialize scanner
@@ -104,7 +105,7 @@ class ScannerOrchestrator:
                             for finding in new_findings:
                                 finding["scan_id"] = scan_id
                                 finding["scanner"] = scanner_type
-                                finding["discovered_at"] = datetime.utcnow()
+                                finding["discovered_at"] = utc_now_naive()
                                 
                                 self._save_finding(db, finding)
                                 findings.extend(new_findings)
@@ -129,7 +130,7 @@ class ScannerOrchestrator:
                     summary = :summary
                     WHERE id = :scan_id"""
                 ).bindparams(
-                    completed_at=datetime.utcnow(),
+                    completed_at=utc_now_naive(),
                     summary=summary,
                     scan_id=scan_id
                 )
@@ -168,7 +169,8 @@ class ScannerOrchestrator:
             "medium_count": 0,
             "low_count": 0,
             "info_count": 0,
-            "false_positive_count": 0
+            "false_positive_count": 0,
+            "risk_score": 0.0,
         }
         
         for finding in findings:
@@ -195,6 +197,6 @@ class ScannerOrchestrator:
             summary["low_count"] * 10
         )
         max_score = max(1, total_weighted)  # Avoid division by zero
-        summary["risk_score"] = min(100, total_weighted / max_score * 100)
+        summary["risk_score"] = min(100.0, total_weighted / max_score * 100)
         
         return summary

@@ -3,7 +3,7 @@ Authentication API endpoints
 """
 from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Optional
 import logging
 
@@ -17,6 +17,7 @@ from app.core.exceptions import (
     AuthenticationException, ValidationException, DatabaseException
 )
 from app.core.config import settings
+from app.utils.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -69,7 +70,7 @@ async def register_user(user_data: UserCreate, db: Session = Depends(get_db)):
         access_token = security_manager.create_access_token(subject=db_user.id)
         refresh_token = security_manager.create_refresh_token(subject=db_user.id)
         
-        user_response = UserResponse.from_orm(db_user)
+        user_response = UserResponse.model_validate(db_user, from_attributes=True)
         
         return UserWithTokens(
             user=user_response,
@@ -105,8 +106,8 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
             raise AuthenticationException("Invalid email or password")
         
         # Check if account is locked
-        if user.locked_until and user.locked_until > datetime.utcnow():  # type: ignore
-            minutes_left = int((user.locked_until - datetime.utcnow()).total_seconds() / 60)
+        if user.locked_until and user.locked_until > utc_now():  # type: ignore
+            minutes_left = int((user.locked_until - utc_now()).total_seconds() / 60)
             raise AuthenticationException(
                 f"Account is locked. Try again in {minutes_left} minutes."
             )
@@ -122,7 +123,7 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
             
             # Lock account after 5 failed attempts
             if user.failed_login_attempts >= 5:  # type: ignore
-                user.locked_until = datetime.utcnow() + timedelta(minutes=15)  # type: ignore
+                user.locked_until = utc_now() + timedelta(minutes=15)  # type: ignore
                 db.commit()
                 raise AuthenticationException(
                     "Too many failed login attempts. Account locked for 15 minutes."
@@ -134,7 +135,7 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
         # Reset failed login attempts on successful login
         user.failed_login_attempts = 0  # type: ignore
         user.locked_until = None  # type: ignore
-        user.last_login = datetime.utcnow()  # type: ignore
+        user.last_login = utc_now()  # type: ignore
         db.commit()
         db.refresh(user)
         
@@ -144,7 +145,7 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
         access_token = security_manager.create_access_token(subject=user.id)
         refresh_token = security_manager.create_refresh_token(subject=user.id)
         
-        user_response = UserResponse.from_orm(user)
+        user_response = UserResponse.model_validate(user, from_attributes=True)
         
         return UserWithTokens(
             user=user_response,
@@ -246,7 +247,7 @@ async def get_current_user(
         if not user:
             raise AuthenticationException("User not found")
         
-        return UserResponse.from_orm(user)
+        return UserResponse.model_validate(user, from_attributes=True)
         
     except AuthenticationException:
         raise
@@ -284,13 +285,13 @@ async def update_user_profile(
                 raise ValidationException("Username already taken")
             user.username = user_data.username  # type: ignore
         
-        user.updated_at = datetime.utcnow()  # type: ignore
+        user.updated_at = utc_now()  # type: ignore
         db.commit()
         db.refresh(user)
         
         logger.info(f"User profile updated: {user.email}")
         
-        return UserResponse.from_orm(user)
+        return UserResponse.model_validate(user, from_attributes=True)
         
     except (AuthenticationException, ValidationException):
         raise
@@ -324,7 +325,7 @@ async def change_password(
         
         # Hash and update new password
         user.hashed_password = security_manager.hash_password(password_data.new_password)  # type: ignore
-        user.updated_at = datetime.utcnow()  # type: ignore
+        user.updated_at = utc_now()  # type: ignore
         db.commit()
         
         logger.info(f"Password changed for user: {user.email}")

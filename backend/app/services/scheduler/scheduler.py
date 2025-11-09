@@ -1,6 +1,7 @@
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from datetime import timedelta
 import asyncio
+import uuid
 from loguru import logger
 from app.database import get_db
 from sqlalchemy import text
@@ -8,6 +9,7 @@ from app.services.scanners.scanner_orchestrator import scanner_orchestrator
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
+from app.utils.datetime_utils import utc_now_naive
 
 class ScanScheduler:
     def __init__(self):
@@ -102,7 +104,7 @@ class ScanScheduler:
                 schedule_type=config['schedule_type'],
                 cron_expression=config.get('cron_expression'),
                 interval_config=config.get('interval'),
-                created_at=datetime.utcnow()
+                created_at=utc_now_naive()
             ))
             db.commit()
             
@@ -135,7 +137,7 @@ class ScanScheduler:
                 target_url=scan_config['target_url'],
                 scan_types=scan_config['scan_types'],
                 scan_config=scan_config['scan_config'],
-                started_at=datetime.utcnow(),
+                started_at=utc_now_naive(),
                 schedule_id=scan_config.get('id')
             ))
             db.commit()

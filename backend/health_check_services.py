@@ -8,6 +8,22 @@ import requests
 import os
 import sys
 from pathlib import Path
+from typing import Optional
+
+from dotenv import load_dotenv
+
+# Ensure backend package is importable when executing from repository root
+BACKEND_ROOT = Path(__file__).resolve().parent
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
+
+# Load environment variables before importing application settings
+load_dotenv(BACKEND_ROOT / ".env")
+
+try:
+    from app.core.config import settings
+except Exception:
+    settings = None
 
 # ANSI color codes
 GREEN = '\033[92m'
@@ -19,21 +35,65 @@ BOLD = '\033[1m'
 
 def print_status(service_name, success, message):
     """Print status with color formatting"""
-    symbol = f"{GREEN}✓{RESET}" if success else f"{RED}✗{RESET}"
+    symbol = f"{GREEN}[OK]{RESET}" if success else f"{RED}[ERROR]{RESET}"
     status_color = GREEN if success else RED
     print(f"{symbol} {service_name:25} {status_color}{message}{RESET}")
+
+
+def _get_setting(attr: str) -> Optional[str]:
+    return getattr(settings, attr, None) if settings is not None else None
+
+
+def _resolve_binary_path(env_name: str, attr_name: str, default: str) -> str:
+    configured = _get_setting(attr_name)
+    if configured:
+        return str(configured)
+    env_value = os.getenv(env_name)
+    if env_value:
+        return env_value
+    return default
+
+
+def _run_version_command(target: str) -> subprocess.CompletedProcess:
+    env = os.environ.copy()
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+    return subprocess.run(
+        [target, '--version'],
+        capture_output=True,
+        text=True,
+        timeout=15,
+        env=env
+    )
 
 
 def check_zap():
     """Check if OWASP ZAP is running"""
     try:
-        zap_url = os.getenv('ZAP_URL', 'http://localhost:8090')
+        zap_url = (
+            _get_setting("ZAP_BASE_URL")
+            or os.getenv("ZAP_BASE_URL")
+            or os.getenv('ZAP_URL')
+            or 'http://localhost:8090'
+        )
+        if not zap_url.startswith("http"):
+            zap_url = f"http://{zap_url}"
+        zap_url = zap_url.rstrip("/")
+        params = {}
+        api_key = _get_setting("ZAP_API_KEY") or os.getenv("ZAP_API_KEY")
+        if api_key:
+            params["apikey"] = api_key
+
         response = requests.get(
-            f"{zap_url}/JSON/core/action/version/",
-            timeout=5
+            f"{zap_url}/JSON/core/view/version/",
+            params=params,
+            timeout=10
         )
         if response.status_code == 200:
-            return True, "Running and accessible"
+            try:
+                version = response.json().get("version", "unknown")
+            except ValueError:
+                version = response.text[:40]
+            return True, f"Running (v{version})"
         return False, f"HTTP {response.status_code}"
     except requests.exceptions.ConnectionError:
         return False, "Connection refused - not running"
@@ -43,17 +103,20 @@ def check_zap():
 
 def check_nuclei():
     """Check if Nuclei is installed"""
+    binary = _resolve_binary_path('NUCLEI_BINARY_PATH', 'NUCLEI_BINARY_PATH', 'nuclei')
+    candidate = Path(binary).expanduser()
+    target = str(candidate if candidate.exists() else binary)
+
+    if candidate.is_absolute() and not candidate.exists():
+        return False, f"Configured path not found: {candidate}"
+
     try:
-        result = subprocess.run(
-            ['nuclei', '--version'],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
+        result = _run_version_command(target)
         if result.returncode == 0:
-            version = result.stdout.strip().split('\n')[0]
+            version = (result.stdout or result.stderr).strip().split('\n')[0]
             return True, version
-        return False, "Installation found but error running"
+        tail = (result.stderr or result.stdout).strip().split('\n')[-1]
+        return False, f"Exit {result.returncode}: {tail[:80]}"
     except FileNotFoundError:
         return False, "Not found in PATH"
     except Exception as e:
@@ -62,17 +125,20 @@ def check_nuclei():
 
 def check_wapiti():
     """Check if Wapiti is installed"""
+    binary = _resolve_binary_path('WAPITI_BINARY_PATH', 'WAPITI_BINARY_PATH', 'wapiti')
+    candidate = Path(binary).expanduser()
+    target = str(candidate if candidate.exists() else binary)
+
+    if candidate.is_absolute() and not candidate.exists():
+        return False, f"Configured path not found: {candidate}"
+
     try:
-        result = subprocess.run(
-            ['wapiti', '--version'],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
+        result = _run_version_command(target)
         if result.returncode == 0:
-            version = result.stdout.strip()
+            version = (result.stdout or result.stderr).strip().split('\n')[0]
             return True, version
-        return False, "Installation found but error running"
+        tail = (result.stderr or result.stdout).strip().split('\n')[-1]
+        return False, f"Exit {result.returncode}: {tail[:80]}"
     except FileNotFoundError:
         return False, "Not found in PATH"
     except Exception as e:
@@ -82,18 +148,21 @@ def check_wapiti():
 def check_database():
     """Check if database connection works"""
     try:
-        from app.database import supabase
-        
-        # Try a simple query
-        response = supabase.table('owasp_scans').select('count', count='exact').execute()
-        return True, "Connected and accessible"
-    except ImportError:
-        return False, "Cannot import database module"
+        from app.database.supabase_client import supabase
+    except ModuleNotFoundError:
+        return False, "Supabase client module not found"
+    except Exception as exc:
+        return False, f"Supabase client init failed: {exc.__class__.__name__}"
+
+    try:
+        if supabase.health_check():
+            return True, "Connected and accessible"
+        return False, "Health check query failed"
     except Exception as e:
         error_msg = str(e)
         if 'SUPABASE_URL' in error_msg or 'env' in error_msg.lower():
             return False, "Environment variables not set"
-        return False, error_msg[:50]
+        return False, error_msg[:80]
 
 
 def check_backend_api():

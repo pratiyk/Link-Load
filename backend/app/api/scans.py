@@ -7,12 +7,13 @@ import uuid
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, WebSocket, WebSocketDisconnect
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, HttpUrl, Field
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.services.comprehensive_scanner import ComprehensiveScanner
 from app.core.security import get_current_user_optional
 from app.database.supabase_client import supabase
 from app.core.config import settings
+from app.services.llm_service import llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +98,8 @@ class ScanResultsResponse(BaseModel):
     risk_assessment: RiskAssessment
     mitre_mapping: Optional[List[Dict[str, Any]]] = None
     ai_analysis: Optional[List[AIAnalysisResult]] = None
-    remediation_strategies: Optional[List[Dict[str, Any]]] = None
+    remediation_strategies: Optional[Dict[str, Any]] = None
+    executive_summary: Optional[str] = None
     # Optional diagnostics when debug=1 is requested
     debug: Optional[Dict[str, Any]] = None
 
@@ -147,7 +149,7 @@ async def start_comprehensive_scan(
             "status": "pending",
             "progress": 0,
             "current_stage": "Initializing",
-            "started_at": datetime.utcnow().isoformat(),
+            "started_at": datetime.now(timezone.utc).isoformat(),
             "options": request.options.dict()
         }
         
@@ -203,15 +205,29 @@ async def get_scan_status(
 
 def _normalize_vulnerability(v: Dict[str, Any]) -> VulnerabilityInfo:
     """Normalize vulnerability data from various scanner formats to VulnerabilityInfo format"""
+    raw_score = v.get("cvss_score") or v.get("cvss") or 0.0
+    try:
+        cvss_score = float(raw_score)
+    except (TypeError, ValueError):
+        cvss_score = 0.0
+
+    mitre_techniques = v.get("mitre_techniques") or []
+    if isinstance(mitre_techniques, dict):
+        mitre_techniques = list(mitre_techniques.values())
+
+    raw_id = v.get("vuln_id") or v.get("vulnerability_id") or v.get("id") or uuid.uuid4().hex[:8]
+    if not isinstance(raw_id, str):
+        raw_id = str(raw_id)
+
     return VulnerabilityInfo(
-        id=v.get("vuln_id") or v.get("id") or uuid.uuid4().hex[:8],
+        id=raw_id,
         title=v.get("title") or v.get("name") or "Unknown",
         description=v.get("description") or "",
         severity=(v.get("severity") or "medium").lower(),
-        cvss_score=v.get("cvss_score") or v.get("cvss") or 0.0,
+        cvss_score=cvss_score,
         location=v.get("location") or v.get("url") or v.get("path") or "",
         recommendation=v.get("recommendation") or v.get("solution") or None,
-        mitre_techniques=v.get("mitre_techniques") or []
+        mitre_techniques=mitre_techniques
     )
 
 
@@ -235,7 +251,7 @@ async def get_scan_results(
             scan_id=scan_id,
             target_url=str(scan.get("target_url") or ""),
             status=str(scan.get("status") or "unknown"),
-            started_at=scan.get("started_at") or datetime.utcnow(),
+            started_at=scan.get("started_at") or datetime.now(timezone.utc),
             completed_at=scan.get("completed_at"),
             vulnerabilities=[
                 _normalize_vulnerability(v)
@@ -254,6 +270,7 @@ async def get_scan_results(
             mitre_mapping=scan.get("mitre_mapping"),
             ai_analysis=scan.get("ai_analysis"),
             remediation_strategies=scan.get("remediation_strategies"),
+            executive_summary=scan.get("executive_summary"),
             debug=scan.get("scanner_debug") if debug else None
         )
         
@@ -262,6 +279,61 @@ async def get_scan_results(
     except Exception as e:
         logger.error(f"Error fetching scan results: {str(e)}")
         raise HTTPException(status_code=500, detail="Error fetching scan results")
+
+
+@router.get("/comprehensive/{scan_id}/summary")
+async def generate_scan_summary(
+    scan_id: str,
+    current_user = Depends(get_current_user_optional)
+):
+    """Generate or return cached executive summary for a scan using Groq LLM"""
+    try:
+        scan = supabase.fetch_scan(scan_id)
+        if not scan:
+            raise HTTPException(status_code=404, detail="Scan not found")
+
+        vulnerabilities = supabase.fetch_vulnerabilities(scan_id)
+
+        # Return cached summary if available
+        cached_summary = scan.get("executive_summary")
+        if cached_summary:
+            return {
+                "scan_id": scan_id,
+                "summary": cached_summary,
+                "cached": True
+            }
+
+        risk_score = scan.get("risk_score") or scan.get("overall_risk_score") or 0.0
+        try:
+            risk_score_value = float(risk_score)
+        except (TypeError, ValueError):
+            risk_score_value = 0.0
+
+        risk_level = scan.get("risk_level") or "Unknown"
+
+        summary_text = await llm_service.generate_executive_summary(
+            vulnerabilities,
+            risk_score_value,
+            risk_level
+        )
+
+        if summary_text:
+            supabase.update_scan(scan_id, {"executive_summary": summary_text})
+
+        return {
+            "scan_id": scan_id,
+            "summary": summary_text,
+            "cached": False
+        }
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        logger.error(f"LLM provider unavailable for summary: {e}")
+        raise HTTPException(status_code=503, detail="LLM provider unavailable for summary generation")
+    except Exception as e:
+        logger.error(f"Failed to generate scan summary: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to generate scan summary")
 
 
 @router.get("/comprehensive/{scan_id}")
@@ -399,7 +471,7 @@ async def _run_comprehensive_scan(
             supabase.update_scan(scan_id, {
                 "status": "failed",
                 "error": str(e),
-                "completed_at": datetime.utcnow().isoformat()
+                "completed_at": datetime.now(timezone.utc).isoformat()
             })
         except Exception as update_error:
             logger.error(f"Failed to update scan status: {update_error}")

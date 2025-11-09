@@ -386,12 +386,12 @@ def create_mock_scan():
         # Create scan record
         print(f"Creating mock scan with ID: {scan_id}")
         supabase.create_scan(scan_data)
-        print("✓ Scan record created")
+        print("[OK] Scan record created")
         
         # Insert vulnerabilities
         print(f"Inserting {len(vulnerabilities)} vulnerabilities...")
         count = supabase.insert_vulnerabilities(scan_id, vulnerabilities)
-        print(f"✓ {count} vulnerabilities inserted")
+        print(f"[OK] {count} vulnerabilities inserted")
         
         print("\n" + "="*60)
         print("Mock scan created successfully!")

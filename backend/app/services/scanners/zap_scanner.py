@@ -1,5 +1,4 @@
 from typing import Dict, Any, List, Optional
-from datetime import datetime
 import logging
 try:
     from zapv2 import ZAPv2
@@ -11,6 +10,7 @@ import json
 from pydantic import BaseModel
 
 from .base_scanner import BaseScanner, ScannerConfig, ScanResult
+from app.utils.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +85,7 @@ class OWASPZAPScanner(BaseScanner):
                 'context_id': context_id,
                 'spider_id': spider_scan_id,
                 'scan_id': active_scan_id,
-                'start_time': datetime.utcnow(),
+                'start_time': utc_now(),
                 'config': config.dict()
             }
             
@@ -156,7 +156,7 @@ class OWASPZAPScanner(BaseScanner):
                 scan_id=scan_id,
                 target_url=scan_info['config']['target_url'],
                 start_time=scan_info['start_time'],
-                end_time=datetime.utcnow(),
+                end_time=utc_now(),
                 status='completed',
                 vulnerabilities=vulnerabilities,
                 raw_findings={

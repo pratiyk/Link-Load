@@ -1,8 +1,9 @@
 """Machine learning service for risk scoring and MITRE ATT&CK mapping."""
 import os
-from datetime import datetime
 from typing import Dict, Any, List, Optional
+
 from .pipeline.ml_pipeline import MLPipeline
+from app.utils.datetime_utils import utc_now
 
 class RiskScoringEngine:
     """Advanced risk scoring engine using ML models."""
@@ -42,7 +43,7 @@ class RiskScoringEngine:
         return {
             "score": 5.0,  # Default medium risk
             "confidence": 0.5,
-            "calculated_at": datetime.utcnow().isoformat(),
+            "calculated_at": utc_now().isoformat(),
             "note": "Using fallback scoring due to ML unavailability"
         }
         

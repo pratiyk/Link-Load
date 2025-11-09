@@ -1,7 +1,8 @@
 from typing import Dict, Any, List
 import numpy as np
-from datetime import datetime
 from loguru import logger
+
+from app.utils.datetime_utils import utc_now
 
 class RiskAnalyzer:
     def __init__(self):
@@ -105,7 +106,7 @@ class RiskAnalyzer:
                     business_impact,
                     finding
                 ),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             }
             
             return report
@@ -118,7 +119,7 @@ class RiskAnalyzer:
                 'business_impact': {'score': 0.0, 'factors': []},
                 'compliance_impact': {'score': 0.0, 'frameworks': []},
                 'remediation_priority': 'low',
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             }
     
     def _calculate_base_risk(self, finding: Dict[str, Any]) -> float:

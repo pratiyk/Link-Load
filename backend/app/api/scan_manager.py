@@ -1,13 +1,16 @@
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from app.database import get_db
 from pydantic import BaseModel
+
+from app.database import get_db
 from app.services.scanners.scanner_orchestrator import ScannerOrchestrator
 from app.core.security import get_current_user
+from app.models.user import User
+from app.utils.datetime_utils import utc_now_naive
 from datetime import datetime
-from typing import List, Dict, Any, Optional
 
 class ScanConfig(BaseModel):
     """Configuration options for a security scan"""
@@ -66,9 +69,7 @@ class ScanResponse(BaseModel):
     
     class Config:
         from_attributes = True
-from app.models.user import User
 import uuid
-from datetime import datetime
 
 router = APIRouter()
 orchestrator = ScannerOrchestrator()
@@ -91,7 +92,7 @@ async def initiate_scan(
         "scan_types": request.scan_types,
         "status": "pending",
         "scan_config": request.scan_config.dict(),
-        "started_at": datetime.utcnow()
+        "started_at": utc_now_naive()
     }
     
     # Add to database
@@ -110,7 +111,7 @@ async def initiate_scan(
         scan_id=scan_id,
         target=request.target_url,
         scan_types=request.scan_types,
-        config=request.scan_config
+        config=request.scan_config.dict()
     )
     
     return ScanResponse(**scan)
@@ -192,7 +193,7 @@ async def cancel_scan(
     db.execute(
         stmt.bindparams(
             scan_id=scan_id,
-            completed_at=datetime.utcnow()
+            completed_at=utc_now_naive()
         )
     )
     db.commit()

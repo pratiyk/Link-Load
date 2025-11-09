@@ -52,7 +52,7 @@ class E2ETestSuite:
     
     def log_test(self, name: str, passed: bool, message: str = ""):
         """Log test result"""
-        symbol = f"{GREEN}✓{RESET}" if passed else f"{RED}✗{RESET}"
+        symbol = f"{GREEN}[OK]{RESET}" if passed else f"{RED}[ERROR]{RESET}"
         print(f"{symbol} {name:40} {message}")
         
         if passed:
