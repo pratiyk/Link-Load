@@ -1,18 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import '../styles/home.css';
 import scannerService from '../services/scannerService';
 import logo from '../assets/logo.png';
+import { useAuth } from '../context/AuthContext';
 
 const Home = () => {
   const navigate = useNavigate();
+  const { isAuthenticated, logout } = useAuth();
   const [scanUrl, setScanUrl] = useState('');
   const [isScanActive, setIsScanActive] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [currentStage, setCurrentStage] = useState('');
   const [recentScans, setRecentScans] = useState([]);
   const [error, setError] = useState(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const accountMenuRef = useRef(null);
 
   useEffect(() => {
     // Load recent scans
@@ -123,6 +127,48 @@ const Home = () => {
     }
   };
 
+  useEffect(() => {
+    const handleDocumentClick = (event) => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target)) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setIsMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleDocumentClick);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setIsMenuOpen(false);
+    }
+  }, [isAuthenticated]);
+
+  const handleNavigate = (path) => {
+    setIsMenuOpen(false);
+    navigate(path);
+  };
+
+  const handleLogout = async () => {
+    setIsMenuOpen(false);
+    try {
+      await logout();
+    } finally {
+      navigate('/login');
+    }
+  };
+
   return (
     <Layout>
       <div className="home">
@@ -130,9 +176,54 @@ const Home = () => {
         <nav className="navbar">
           <div className="navbar-logo"></div>
           <ul className="navbar-menu">
-            <li className="login-register-tab">
-              <a href="/login">Login / Register</a>
-            </li>
+            {isAuthenticated ? (
+              <li className="navbar-menu__item navbar-menu__item--account" ref={accountMenuRef}>
+                <button
+                  type="button"
+                  className="account-trigger"
+                  aria-haspopup="true"
+                  aria-expanded={isMenuOpen}
+                  onClick={() => setIsMenuOpen((previous) => !previous)}
+                >
+                  <span className="account-trigger__label">Account</span>
+                  <span className="account-trigger__chevron" aria-hidden="true">v</span>
+                </button>
+                <div
+                  className={`account-dropdown ${isMenuOpen ? 'account-dropdown--open' : ''}`}
+                  role="menu"
+                >
+                  <button
+                    type="button"
+                    className="account-dropdown__item"
+                    onClick={() => handleNavigate('/settings/profile')}
+                    role="menuitem"
+                  >
+                    Profile settings
+                  </button>
+                  <button
+                    type="button"
+                    className="account-dropdown__item"
+                    onClick={() => handleNavigate('/settings/verification')}
+                    role="menuitem"
+                  >
+                    DNS verification
+                  </button>
+                  <hr className="account-dropdown__divider" />
+                  <button
+                    type="button"
+                    className="account-dropdown__item account-dropdown__item--danger"
+                    onClick={handleLogout}
+                    role="menuitem"
+                  >
+                    Sign out
+                  </button>
+                </div>
+              </li>
+            ) : (
+              <li className="navbar-menu__item navbar-menu__item--cta">
+                <a className="navbar-link--cta" href="/login">Login / Register</a>
+              </li>
+            )}
           </ul>
         </nav>
 

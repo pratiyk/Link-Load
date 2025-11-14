@@ -1,0 +1,411 @@
+.verification-shell {
+    padding: 3rem clamp(1.5rem, 3vw, 4rem);
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    gap: 2.5rem;
+}
+
+.verification-shell--loading {
+    min-height: 60vh;
+    display: grid;
+    place-items: center;
+    font-family: var(--font-display);
+    letter-spacing: 0.08em;
+}
+
+.verification-header {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.verification-header__badge {
+    width: 48px;
+    height: 48px;
+    background: linear-gradient(135deg, #1d3557, #457b9d);
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(19, 39, 67, 0.25);
+}
+
+.verification-header__title {
+    font-family: var(--font-display);
+    font-size: clamp(2.25rem, 3vw, 2.8rem);
+    margin: 0;
+    letter-spacing: 0.06em;
+}
+
+.verification-header__subtitle {
+    margin: 0.35rem 0 0;
+    max-width: 720px;
+    color: rgba(18, 20, 23, 0.75);
+    line-height: 1.6;
+}
+
+.verification-callout {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    border: 2px solid #0d1b2a;
+    padding: 1.25rem 1.5rem;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(67, 97, 238, 0.12), rgba(76, 201, 240, 0.1));
+    box-shadow: 0 12px 32px rgba(15, 32, 64, 0.08);
+}
+
+.verification-callout__title {
+    margin: 0 0 0.25rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+}
+
+.verification-callout__body {
+    margin: 0;
+    color: rgba(12, 21, 35, 0.78);
+    line-height: 1.65;
+}
+
+.verification-feedback {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.9rem 1.1rem;
+    border-radius: 12px;
+    font-weight: 600;
+}
+
+.verification-feedback--error {
+    background: rgba(231, 76, 60, 0.15);
+    color: #8b1d1d;
+}
+
+.verification-feedback--success {
+    background: rgba(46, 204, 113, 0.18);
+    color: #1f5132;
+}
+
+.verification-grid {
+    display: grid;
+    gap: 2rem;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}
+
+.verification-card {
+    background: #ffffff;
+    border: 1px solid rgba(18, 20, 23, 0.08);
+    border-radius: 18px;
+    padding: 2rem;
+    box-shadow: 0 16px 40px rgba(12, 19, 38, 0.08);
+    display: grid;
+    gap: 1.75rem;
+}
+
+.verification-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.verification-card__title {
+    margin: 0;
+    font-size: 1.45rem;
+    letter-spacing: 0.04em;
+}
+
+.verification-rotate {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    border: 1px solid rgba(13, 27, 42, 0.18);
+    padding: 0.45rem 0.9rem;
+    border-radius: 999px;
+    background: #f7fbff;
+    cursor: pointer;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.verification-rotate:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.verification-form {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.verification-form__label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-weight: 600;
+}
+
+.verification-form__label small {
+    color: rgba(18, 20, 23, 0.6);
+    font-weight: 400;
+}
+
+.verification-form__control {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border: 1px solid rgba(18, 20, 23, 0.12);
+    border-radius: 12px;
+    padding: 0.6rem 0.9rem;
+    background: rgba(250, 250, 252, 0.85);
+}
+
+.verification-form__control input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-size: 1rem;
+    outline: none;
+}
+
+.verification-form__control button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border: none;
+    background: #14213d;
+    color: #ffffff;
+    border-radius: 8px;
+    padding: 0.55rem 1.1rem;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.85rem;
+}
+
+.verification-form__control button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.verification-table {
+    border: 1px solid rgba(18, 20, 23, 0.08);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.verification-table table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.verification-table th,
+.verification-table td {
+    padding: 0.85rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid rgba(18, 20, 23, 0.08);
+}
+
+.verification-table th {
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    background: rgba(244, 247, 254, 0.9);
+}
+
+.verification-table__domain {
+    display: grid;
+    gap: 0.25rem;
+}
+
+.verification-table__name {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.verification-table__token {
+    font-family: "Source Code Pro", "Courier New", monospace;
+    font-size: 0.78rem;
+    color: rgba(18, 20, 23, 0.65);
+}
+
+.verification-table__host {
+    font-family: "Source Code Pro", "Courier New", monospace;
+    font-size: 0.82rem;
+    background: rgba(18, 20, 23, 0.05);
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+}
+
+.verification-actions__group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.verification-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.45rem 0.8rem;
+    border-radius: 999px;
+    border: 1px solid rgba(18, 20, 23, 0.14);
+    background: #f7f9fc;
+    cursor: pointer;
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.verification-action:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.verification-action--danger {
+    border-color: rgba(231, 76, 60, 0.25);
+    background: rgba(231, 76, 60, 0.12);
+    color: #8b1d1d;
+}
+
+.verification-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.28rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.verification-status--verified {
+    background: rgba(46, 204, 113, 0.18);
+    color: #1f5132;
+}
+
+.verification-status--pending {
+    background: rgba(243, 156, 18, 0.2);
+    color: #7a4002;
+}
+
+.verification-status--error {
+    background: rgba(231, 76, 60, 0.18);
+    color: #8b1d1d;
+}
+
+.verification-error-hint {
+    margin: 0.6rem 0 0;
+    font-size: 0.75rem;
+    color: #7a1f1f;
+}
+
+.verification-table__empty {
+    padding: 2rem;
+    text-align: center;
+    color: rgba(18, 20, 23, 0.6);
+}
+
+.verification-guide {
+    background: #0d1b2a;
+    color: #ffffff;
+    border-radius: 20px;
+    padding: 2rem;
+    display: grid;
+    gap: 1.5rem;
+    box-shadow: 0 16px 40px rgba(5, 14, 28, 0.35);
+}
+
+.verification-guide h2 {
+    margin: 0;
+    font-size: 1.35rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.verification-guide ol {
+    margin: 0;
+    padding-left: 1.2rem;
+    display: grid;
+    gap: 0.65rem;
+}
+
+.verification-guide li {
+    line-height: 1.6;
+}
+
+.verification-tip {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 0.9rem 1rem;
+}
+
+.verification-tip p {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+.verification-user {
+    border-top: 1px solid rgba(255, 255, 255, 0.16);
+    padding-top: 1.1rem;
+}
+
+.verification-user__label {
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.75rem;
+    opacity: 0.7;
+}
+
+.verification-user__detail {
+    margin: 0.35rem 0 0;
+    font-weight: 600;
+}
+
+@media (max-width: 1040px) {
+    .verification-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .verification-guide {
+        order: -1;
+    }
+}
+
+@media (max-width: 720px) {
+    .verification-shell {
+        padding: 2.2rem 1.25rem;
+    }
+
+    .verification-card,
+    .verification-guide {
+        padding: 1.6rem;
+    }
+
+    .verification-form__control {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .verification-form__control button {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .verification-table th,
+    .verification-table td {
+        padding: 0.75rem 0.7rem;
+    }
+
+    .verification-actions__group {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .verification-action {
+        justify-content: center;
+    }
+}

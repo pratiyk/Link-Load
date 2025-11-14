@@ -9,6 +9,7 @@
  */
 import axios from "axios";
 import { toast } from "react-toastify";
+import { supabase, isSupabaseConfigured } from "../services/supabaseClient";
 
 // API Configuration
 export const API_BASE_URL =
@@ -144,6 +145,9 @@ export const removeAuthToken = () => {
   localStorage.removeItem("authToken");
   localStorage.removeItem("refreshToken");
   localStorage.removeItem("user");
+  localStorage.removeItem("supabase_access_token");
+  localStorage.removeItem("supabase_refresh_token");
+  localStorage.removeItem("auth_provider");
 };
 
 export const setRefreshToken = (token) => {
@@ -161,6 +165,29 @@ export const getRefreshToken = () => {
 // Helper function to refresh access token
 export const refreshAccessToken = async () => {
   try {
+    const authProvider = localStorage.getItem("auth_provider");
+    if (authProvider === "supabase" && isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.auth.refreshSession();
+      if (error) {
+        throw error;
+      }
+
+      const { session } = data || {};
+      if (!session?.access_token) {
+        throw new Error("Supabase session refresh returned no access token");
+      }
+
+      setAuthToken(session.access_token);
+      if (session.refresh_token) {
+        setRefreshToken(session.refresh_token);
+        localStorage.setItem("supabase_refresh_token", session.refresh_token);
+      }
+      localStorage.setItem("supabase_access_token", session.access_token);
+      localStorage.setItem("auth_provider", "supabase");
+
+      return session.access_token;
+    }
+
     const refreshToken = getRefreshToken();
     if (!refreshToken) {
       throw new Error("No refresh token available");
@@ -175,6 +202,8 @@ export const refreshAccessToken = async () => {
     if (refresh_token) {
       setRefreshToken(refresh_token);
     }
+
+    localStorage.setItem("auth_provider", "native");
 
     return access_token;
   } catch (error) {
@@ -233,5 +262,13 @@ export const API_ENDPOINTS = {
   },
   remediation: "/api/v1/remediate",
   remediationExport: "/api/v1/remediate/export",
+  verification: {
+    profile: "/api/v1/domains/profile",
+    list: "/api/v1/domains",
+    create: "/api/v1/domains",
+    item: (id) => `/api/v1/domains/${id}`,
+    verify: (id) => `/api/v1/domains/${id}/verify`,
+    rotateToken: "/api/v1/domains/rotate-token",
+  },
   health: "/health",
 };

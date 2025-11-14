@@ -62,15 +62,15 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     """Model for user registration"""
-    password: str = Field(..., min_length=8, max_length=100)
-    confirm_password: str = Field(..., min_length=8, max_length=100)
+    password: str = Field(..., min_length=12, max_length=100)
+    confirm_password: str = Field(..., min_length=12, max_length=100)
 
     @field_validator('password')
     @classmethod
     def validate_password_strength(cls, v: str) -> str:
         """Validate password meets security requirements"""
-        if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters long')
+        if len(v) < 12:
+            raise ValueError('Password must be at least 12 characters long')
         if not re.search(r'[A-Z]', v):
             raise ValueError('Password must contain at least one uppercase letter')
         if not re.search(r'[a-z]', v):
@@ -114,15 +114,15 @@ class UserUpdate(BaseModel):
 class PasswordChange(BaseModel):
     """Model for changing password"""
     current_password: str
-    new_password: str = Field(..., min_length=8, max_length=100)
-    confirm_new_password: str = Field(..., min_length=8, max_length=100)
+    new_password: str = Field(..., min_length=12, max_length=100)
+    confirm_new_password: str = Field(..., min_length=12, max_length=100)
 
     @field_validator('new_password')
     @classmethod
     def validate_password_strength(cls, v: str) -> str:
         """Validate password meets security requirements"""
-        if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters long')
+        if len(v) < 12:
+            raise ValueError('Password must be at least 12 characters long')
         if not re.search(r'[A-Z]', v):
             raise ValueError('Password must contain at least one uppercase letter')
         if not re.search(r'[a-z]', v):

@@ -25,6 +25,10 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 security_manager = SecurityManager()
 
 
+_GENERIC_LOGIN_ERROR = "Invalid username or password."
+_GENERIC_REGISTRATION_ERROR = "Unable to create an account with the provided information."
+
+
 @router.post("/register", response_model=UserWithTokens, status_code=status.HTTP_201_CREATED)
 async def register_user(user_data: UserCreate, db: Session = Depends(get_db)):
     """
@@ -37,24 +41,30 @@ async def register_user(user_data: UserCreate, db: Session = Depends(get_db)):
     - Returns user data with JWT tokens
     """
     try:
+        email = user_data.email.strip().lower()
+        username = user_data.username.strip().lower()
+        full_name = (user_data.full_name.strip() if user_data.full_name else None)
+
         # Check if email already exists
-        existing_email = db.query(User).filter(User.email == user_data.email).first()
+        existing_email = db.query(User).filter(User.email == email).first()
         if existing_email:
-            raise ValidationException("Email already registered")
+            logger.warning("Registration attempt rejected for existing email", extra={"email": email})
+            raise ValidationException(_GENERIC_REGISTRATION_ERROR)
         
         # Check if username already exists
-        existing_username = db.query(User).filter(User.username == user_data.username).first()
+        existing_username = db.query(User).filter(User.username == username).first()
         if existing_username:
-            raise ValidationException("Username already taken")
+            logger.warning("Registration attempt rejected for existing username", extra={"username": username})
+            raise ValidationException(_GENERIC_REGISTRATION_ERROR)
         
         # Hash password
         hashed_password = security_manager.hash_password(user_data.password)
         
         # Create user
         db_user = User(
-            email=user_data.email,
-            username=user_data.username,
-            full_name=user_data.full_name,
+            email=email,
+            username=username,
+            full_name=full_name,
             hashed_password=hashed_password,
             is_active=True,
             is_verified=False,  # Email verification required
@@ -83,9 +93,9 @@ async def register_user(user_data: UserCreate, db: Session = Depends(get_db)):
     except ValidationException:
         raise
     except Exception as e:
-        logger.error(f"Registration failed: {e}")
+        logger.error("Registration failed", exc_info=True)
         db.rollback()
-        raise DatabaseException(f"Failed to register user: {str(e)}")
+        raise DatabaseException("Registration service is temporarily unavailable")
 
 
 @router.post("/login", response_model=UserWithTokens)
@@ -99,22 +109,23 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
     - Returns user data with JWT tokens
     """
     try:
+        email = credentials.email.strip().lower()
         # Find user by email
-        user = db.query(User).filter(User.email == credentials.email).first()
+        user = db.query(User).filter(User.email == email).first()
         
         if not user:
-            raise AuthenticationException("Invalid email or password")
+            logger.warning("Failed login attempt for unknown email", extra={"email": email})
+            raise AuthenticationException(_GENERIC_LOGIN_ERROR)
         
         # Check if account is locked
         if user.locked_until and user.locked_until > utc_now():  # type: ignore
-            minutes_left = int((user.locked_until - utc_now()).total_seconds() / 60)
-            raise AuthenticationException(
-                f"Account is locked. Try again in {minutes_left} minutes."
-            )
+            logger.warning("Login attempt on locked account", extra={"email": email, "locked_until": user.locked_until})
+            raise AuthenticationException(_GENERIC_LOGIN_ERROR)
         
         # Check if account is active
         if not user.is_active:  # type: ignore
-            raise AuthenticationException("Account is disabled")
+            logger.warning("Login attempt on inactive account", extra={"email": email})
+            raise AuthenticationException(_GENERIC_LOGIN_ERROR)
         
         # Verify password
         if not security_manager.verify_password(credentials.password, str(user.hashed_password)):
@@ -125,12 +136,12 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
             if user.failed_login_attempts >= 5:  # type: ignore
                 user.locked_until = utc_now() + timedelta(minutes=15)  # type: ignore
                 db.commit()
-                raise AuthenticationException(
-                    "Too many failed login attempts. Account locked for 15 minutes."
-                )
+                logger.warning("Account locked after repeated failures", extra={"email": email})
+                raise AuthenticationException(_GENERIC_LOGIN_ERROR)
             
             db.commit()
-            raise AuthenticationException("Invalid email or password")
+            logger.warning("Invalid credentials submitted", extra={"email": email})
+            raise AuthenticationException(_GENERIC_LOGIN_ERROR)
         
         # Reset failed login attempts on successful login
         user.failed_login_attempts = 0  # type: ignore
@@ -139,7 +150,7 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(user)
         
-        logger.info(f"User logged in: {user.email}")
+        logger.info("User logged in", extra={"email": email})
         
         # Generate tokens
         access_token = security_manager.create_access_token(subject=user.id)
@@ -158,8 +169,8 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
     except AuthenticationException:
         raise
     except Exception as e:
-        logger.error(f"Login failed: {e}")
-        raise DatabaseException(f"Login failed: {str(e)}")
+        logger.error("Login failed", exc_info=True)
+        raise DatabaseException("Login service is temporarily unavailable")
 
 
 @router.post("/refresh", response_model=TokenResponse)

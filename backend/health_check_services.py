@@ -57,10 +57,12 @@ def _resolve_binary_path(env_name: str, attr_name: str, default: str) -> str:
 def _run_version_command(target: str) -> subprocess.CompletedProcess:
     env = os.environ.copy()
     env.setdefault("PYTHONIOENCODING", "utf-8")
+    env.setdefault("PYTHONUTF8", "1")
     return subprocess.run(
         [target, '--version'],
         capture_output=True,
         text=True,
+        encoding='utf-8',
         timeout=15,
         env=env
     )

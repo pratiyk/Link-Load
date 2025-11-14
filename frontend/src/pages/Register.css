@@ -1,0 +1,88 @@
+/* Register page overrides layered on top of Login.css */
+
+.register-page .login-brand__title {
+    letter-spacing: 0.1em;
+}
+
+.register-page .login-brand__subtitle {
+    max-width: 420px;
+}
+
+.register-card .login-card__badge {
+    background: var(--color-block-blue);
+}
+
+.register-card .login-card__subtitle {
+    max-width: 540px;
+}
+
+.register-card .login-submit {
+    background: var(--color-block-coral);
+}
+
+.register-card .login-submit:hover:enabled {
+    box-shadow: 14px 14px 0 rgba(18, 20, 23, 0.24);
+}
+
+.register-support {
+    align-self: center;
+    max-width: 760px;
+    width: 100%;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+.register-support__surface {
+    border: 2px dashed var(--color-black);
+    background: #fff9ea;
+    padding: var(--spacing-4);
+    box-shadow: 8px 8px 0 rgba(18, 20, 23, 0.12);
+    display: grid;
+    gap: var(--spacing-3);
+}
+
+.register-benefits {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: var(--spacing-3);
+}
+
+.register-benefits li {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--spacing-2);
+    align-items: start;
+    font-size: var(--font-size-sm);
+    color: var(--color-black);
+}
+
+.register-benefits li svg {
+    margin-top: 0.2rem;
+    color: var(--color-block-green);
+}
+
+.register-legal {
+    font-size: var(--font-size-xs);
+    color: rgba(18, 20, 23, 0.8);
+    line-height: 1.6;
+}
+
+.register-password-policy {
+    margin-top: var(--spacing-3);
+    padding: var(--spacing-2) var(--spacing-3);
+    border: 2px dashed var(--color-black);
+    background: rgba(255, 247, 223, 0.85);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    line-height: 1.6;
+    color: rgba(18, 20, 23, 0.9);
+}
+
+@media (max-width: 720px) {
+    .register-support__surface {
+        padding: var(--spacing-3);
+    }
+}

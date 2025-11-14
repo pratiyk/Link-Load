@@ -22,7 +22,8 @@ from app.api import ws, auth, scan_manager, ws_endpoints, scans, batch_scanner, 
 from app.api import (
     vulnerability_scanner,
     vulnerabilities,
-    intelligence
+    intelligence,
+    domain_verification
 )
 
 logger = logging.getLogger(__name__)
@@ -140,6 +141,7 @@ app.include_router(scan_manager.router, prefix=settings.API_PREFIX)  # Scan mana
 app.include_router(scans.router)  # Comprehensive scanning endpoints
 app.include_router(ws_endpoints.router, prefix=settings.API_PREFIX)  # WebSocket endpoints
 app.include_router(batch_scanner.router)  # Batch scanning endpoints
+app.include_router(domain_verification.router)  # Domain verification workflows
 
 # Health check endpoints
 @app.get("/")
