@@ -459,11 +459,13 @@ const ScanResults = () => {
         <div className="error-container">
           <h2>Error Loading Results</h2>
           <p>{error}</p>
-          <p style={{ fontSize: '0.9rem', color: '#666', marginTop: '1rem' }}>
-            Scan ID: {scanId}
-          </p>
-          <button onClick={() => window.location.reload()}>Retry</button>
-          <button onClick={() => navigate('/')} style={{ marginLeft: '1rem' }}>Back to Home</button>
+          <p className="error-scan-id">Scan ID: {scanId}</p>
+          <div className="error-actions">
+            <button onClick={() => window.location.reload()}>Retry</button>
+            <button onClick={() => navigate('/')} className="error-actions__secondary">
+              Back to Home
+            </button>
+          </div>
         </div>
       </Layout>
     );
@@ -475,11 +477,13 @@ const ScanResults = () => {
         <div className="error-container">
           <h2>No Results Found</h2>
           <p>The scan results could not be loaded. The scan may still be in progress.</p>
-          <p style={{ fontSize: '0.9rem', color: '#666', marginTop: '1rem' }}>
-            Scan ID: {scanId}
-          </p>
-          <button onClick={() => window.location.reload()}>Refresh</button>
-          <button onClick={() => navigate('/')} style={{ marginLeft: '1rem' }}>Back to Home</button>
+          <p className="error-scan-id">Scan ID: {scanId}</p>
+          <div className="error-actions">
+            <button onClick={() => window.location.reload()}>Refresh</button>
+            <button onClick={() => navigate('/')} className="error-actions__secondary">
+              Back to Home
+            </button>
+          </div>
         </div>
       </Layout>
     );

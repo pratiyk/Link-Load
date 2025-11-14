@@ -54,14 +54,22 @@ class WapitiScanner(BaseScanner):
             # Test wapiti installation
             if self.is_windows:
                 # Use subprocess.run for Windows
-                result = await asyncio.get_event_loop().run_in_executor(
-                    self.executor,
-                    lambda: subprocess.run(
+                def _run_version_windows():
+                    env = os.environ.copy()
+                    env['PYTHONIOENCODING'] = 'utf-8'
+                    env['PYTHONUTF8'] = '1'
+                    env['PYTHONLEGACYWINDOWSSTDIO'] = '0'
+                    return subprocess.run(
                         [self.config.binary_path, '--version'],
                         capture_output=True,
                         text=True,
-                        timeout=10
+                        timeout=10,
+                        env=env
                     )
+
+                result = await asyncio.get_event_loop().run_in_executor(
+                    self.executor,
+                    _run_version_windows
                 )
                 if result.returncode != 0:
                     logger.error(f"Wapiti not found or error: {result.stderr}")
@@ -69,11 +77,15 @@ class WapitiScanner(BaseScanner):
                 version = result.stdout.strip()
             else:
                 # Use asyncio subprocess for Linux/Mac
+                env = os.environ.copy()
+                env['PYTHONIOENCODING'] = env.get('PYTHONIOENCODING', 'utf-8')
+                env['PYTHONUTF8'] = env.get('PYTHONUTF8', '1')
                 proc = await asyncio.create_subprocess_exec(
                     self.config.binary_path,
                     '--version',
                     stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
+                    stderr=asyncio.subprocess.PIPE,
+                    env=env
                 )
                 stdout, stderr = await proc.communicate()
                 
@@ -127,6 +139,10 @@ class WapitiScanner(BaseScanner):
                         # Set environment to avoid asyncio issues on Windows
                         env = os.environ.copy()
                         env['PYTHONASYNCIODEBUG'] = '0'
+                        # Force UTF-8 output so Wapiti's banner doesn't crash on cp1252 consoles
+                        env['PYTHONIOENCODING'] = 'utf-8'
+                        env['PYTHONUTF8'] = '1'
+                        env['PYTHONLEGACYWINDOWSSTDIO'] = '0'
                         
                         proc = subprocess.Popen(
                             cmd,

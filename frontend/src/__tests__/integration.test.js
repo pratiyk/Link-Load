@@ -770,7 +770,13 @@ describe('ScanResults experience', () => {
     const riskCircle = await screen.findByText('5.5');
     expect(riskCircle).toBeInTheDocument();
     expect(riskCircle).toHaveStyle('background: #ffbb33');
-    expect(screen.getByText(/Medium Risk Level/i)).toBeInTheDocument();
+
+    const riskLevelNode = screen.getByText((content, element) => (
+      content === 'Medium' && element.classList.contains('risk-label-level')
+    ));
+    expect(riskLevelNode).toBeInTheDocument();
+    const riskCaptionNode = riskLevelNode.parentElement?.querySelector('.risk-label-caption');
+    expect(riskCaptionNode).toHaveTextContent(/Risk Level/i);
   });
 
   test('allows switching directly to threat intelligence when overview lacks findings', async () => {

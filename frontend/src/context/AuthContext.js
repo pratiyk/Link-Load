@@ -56,10 +56,10 @@ export const AuthProvider = ({ children }) => {
 
       localStorage.setItem('token', mockResponse.token);
       setUser(mockResponse.user);
-      return true;
+      return { success: true, user: mockResponse.user };
     } catch (error) {
       console.error('Login error:', error);
-      return false;
+      return { success: false, error: error.message || 'Login failed' };
     }
   };
 
@@ -78,10 +78,10 @@ export const AuthProvider = ({ children }) => {
 
       localStorage.setItem('token', mockResponse.token);
       setUser(mockResponse.user);
-      return true;
+      return { success: true, user: mockResponse.user };
     } catch (error) {
       console.error('Registration error:', error);
-      return false;
+      return { success: false, error: error.message || 'Registration failed' };
     }
   };
 

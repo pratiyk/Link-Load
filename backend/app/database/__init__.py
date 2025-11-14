@@ -41,5 +41,6 @@ def init_db():
     """Initialize database tables"""
     from app.models.user import User, RevokedToken
     from app.models.attack_surface_models import AttackSurfaceScan, DiscoveredAsset
+    from app.models.domain_verification import DomainVerification
     
     Base.metadata.create_all(bind=engine)
