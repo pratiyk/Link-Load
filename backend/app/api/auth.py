@@ -1,13 +1,16 @@
 """
 Authentication API endpoints
 """
-from fastapi import APIRouter, HTTPException, status, Depends
-from sqlalchemy.orm import Session
+import logging
 from datetime import timedelta
 from typing import Optional
-import logging
+
+from fastapi import APIRouter, HTTPException, status, Depends
+from pydantic import BaseModel, EmailStr
+from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.database.supabase_client import supabase
 from app.models.user import (
     User, RevokedToken, UserCreate, UserLogin, UserResponse,
     TokenResponse, TokenRefresh, UserWithTokens, UserUpdate, PasswordChange
@@ -27,6 +30,10 @@ security_manager = SecurityManager()
 
 _GENERIC_LOGIN_ERROR = "Invalid username or password."
 _GENERIC_REGISTRATION_ERROR = "Unable to create an account with the provided information."
+
+
+class SupabaseEmailConfirmRequest(BaseModel):
+    email: EmailStr
 
 
 @router.post("/register", response_model=UserWithTokens, status_code=status.HTTP_201_CREATED)
@@ -216,6 +223,20 @@ async def refresh_token(token_data: TokenRefresh, db: Session = Depends(get_db))
     except Exception as e:
         logger.error(f"Token refresh failed: {e}")
         raise AuthenticationException("Failed to refresh token")
+
+
+@router.post("/supabase/confirm", status_code=status.HTTP_204_NO_CONTENT)
+async def confirm_supabase_email(payload: SupabaseEmailConfirmRequest):
+    """Mark a Supabase user's email as confirmed using the service role."""
+    try:
+        updated = supabase.confirm_user_email(payload.email)
+        if not updated:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Supabase user not found")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Supabase email confirmation failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Failed to confirm Supabase email")
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
