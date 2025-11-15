@@ -281,6 +281,28 @@ async def get_scan_results(
         raise HTTPException(status_code=500, detail="Error fetching scan results")
 
 
+@router.get("/comprehensive/list")
+async def list_scans(
+    skip: int = 0,
+    limit: int = 10,
+    status: Optional[str] = None,
+    current_user = Depends(get_current_user_optional)
+):
+    """List user's scans with optional filtering"""
+    try:
+        user_id = current_user.id if current_user else "anonymous"
+        scans = supabase.get_user_scans(user_id, status, limit, skip)
+        return {
+            "scans": scans,
+            "total": len(scans),
+            "skip": skip,
+            "limit": limit
+        }
+    except Exception as e:
+        logger.error(f"Error listing scans: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error listing scans")
+
+
 @router.get("/comprehensive/{scan_id}/summary")
 async def generate_scan_summary(
     scan_id: str,
@@ -399,28 +421,6 @@ async def websocket_scan_updates(websocket: WebSocket, scan_id: str):
             await websocket.close(code=1000)
         except:
             pass
-
-
-@router.get("/comprehensive/list")
-async def list_scans(
-    skip: int = 0,
-    limit: int = 10,
-    status: Optional[str] = None,
-    current_user = Depends(get_current_user_optional)
-):
-    """List user's scans with optional filtering"""
-    try:
-        user_id = current_user.id if current_user else "anonymous"
-        scans = supabase.get_user_scans(user_id, status, limit, skip)
-        return {
-            "scans": scans,
-            "total": len(scans),
-            "skip": skip,
-            "limit": limit
-        }
-    except Exception as e:
-        logger.error(f"Error listing scans: {str(e)}")
-        raise HTTPException(status_code=500, detail="Error listing scans")
 
 
 @router.post("/comprehensive/{scan_id}/cancel")

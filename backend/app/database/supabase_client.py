@@ -3,15 +3,18 @@ import os
 import time
 import uuid
 from enum import Enum
+from typing import Dict, List, Optional, Any
+from datetime import datetime
+from contextlib import contextmanager
+
+import httpx
 from supabase import create_client, Client
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.engine.url import make_url
+
 from app.core.config import settings
-from typing import Dict, List, Optional, Any
-from datetime import datetime
-from contextlib import contextmanager
 
 from app.utils.datetime_utils import utc_now
 
@@ -447,6 +450,54 @@ class SupabaseClient:
         except Exception as e:
             logger.error(f"Failed to create batch scan: {str(e)}", exc_info=True)
             raise
+
+    def confirm_user_email(self, email: str) -> bool:
+        """Mark a Supabase user's email as confirmed using the service role API."""
+        if not email:
+            raise ValueError("Email is required for confirmation")
+
+        base_url = settings.SUPABASE_URL.rstrip('/')
+        headers = {
+            "Authorization": f"Bearer {settings.SUPABASE_SERVICE_KEY}",
+            "apikey": settings.SUPABASE_SERVICE_KEY,
+            "Content-Type": "application/json",
+        }
+
+        with httpx.Client(timeout=httpx.Timeout(10.0, read=10.0)) as client:
+            response = client.get(
+                f"{base_url}/auth/v1/admin/users",
+                params={"email": email},
+                headers=headers,
+            )
+            if response.status_code != 200:
+                logger.error("Supabase admin list users failed: %s", response.text)
+                raise RuntimeError("Failed to query Supabase users")
+
+            data = response.json() or {}
+            users = data.get("users") or []
+            if not users:
+                return False
+
+            user_id = users[0].get("id")
+            if not user_id:
+                return False
+
+            confirm_payload = {
+                "email_confirmed_at": datetime.utcnow().isoformat() + "Z",
+                "email": email,
+            }
+
+            update_response = client.put(
+                f"{base_url}/auth/v1/admin/users/{user_id}",
+                json=confirm_payload,
+                headers=headers,
+            )
+
+            if update_response.status_code not in {200, 204}:
+                logger.error("Supabase admin update user failed: %s", update_response.text)
+                raise RuntimeError("Failed to confirm Supabase user")
+
+            return True
 
     def update_batch_scan(self, batch_id: str, update: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update batch scan record"""
