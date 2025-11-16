@@ -5,6 +5,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Verification from "./pages/Verification";
 import ScanResults from "./pages/ScanResults";
+import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 
 import "./styles/variables.css";
@@ -18,6 +19,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/scan/:scanId" element={<ScanResults />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/profile" element={<Profile />} />
         <Route path="/settings/verification" element={<Verification />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

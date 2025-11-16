@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import scannerService from '../services/scannerService';
 import './ScanResults.css';
@@ -1152,7 +1152,7 @@ const ScanResults = () => {
         <header className="results-header">
           <div className="header-content">
             <h1>Scan Results</h1>
-            <button className="back-button" onClick={() => navigate('/')}>← Back to Home</button>
+            <Link to="/" className="back-button">← Back to Home</Link>
           </div>
           <div className="scan-info">
             <div className="scan-info-item">

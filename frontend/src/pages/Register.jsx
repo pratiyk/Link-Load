@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { UserPlus, Mail, Lock, Sparkles, ShieldCheck } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
+import Layout from '../components/Layout';
 import './Login.css';
 import './Register.css';
 import logo from '../assets/logo.png';
@@ -125,186 +126,188 @@ const Register = () => {
   };
 
   return (
-    <div className="login-page register-page">
-      <div className="login-page__frame">
-        <header className="login-brand">
-          <div className="login-brand__inner">
-            <span className="login-brand__tab" aria-hidden="true" />
-            <div className="login-brand__logo-wrap">
-              <img src={logo} alt="Link&Load Logo" className="login-brand__logo" />
+    <Layout>
+      <div className="login-page register-page">
+        <div className="login-page__frame">
+          <header className="login-brand">
+            <div className="login-brand__inner">
+              <span className="login-brand__tab" aria-hidden="true" />
+              <div className="login-brand__logo-wrap">
+                <img src={logo} alt="Link&Load Logo" className="login-brand__logo" />
+              </div>
+              <div className="login-brand__text">
+                <h1 className="login-brand__title">Breaches Hate Company.</h1>
+                <p className="login-brand__subtitle">
+                  We Don't Just Connect the Dots. We Obliterate the Threat.
+                </p>
+              </div>
+              <span className="login-brand__chip" aria-hidden="true" />
             </div>
-            <div className="login-brand__text">
-              <h1 className="login-brand__title">Breaches Hate Company.</h1>
-              <p className="login-brand__subtitle">
-                We Don't Just Connect the Dots. We Obliterate the Threat.
+          </header>
+
+          <section className="login-card register-card">
+            <div className="login-card__surface">
+              <div className="login-card__header">
+                <div className="login-card__badge">
+                  <UserPlus size={30} color="#000" />
+                </div>
+                <h1 className="login-card__title">Create your account</h1>
+                <p className="login-card__subtitle">
+                  We use Supabase Auth so your credentials stay encrypted end-to-end. Confirm your email to activate advanced scanning features.
+                </p>
+              </div>
+
+              {!isSecureContext && (
+                <div className="login-alert" role="alert" style={{ background: 'rgba(241, 86, 63, 0.12)' }}>
+                  <ShieldCheck size={18} />
+                  <span>A secure HTTPS connection is required to protect registration details. Switch to an encrypted link before continuing.</span>
+                </div>
+              )}
+
+              {!supabaseReady && (
+                <div className="login-alert" role="alert" style={{ background: 'rgba(241, 86, 63, 0.12)' }}>
+                  <ShieldCheck size={18} />
+                  <span>
+                    Supabase credentials are missing. Add REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY to enable account creation.
+                  </span>
+                </div>
+              )}
+
+              {error && (
+                <div className="login-alert" role="alert">
+                  <ShieldCheck size={18} />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {success && (
+                <div className="login-alert" role="status" style={{ background: 'rgba(113, 208, 140, 0.2)' }}>
+                  <Sparkles size={18} />
+                  <span>{success}</span>
+                </div>
+              )}
+
+              <form className="login-form" onSubmit={handleSubmit}>
+                <div className="login-input-group">
+                  <label className="login-input-label" htmlFor="register-fullname">
+                    <UserPlus size={16} />
+                    Full name (optional)
+                  </label>
+                  <input
+                    id="register-fullname"
+                    type="text"
+                    className="login-input"
+                    placeholder="Ada Lovelace"
+                    value={formData.fullName}
+                    onChange={handleChange('fullName')}
+                    autoComplete="name"
+                  />
+                </div>
+
+                <div className="login-input-group">
+                  <label className="login-input-label" htmlFor="register-email">
+                    <Mail size={16} />
+                    Work email
+                  </label>
+                  <input
+                    id="register-email"
+                    type="email"
+                    className="login-input"
+                    placeholder="you@company.com"
+                    value={formData.email}
+                    onChange={handleEmailChange}
+                    autoComplete="email"
+                    required
+                  />
+                </div>
+
+                <div className="login-input-group">
+                  <label className="login-input-label" htmlFor="register-password">
+                    <Lock size={16} />
+                    Password
+                  </label>
+                  <input
+                    id="register-password"
+                    type="password"
+                    className="login-input"
+                    placeholder="••••••••"
+                    value={formData.password}
+                    onChange={handleChange('password')}
+                    autoComplete="new-password"
+                    required
+                  />
+                </div>
+
+                <div className="login-input-group">
+                  <label className="login-input-label" htmlFor="register-confirm-password">
+                    <Lock size={16} />
+                    Confirm password
+                  </label>
+                  <input
+                    id="register-confirm-password"
+                    type="password"
+                    className="login-input"
+                    placeholder="••••••••"
+                    value={formData.confirmPassword}
+                    onChange={handleChange('confirmPassword')}
+                    autoComplete="new-password"
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="login-submit"
+                  disabled={loading || !supabaseReady || !isSecureContext}
+                  aria-disabled={!supabaseReady || loading || !isSecureContext}
+                  style={!supabaseReady || !isSecureContext ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+                >
+                  {loading ? 'Creating account…' : !isSecureContext ? 'Enable HTTPS' : supabaseReady ? 'Create account' : 'Configure Supabase'}
+                </button>
+              </form>
+
+              <div className="register-password-policy">
+                Passwords must be at least 12 characters long and include uppercase, lowercase, numeric, and symbol characters.
+              </div>
+
+              <div className="register-legal">
+                By clicking create account you agree to the Link&amp;Load Terms of Service and acknowledge our Privacy Policy. We will never share your credentials.
+              </div>
+
+              <div className="login-meta">
+                Already have an account?
+                <Link className="login-meta__link" to="/login">
+                  Sign in instead
+                </Link>
+              </div>
+            </div>
+          </section>
+
+          <section className="register-support">
+            <div className="register-support__surface">
+              <h2 className="dns-card__title">Why Supabase Auth?</h2>
+              <ul className="register-benefits">
+                <li>
+                  <ShieldCheck size={18} />
+                  <span>Session management with row-level security ensures your vulnerability data stays isolated per workspace.</span>
+                </li>
+                <li>
+                  <Sparkles size={18} />
+                  <span>Instant verification emails let teams onboard quickly while keeping malicious actors out.</span>
+                </li>
+                <li>
+                  <Mail size={18} />
+                  <span>Bring your own SMTP to align with corporate email policies without extra configuration.</span>
+                </li>
+              </ul>
+              <p className="register-legal">
+                After verifying your email, return to the login screen to access Link&amp;Load. Contact support if you need SSO or SCIM provisioning.
               </p>
             </div>
-            <span className="login-brand__chip" aria-hidden="true" />
-          </div>
-        </header>
-
-        <section className="login-card register-card">
-          <div className="login-card__surface">
-            <div className="login-card__header">
-              <div className="login-card__badge">
-                <UserPlus size={30} color="#000" />
-              </div>
-              <h1 className="login-card__title">Create your account</h1>
-              <p className="login-card__subtitle">
-                We use Supabase Auth so your credentials stay encrypted end-to-end. Confirm your email to activate advanced scanning features.
-              </p>
-            </div>
-
-            {!isSecureContext && (
-              <div className="login-alert" role="alert" style={{ background: 'rgba(241, 86, 63, 0.12)' }}>
-                <ShieldCheck size={18} />
-                <span>A secure HTTPS connection is required to protect registration details. Switch to an encrypted link before continuing.</span>
-              </div>
-            )}
-
-            {!supabaseReady && (
-              <div className="login-alert" role="alert" style={{ background: 'rgba(241, 86, 63, 0.12)' }}>
-                <ShieldCheck size={18} />
-                <span>
-                  Supabase credentials are missing. Add REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY to enable account creation.
-                </span>
-              </div>
-            )}
-
-            {error && (
-              <div className="login-alert" role="alert">
-                <ShieldCheck size={18} />
-                <span>{error}</span>
-              </div>
-            )}
-
-            {success && (
-              <div className="login-alert" role="status" style={{ background: 'rgba(113, 208, 140, 0.2)' }}>
-                <Sparkles size={18} />
-                <span>{success}</span>
-              </div>
-            )}
-
-            <form className="login-form" onSubmit={handleSubmit}>
-              <div className="login-input-group">
-                <label className="login-input-label" htmlFor="register-fullname">
-                  <UserPlus size={16} />
-                  Full name (optional)
-                </label>
-                <input
-                  id="register-fullname"
-                  type="text"
-                  className="login-input"
-                  placeholder="Ada Lovelace"
-                  value={formData.fullName}
-                  onChange={handleChange('fullName')}
-                  autoComplete="name"
-                />
-              </div>
-
-              <div className="login-input-group">
-                <label className="login-input-label" htmlFor="register-email">
-                  <Mail size={16} />
-                  Work email
-                </label>
-                <input
-                  id="register-email"
-                  type="email"
-                  className="login-input"
-                  placeholder="you@company.com"
-                  value={formData.email}
-                  onChange={handleEmailChange}
-                  autoComplete="email"
-                  required
-                />
-              </div>
-
-              <div className="login-input-group">
-                <label className="login-input-label" htmlFor="register-password">
-                  <Lock size={16} />
-                  Password
-                </label>
-                <input
-                  id="register-password"
-                  type="password"
-                  className="login-input"
-                  placeholder="••••••••"
-                  value={formData.password}
-                  onChange={handleChange('password')}
-                  autoComplete="new-password"
-                  required
-                />
-              </div>
-
-              <div className="login-input-group">
-                <label className="login-input-label" htmlFor="register-confirm-password">
-                  <Lock size={16} />
-                  Confirm password
-                </label>
-                <input
-                  id="register-confirm-password"
-                  type="password"
-                  className="login-input"
-                  placeholder="••••••••"
-                  value={formData.confirmPassword}
-                  onChange={handleChange('confirmPassword')}
-                  autoComplete="new-password"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="login-submit"
-                disabled={loading || !supabaseReady || !isSecureContext}
-                aria-disabled={!supabaseReady || loading || !isSecureContext}
-                style={!supabaseReady || !isSecureContext ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
-              >
-                {loading ? 'Creating account…' : !isSecureContext ? 'Enable HTTPS' : supabaseReady ? 'Create account' : 'Configure Supabase'}
-              </button>
-            </form>
-
-            <div className="register-password-policy">
-              Passwords must be at least 12 characters long and include uppercase, lowercase, numeric, and symbol characters.
-            </div>
-
-            <div className="register-legal">
-              By clicking create account you agree to the Link&amp;Load Terms of Service and acknowledge our Privacy Policy. We will never share your credentials.
-            </div>
-
-            <div className="login-meta">
-              Already have an account?
-              <Link className="login-meta__link" to="/login">
-                Sign in instead
-              </Link>
-            </div>
-          </div>
-        </section>
-
-        <section className="register-support">
-          <div className="register-support__surface">
-            <h2 className="dns-card__title">Why Supabase Auth?</h2>
-            <ul className="register-benefits">
-              <li>
-                <ShieldCheck size={18} />
-                <span>Session management with row-level security ensures your vulnerability data stays isolated per workspace.</span>
-              </li>
-              <li>
-                <Sparkles size={18} />
-                <span>Instant verification emails let teams onboard quickly while keeping malicious actors out.</span>
-              </li>
-              <li>
-                <Mail size={18} />
-                <span>Bring your own SMTP to align with corporate email policies without extra configuration.</span>
-              </li>
-            </ul>
-            <p className="register-legal">
-              After verifying your email, return to the login screen to access Link&amp;Load. Contact support if you need SSO or SCIM provisioning.
-            </p>
-          </div>
-        </section>
+          </section>
+        </div>
       </div>
-    </div>
+    </Layout>
   );
 };
 
