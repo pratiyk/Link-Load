@@ -20,6 +20,7 @@ from app.core.exceptions import (
     ValidationException,
 )
 from app.core.security import get_current_user, security_manager
+from app.core.authorization import require_authenticated_user, get_user_id
 from app.database import get_db
 from app.models.domain_verification import (
     DomainCreate,
@@ -198,8 +199,15 @@ async def get_verification_profile(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> DomainVerificationProfile:
-    token = _ensure_account_token(db, current_user)
+    """Get verification profile for the authenticated user.
+    
+    SECURITY: Users can only access their own verification profiles.
+    The query explicitly filters by user_id from the authenticated session.
+    """
     user_id = _extract_user_id(current_user)
+    token = _ensure_account_token(db, current_user)
+    
+    # Query explicitly scoped to authenticated user
     domains = (
         db.query(DomainVerification)
         .filter(DomainVerification.user_id == user_id)
@@ -226,11 +234,17 @@ async def register_domain(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> DomainResponse:
+    """Register a domain for DNS TXT verification.
+    
+    SECURITY: Domains are created in the context of the authenticated user.
+    User must be authenticated to register domains.
+    """
     sanitized = _sanitize_domain(payload.domain)
     token = _ensure_account_token(db, current_user)
     host_label = _build_host_label(sanitized)
     user_id = _extract_user_id(current_user)
 
+    # Query explicitly scoped to authenticated user
     existing = (
         db.query(DomainVerification)
         .filter(
@@ -277,6 +291,11 @@ async def delete_domain(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> None:
+    """Delete a domain for the authenticated user.
+    
+    SECURITY: Users can only delete their own domains.
+    The query explicitly filters by both domain_id and user_id.
+    """
     user_id = _extract_user_id(current_user)
     domain_record = _get_user_domain(db, user_id, domain_id)
     try:
@@ -295,6 +314,11 @@ async def verify_domain(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> DomainVerificationResult:
+    """Verify domain ownership via DNS TXT record.
+    
+    SECURITY: Users can only verify their own domains.
+    The query explicitly filters by both domain_id and user_id.
+    """
     user_id = _extract_user_id(current_user)
     domain_record = _get_user_domain(db, user_id, domain_id)
 

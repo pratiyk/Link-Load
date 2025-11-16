@@ -10,10 +10,16 @@ from pydantic import BaseModel, HttpUrl, Field
 from datetime import datetime, timezone
 
 from app.services.comprehensive_scanner import ComprehensiveScanner
-from app.core.security import get_current_user_optional
+from app.core.security import get_current_user_optional, get_current_user
 from app.database.supabase_client import supabase
 from app.core.config import settings
 from app.services.llm_service import llm_service
+from app.core.authorization import (
+    verify_scan_ownership,
+    require_authenticated_user,
+    get_user_id,
+    AccessDeniedException,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -180,13 +186,20 @@ async def start_comprehensive_scan(
 @router.get("/comprehensive/{scan_id}/status")
 async def get_scan_status(
     scan_id: str,
-    current_user = Depends(get_current_user_optional)
+    current_user = Depends(get_current_user)
 ):
-    """Get the current status of a scan"""
+    """Get the current status of a scan.
+    
+    SECURITY: Only the owner of the scan can retrieve its status.
+    """
     try:
+        # Require authentication and get user_id
+        user_id = get_user_id(current_user)
+        
         scan = supabase.fetch_scan(scan_id)
-        if not scan:
-            raise HTTPException(status_code=404, detail="Scan not found")
+        
+        # Verify ownership
+        verify_scan_ownership(scan, user_id)
         
         return {
             "scan_id": scan_id,
@@ -235,13 +248,21 @@ def _normalize_vulnerability(v: Dict[str, Any]) -> VulnerabilityInfo:
 async def get_scan_results(
     scan_id: str,
     debug: Optional[bool] = False,
-    current_user = Depends(get_current_user_optional)
+    current_user = Depends(get_current_user)
 ):
-    """Get the complete results of a scan"""
+    """Get the complete results of a scan.
+    
+    SECURITY: Only the owner of the scan can retrieve its results.
+    """
     try:
+        # Require authentication and get user_id
+        user_id = get_user_id(current_user)
+        
+        # Fetch scan
         scan = supabase.fetch_scan(scan_id)
-        if not scan:
-            raise HTTPException(status_code=404, detail="Scan not found")
+        
+        # Verify ownership
+        verify_scan_ownership(scan, user_id)
         
         # Fetch vulnerabilities
         vulns = supabase.fetch_vulnerabilities(scan_id)
@@ -286,11 +307,16 @@ async def list_scans(
     skip: int = 0,
     limit: int = 10,
     status: Optional[str] = None,
-    current_user = Depends(get_current_user_optional)
+    current_user = Depends(get_current_user)
 ):
-    """List user's scans with optional filtering"""
+    """List the current user's scans with optional filtering.
+    
+    SECURITY: Users can only retrieve their own scans.
+    """
     try:
-        user_id = current_user.id if current_user else "anonymous"
+        # Require authentication and get user_id
+        user_id = get_user_id(current_user)
+        
         scans = supabase.get_user_scans(user_id, status, limit, skip)
         return {
             "scans": scans,
@@ -306,13 +332,20 @@ async def list_scans(
 @router.get("/comprehensive/{scan_id}/summary")
 async def generate_scan_summary(
     scan_id: str,
-    current_user = Depends(get_current_user_optional)
+    current_user = Depends(get_current_user)
 ):
-    """Generate or return cached executive summary for a scan using Groq LLM"""
+    """Generate or return cached executive summary for a scan using Groq LLM.
+    
+    SECURITY: Only the owner of the scan can retrieve its summary.
+    """
     try:
+        # Require authentication and get user_id
+        user_id = get_user_id(current_user)
+        
         scan = supabase.fetch_scan(scan_id)
-        if not scan:
-            raise HTTPException(status_code=404, detail="Scan not found")
+        
+        # Verify ownership
+        verify_scan_ownership(scan, user_id)
 
         vulnerabilities = supabase.fetch_vulnerabilities(scan_id)
 
@@ -361,9 +394,12 @@ async def generate_scan_summary(
 @router.get("/comprehensive/{scan_id}")
 async def get_scan_result_redirect(
     scan_id: str,
-    current_user = Depends(get_current_user_optional)
+    current_user = Depends(get_current_user)
 ):
-    """Alias for get_scan_results for backward compatibility"""
+    """Alias for get_scan_results for backward compatibility.
+    
+    SECURITY: Enforces user ownership via get_scan_results.
+    """
     return await get_scan_results(scan_id, debug=False, current_user=current_user)
 
 
@@ -426,13 +462,20 @@ async def websocket_scan_updates(websocket: WebSocket, scan_id: str):
 @router.post("/comprehensive/{scan_id}/cancel")
 async def cancel_scan(
     scan_id: str,
-    current_user = Depends(get_current_user_optional)
+    current_user = Depends(get_current_user)
 ):
-    """Cancel an in-progress scan"""
+    """Cancel an in-progress scan.
+    
+    SECURITY: Only the owner of the scan can cancel it.
+    """
     try:
+        # Require authentication and get user_id
+        user_id = get_user_id(current_user)
+        
         scan = supabase.fetch_scan(scan_id)
-        if not scan:
-            raise HTTPException(status_code=404, detail="Scan not found")
+        
+        # Verify ownership
+        verify_scan_ownership(scan, user_id)
         
         # Update status
         supabase.update_scan(scan_id, {"status": "cancelled"})

@@ -19,9 +19,13 @@ const Home = () => {
   const accountMenuRef = useRef(null);
 
   useEffect(() => {
-    // Load recent scans
-    loadRecentScans();
-  }, []);
+    // Load recent scans only if authenticated
+    if (isAuthenticated) {
+      loadRecentScans();
+    } else {
+      setRecentScans([]);
+    }
+  }, [isAuthenticated]);
 
   const loadRecentScans = async () => {
     try {
@@ -185,8 +189,7 @@ const Home = () => {
                   aria-expanded={isMenuOpen}
                   onClick={() => setIsMenuOpen((previous) => !previous)}
                 >
-                  <span className="account-trigger__label">Account</span>
-                  <span className="account-trigger__chevron" aria-hidden="true">v</span>
+                  Account
                 </button>
                 <div
                   className={`account-dropdown ${isMenuOpen ? 'account-dropdown--open' : ''}`}
@@ -195,10 +198,10 @@ const Home = () => {
                   <button
                     type="button"
                     className="account-dropdown__item"
-                    onClick={() => handleNavigate('/settings/profile')}
+                    onClick={() => handleNavigate('/profile')}
                     role="menuitem"
                   >
-                    Profile settings
+                    Profile
                   </button>
                   <button
                     type="button"
@@ -206,7 +209,7 @@ const Home = () => {
                     onClick={() => handleNavigate('/settings/verification')}
                     role="menuitem"
                   >
-                    DNS verification
+                    DNS TXT verification
                   </button>
                   <hr className="account-dropdown__divider" />
                   <button
@@ -215,7 +218,7 @@ const Home = () => {
                     onClick={handleLogout}
                     role="menuitem"
                   >
-                    Sign out
+                    Log out
                   </button>
                 </div>
               </li>
@@ -254,6 +257,10 @@ const Home = () => {
                       <span className="progress-stage">{currentStage}</span>
                     </div>
                   </div>
+                ) : !isAuthenticated ? (
+                  <div className="auth-prompt-screen">
+                    Sign in to start scan
+                  </div>
                 ) : (
                   <div className={`glitch-text ${scanUrl ? 'ready' : ''}`}>
                     {scanUrl ? 'READY TO SCAN' : 'PRESS START SCAN'}
@@ -275,7 +282,7 @@ const Home = () => {
               <button
                 onClick={handleScan}
                 className="scan-button"
-                disabled={isScanActive || !scanUrl.trim()}
+                disabled={isScanActive || !scanUrl.trim() || !isAuthenticated}
               >
                 {isScanActive ? 'SCANNING...' : 'START SCAN'}
               </button>

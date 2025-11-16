@@ -318,8 +318,19 @@ class SupabaseClient:
             self._memory_scans[scan_id] = mem
             return mem
 
-    def fetch_scan(self, scan_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieve a single scan record"""
+    def fetch_scan(self, scan_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Retrieve a single scan record.
+        
+        Args:
+            scan_id: The scan ID to fetch
+            user_id: If provided, verify the scan belongs to this user (data isolation)
+            
+        Returns:
+            The scan data or None if not found
+            
+        Raises:
+            Exception: If user_id is provided but doesn't match the scan owner
+        """
         try:
             res = self.client.table("owasp_scans").select("*").eq("scan_id", scan_id).execute()
             if not res.data or len(res.data) == 0:
@@ -327,6 +338,16 @@ class SupabaseClient:
                 return self._memory_scans.get(scan_id)
             # Use first result if multiple
             scan_data = res.data[0] if isinstance(res.data, list) else res.data
+            
+            # If user_id provided, verify ownership (data isolation)
+            if user_id:
+                scan_owner = scan_data.get("user_id")
+                if scan_owner != user_id:
+                    from app.core.authorization import AccessDeniedException
+                    raise AccessDeniedException(
+                        f"You do not have access to scan {scan_id}"
+                    )
+            
             # Merge DB data into existing memory (preserve extra debug fields)
             existing = self._memory_scans.get(scan_id, {})
             merged = dict(existing)
@@ -380,9 +401,26 @@ class SupabaseClient:
                 pass
             return len(self._memory_vulns.get(scan_id, []))
 
-    def fetch_vulnerabilities(self, scan_id: str) -> List[Dict[str, Any]]:
-        """Retrieve all vulnerabilities for a given scan_id"""
+    def fetch_vulnerabilities(self, scan_id: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Retrieve all vulnerabilities for a given scan_id.
+        
+        Args:
+            scan_id: The scan ID to fetch vulnerabilities for
+            user_id: If provided, verify the scan belongs to this user before returning data
+            
+        Returns:
+            List of vulnerability records
+            
+        Raises:
+            Exception: If user_id is provided but scan doesn't belong to user
+        """
         try:
+            # If user_id provided, verify ownership first
+            if user_id:
+                scan = self.fetch_scan(scan_id, user_id=user_id)
+                if not scan:
+                    return []
+            
             res = self.client.table("owasp_vulnerabilities").select("*").eq("scan_id", scan_id).execute()
             if res.data:
                 # Sync memory cache

@@ -1,6 +1,13 @@
 import { render, screen } from '@testing-library/react';
 import App from './App';
 
+jest.mock('./context/AuthContext', () => ({
+  useAuth: () => ({
+    isAuthenticated: false,
+    logout: jest.fn()
+  })
+}));
+
 jest.mock('./services/scannerService', () => {
   const mockService = {
     listScans: jest.fn().mockResolvedValue({ scans: [] }),

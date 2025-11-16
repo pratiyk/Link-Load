@@ -9,6 +9,14 @@ from app.services.intelligence_mapping.realtime_intel import RealTimeIntelligenc
 from typing import Dict, Any
 import logging
 
+async def verify_token(token: str) -> str:
+    """Verify WebSocket token and return client ID"""
+    try:
+        user_id = get_current_user_id(token)
+        return str(user_id) if user_id else None
+    except Exception:
+        return None
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/intelligence/ws", tags=["intelligence"])
 

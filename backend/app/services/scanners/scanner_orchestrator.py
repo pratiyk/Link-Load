@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Optional, cast
 import asyncio
 import logging
+import uuid
 
 from app.services.scanners.base_scanner import BaseScanner
 from app.services.scanners.zap_scanner import ZAPScanner
@@ -158,7 +159,7 @@ class ScannerOrchestrator:
         scan_info = self.active_scans[scan_id]
         for scanner_type in scan_info["scanners"]:
             if scanner_type in self.scanners:
-                asyncio.create_task(self.scanners[scanner_type].stop())
+                asyncio.create_task(self.scanners[scanner_type].stop_scan(scan_id))
     
     def _calculate_summary(self, findings: List[Dict]) -> Dict:
         """Calculate scan summary from findings"""
