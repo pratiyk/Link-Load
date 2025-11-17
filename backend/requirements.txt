@@ -14,9 +14,8 @@ zaproxy>=0.4.0
 supabase>=2.0.0
 wapiti3>=3.2.0
 mitmproxy>=11.0.0
-python-owasp-zap-v2.4>=0.4.2
-nuclei-sdk>=0.1.0
-python-nuclei>=0.2.0
+# NOTE: python-owasp-zap-v2.4, nuclei-sdk, and python-nuclei are not published on PyPI.
+# Install their vendor binaries instead (tools/zap, tools/nuclei) and point env vars to them.
 aiohttp-client-cache>=0.8.1
 PyJWT>=2.6.0
 cryptography>=40.0.0
@@ -47,7 +46,7 @@ requests>=2.20.0
 httpx>=0.20.0
 websockets>=11.0.0
 fastapi-websocket-pubsub>=0.3.0
-asyncio>=3.4.3
+asyncio>=3.4.3  # vendored for legacy compat; stdlib asyncio already bundled
 dnspython>=2.4.0
 
 # Development and testing dependencies

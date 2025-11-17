@@ -47,6 +47,119 @@ if (Test-Path $pythonExe) {
     exit 1
 }
 
+# Helper to validate scanner binaries
+function Test-ScannerBinary {
+    param(
+        [string]$Name,
+        [string]$Path,
+        [string[]]$VersionArgs
+    )
+
+    if (-not $Path) {
+        Write-Warning "$Name path not provided in environment variables"
+        return
+    }
+    if (-not (Test-Path $Path)) {
+        Write-Warning "$Name binary not found at $Path"
+        return
+    }
+    try {
+        Write-Host "[INFO] Validating $Name binary..." -ForegroundColor Green
+        $processInfo = New-Object System.Diagnostics.ProcessStartInfo
+        $processInfo.FileName = $Path
+        $processInfo.Arguments = ($VersionArgs -join ' ')
+        $processInfo.RedirectStandardOutput = $true
+        $processInfo.RedirectStandardError = $true
+        $processInfo.UseShellExecute = $false
+        $processInfo.CreateNoWindow = $true
+        $process = [System.Diagnostics.Process]::Start($processInfo)
+        if ($process.WaitForExit(15000)) {
+            if ($process.ExitCode -eq 0) {
+                Write-Host "[SUCCESS] $Name is ready" -ForegroundColor Green
+            } else {
+                Write-Warning "$Name exited with code $($process.ExitCode). Check logs for details."
+            }
+        } else {
+            $process.Kill()
+            Write-Warning "$Name validation timed out"
+        }
+    } catch {
+        Write-Warning "Failed to validate $Name: $($_.Exception.Message)"
+    }
+}
+
+# Ensure OWASP ZAP daemon is running
+Write-Host "" 
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "Ensuring OWASP ZAP Daemon Is Running" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+
+$zapUrl = $env:ZAP_BASE_URL -or "http://localhost:8090"
+try {
+    $zapUri = [System.Uri]$zapUrl
+    $zapPort = $zapUri.Port
+    $zapHost = $zapUri.Host
+} catch {
+    Write-Warning "Invalid ZAP_BASE_URL '$zapUrl', defaulting to http://localhost:8090"
+    $zapUri = [System.Uri]"http://localhost:8090"
+    $zapPort = 8090
+    $zapHost = "localhost"
+}
+
+Write-Host "[INFO] Target ZAP endpoint: $($zapUri.AbsoluteUri)" -ForegroundColor Green
+$zapConnection = Get-NetTCPConnection -LocalPort $zapPort -ErrorAction SilentlyContinue
+if ($zapConnection) {
+    Write-Host "[SUCCESS] ZAP already listening on port $zapPort (PID $($zapConnection.OwningProcess))" -ForegroundColor Green
+} else {
+    $repoRoot = Split-Path $scriptDir -Parent
+    $zapBat = Join-Path $repoRoot "tools/zap/ZAP_2.15.0/zap.bat"
+    if (-not (Test-Path $zapBat)) {
+        Write-Warning "OWASP ZAP launcher not found at $zapBat. Please install or update ZAP." 
+    } else {
+        Write-Host "[INFO] Starting OWASP ZAP daemon..." -ForegroundColor Yellow
+        $zapArgs = @("-daemon", "-port", $zapPort)
+        if ($env:ZAP_API_KEY) {
+            $zapArgs += @("-config", "api.key=$($env:ZAP_API_KEY)")
+        }
+        Start-Process -FilePath $zapBat -ArgumentList $zapArgs -WorkingDirectory (Split-Path $zapBat) -WindowStyle Hidden
+        # Wait for ZAP to open the port (max 45 seconds)
+        $zapReady = $false
+        for ($i = 0; $i -lt 45; $i++) {
+            Start-Sleep -Seconds 1
+            if (Get-NetTCPConnection -LocalPort $zapPort -ErrorAction SilentlyContinue) {
+                $zapReady = $true
+                break
+            }
+        }
+        if ($zapReady) {
+            Write-Host "[SUCCESS] ZAP is now listening on port $zapPort" -ForegroundColor Green
+        } else {
+            Write-Warning "ZAP did not open port $zapPort within 45 seconds. Backend scans may fail."
+        }
+    }
+}
+
+# Validate Nuclei scanner
+Write-Host "" 
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "Validating Nuclei Scanner" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+$nucleiPath = $env:NUCLEI_BINARY_PATH
+Test-ScannerBinary -Name "Nuclei" -Path $nucleiPath -VersionArgs @("-version")
+if ($env:NUCLEI_TEMPLATES_PATH -and (Test-Path $env:NUCLEI_TEMPLATES_PATH)) {
+    Write-Host "[SUCCESS] Nuclei templates directory present at $($env:NUCLEI_TEMPLATES_PATH)" -ForegroundColor Green
+} elseif ($env:NUCLEI_TEMPLATES_PATH) {
+    Write-Warning "Configured Nuclei templates path not found: $($env:NUCLEI_TEMPLATES_PATH)"
+}
+
+# Validate Wapiti scanner
+Write-Host "" 
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "Validating Wapiti Scanner" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+$wapitiPath = $env:WAPITI_BINARY_PATH
+Test-ScannerBinary -Name "Wapiti" -Path $wapitiPath -VersionArgs @("--version")
+
 # Check if port 8000 is in use
 Write-Host "[INFO] Checking if port 8000 is available..." -ForegroundColor Green
 $portCheck = Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue

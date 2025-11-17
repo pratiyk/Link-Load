@@ -399,12 +399,14 @@ class ComprehensiveScanner:
             max_wait = options.get("timeout_minutes", 30) * 60
             wait_interval = 5  # seconds
             elapsed = 0
+            timed_out = True
             
             while elapsed < max_wait:
                 status = await scanner.get_scan_status(scan_task_id)
                 scan_status = status.get('status')
                 
                 if scan_status == 'completed':
+                    timed_out = False
                     break
                 elif scan_status in ['failed', 'error', 'not_found']:
                     logger.error(f"{scanner_type} scan failed: {status}")
@@ -413,8 +415,38 @@ class ComprehensiveScanner:
                 await asyncio.sleep(wait_interval)
                 elapsed += wait_interval
             
+            if timed_out:
+                logger.error(
+                    "%s scan exceeded max wait of %s seconds; stopping task",
+                    scanner_type,
+                    max_wait
+                )
+                try:
+                    await scanner.stop_scan(scan_task_id)
+                    await scanner.cleanup_scan(scan_task_id)
+                except Exception:
+                    logger.debug("Failed to stop timed out %s scan", scanner_type, exc_info=True)
+                await self._update_scan_progress(
+                    scan_id,
+                    stage=f"{scanner_type.upper()} scan timed out",
+                    progress=60
+                )
+                return []
+            
             # Get scan results
-            result = await scanner.get_scan_results(scan_task_id)
+            try:
+                results_timeout = max(30, min(max_wait or 120, 300))
+                result = await asyncio.wait_for(
+                    scanner.get_scan_results(scan_task_id),
+                    timeout=results_timeout
+                )
+            except asyncio.TimeoutError:
+                logger.error("%s scan results retrieval timed out", scanner_type)
+                try:
+                    await scanner.stop_scan(scan_task_id)
+                except Exception:
+                    logger.debug("Failed to stop %s after results timeout", scanner_type, exc_info=True)
+                return []
             vulnerabilities = result.vulnerabilities if result and hasattr(result, 'vulnerabilities') else []
             enriched_vulnerabilities: List[Dict[str, Any]] = []
             for vuln in vulnerabilities or []:
@@ -470,20 +502,34 @@ class ComprehensiveScanner:
             )
 
             # Use LLM service for comprehensive analysis
-            from app.services.llm_service import llm_service
-            
-            # Get business context from options if provided
-            business_context = options.get("business_context")
-            
-            # Call LLM service
-            llm_result = await llm_service.analyze_vulnerabilities(
-                vulnerabilities=vulnerabilities,
-                target_url=options.get("target_url", "unknown"),
-                business_context=business_context
-            )
-            
-            # Extract recommendations from LLM response
-            ai_analysis = llm_result.get("vulnerabilities", [])
+            try:
+                from app.services.llm_service import llm_service
+                
+                # Get business context from options if provided
+                business_context = options.get("business_context")
+                
+                try:
+                    # Call LLM service with timeout to prevent hanging
+                    llm_result = await asyncio.wait_for(
+                        llm_service.analyze_vulnerabilities(
+                            vulnerabilities=vulnerabilities,
+                            target_url=options.get("target_url", "unknown"),
+                            business_context=business_context
+                        ),
+                        timeout=30.0  # 30 second timeout
+                    )
+                    
+                    # Extract recommendations from LLM response
+                    ai_analysis = llm_result.get("vulnerabilities", [])
+                except asyncio.TimeoutError:
+                    logger.warning(f"LLM analysis timeout for scan {scan_id}, using fallback")
+                    ai_analysis = []
+                except Exception as llm_err:
+                    logger.warning(f"LLM service error: {llm_err}, using fallback")
+                    ai_analysis = []
+            except ImportError:
+                logger.debug("LLM service not available, using fallback")
+                ai_analysis = []
             
             # If no LLM result, fall back to basic analysis
             if not ai_analysis:
@@ -507,6 +553,7 @@ class ComprehensiveScanner:
 
         except Exception as e:
             logger.error(f"AI analysis failed: {e}")
+            # Continue anyway - don't fail the entire scan
 
     async def _perform_mitre_mapping(
         self,
@@ -536,36 +583,45 @@ class ComprehensiveScanner:
                 all_ttps = []
                 all_capec = []
                 
-                for vuln in vulnerabilities[:20]:  # Process top 20 vulnerabilities
-                    description = f"{vuln.get('title', '')} {vuln.get('description', '')}"
-                    cve_id = vuln.get('cve_id')
-                    
-                    try:
-                        mapping_result = await mitre_mapper.map_vulnerability(description, cve_id)
+                try:
+                    # Process vulnerabilities with timeout
+                    for vuln in vulnerabilities[:20]:  # Process top 20 vulnerabilities
+                        description = f"{vuln.get('title', '')} {vuln.get('description', '')}"
+                        cve_id = vuln.get('cve_id')
                         
-                        # Extract techniques with confidence scores
-                        for tech in mapping_result.get('techniques', [])[:3]:  # Top 3 per vuln
-                            technique_data = {
-                                "id": tech['technique_id'],
-                                "name": tech.get('name', 'Unknown'),
-                                "confidence": tech.get('confidence', 0.0),
-                                "method": tech.get('method', 'unknown'),
-                                "vulnerability_id": vuln.get('vulnerability_id'),
-                                "tactic": tech.get('tactic', 'Unknown')
-                            }
-                            all_techniques.append(technique_data)
-                        
-                        # Collect TTPs
-                        all_ttps.extend(mapping_result.get('ttps', []))
-                        
-                        # Collect CAPEC patterns
-                        all_capec.extend(mapping_result.get('capec_patterns', []))
-                        
-                    except Exception as ve:
-                        logger.debug(f"MITRE mapping failed for vulnerability {vuln.get('title')}: {ve}")
-                        continue
-                
-                db.close()
+                        try:
+                            # Add timeout to MITRE mapping call
+                            mapping_result = await asyncio.wait_for(
+                                mitre_mapper.map_vulnerability(description, cve_id),
+                                timeout=5.0  # 5 second timeout per vulnerability
+                            )
+                            
+                            # Extract techniques with confidence scores
+                            for tech in mapping_result.get('techniques', [])[:3]:  # Top 3 per vuln
+                                technique_data = {
+                                    "id": tech['technique_id'],
+                                    "name": tech.get('name', 'Unknown'),
+                                    "confidence": tech.get('confidence', 0.0),
+                                    "method": tech.get('method', 'unknown'),
+                                    "vulnerability_id": vuln.get('vulnerability_id'),
+                                    "tactic": tech.get('tactic', 'Unknown')
+                                }
+                                all_techniques.append(technique_data)
+                            
+                            # Collect TTPs
+                            all_ttps.extend(mapping_result.get('ttps', []))
+                            
+                            # Collect CAPEC patterns
+                            all_capec.extend(mapping_result.get('capec_patterns', []))
+                            
+                        except asyncio.TimeoutError:
+                            logger.debug(f"MITRE mapping timeout for {vuln.get('title')}")
+                            continue
+                        except Exception as ve:
+                            logger.debug(f"MITRE mapping failed for vulnerability {vuln.get('title')}: {ve}")
+                            continue
+                finally:
+                    db.close()
                 
                 # Remove duplicates and sort by confidence
                 seen_techniques = {}
