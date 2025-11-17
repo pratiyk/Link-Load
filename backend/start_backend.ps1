@@ -4,6 +4,10 @@ Write-Host "Starting Link-Load Backend Server" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
+# Force UTF-8 console encoding so scanner CLIs can emit ASCII art/logs without errors
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+[Console]::InputEncoding  = [System.Text.Encoding]::UTF8
+
 # Get script directory
 $scriptDir = $PSScriptRoot
 Write-Host "[INFO] Script directory: $scriptDir" -ForegroundColor Green
@@ -32,6 +36,12 @@ if (Test-Path $envPath) {
 # Set PYTHONPATH
 $env:PYTHONPATH = $scriptDir
 Write-Host "[INFO] PYTHONPATH set to: $env:PYTHONPATH" -ForegroundColor Green
+
+# Ensure UTF-8 for CLI scanners (Wapiti banner prints non-ASCII)
+if (-not $env:PYTHONIOENCODING) {
+    $env:PYTHONIOENCODING = "utf-8"
+    Write-Host "[INFO] PYTHONIOENCODING set to utf-8 for scanner compatibility" -ForegroundColor Green
+}
 
 # Check Python executable
 $pythonExe = "C:\prateek\projects\linkload\.venv\Scripts\python.exe"
@@ -74,17 +84,25 @@ function Test-ScannerBinary {
         $processInfo.CreateNoWindow = $true
         $process = [System.Diagnostics.Process]::Start($processInfo)
         if ($process.WaitForExit(15000)) {
+            $stdOut = $process.StandardOutput.ReadToEnd().Trim()
+            $stdErr = $process.StandardError.ReadToEnd().Trim()
             if ($process.ExitCode -eq 0) {
                 Write-Host "[SUCCESS] $Name is ready" -ForegroundColor Green
             } else {
-                Write-Warning "$Name exited with code $($process.ExitCode). Check logs for details."
+                Write-Warning "$Name exited with code $($process.ExitCode)."
+                if ($stdOut) {
+                    Write-Host "[STDOUT] $stdOut" -ForegroundColor DarkGray
+                }
+                if ($stdErr) {
+                    Write-Warning "[STDERR] $stdErr"
+                }
             }
         } else {
             $process.Kill()
             Write-Warning "$Name validation timed out"
         }
     } catch {
-        Write-Warning "Failed to validate $Name: $($_.Exception.Message)"
+        Write-Warning "Failed to validate ${Name}: $($_.Exception.Message)"
     }
 }
 
@@ -94,7 +112,12 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Ensuring OWASP ZAP Daemon Is Running" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 
-$zapUrl = $env:ZAP_BASE_URL -or "http://localhost:8090"
+if ([string]::IsNullOrWhiteSpace($env:ZAP_BASE_URL)) {
+    $zapUrl = "http://localhost:8090"
+    Write-Host "[INFO] ZAP_BASE_URL not configured. Using default http://localhost:8090" -ForegroundColor Yellow
+} else {
+    $zapUrl = $env:ZAP_BASE_URL
+}
 try {
     $zapUri = [System.Uri]$zapUrl
     $zapPort = $zapUri.Port
