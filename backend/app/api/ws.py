@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 @router.websocket("/ws/scans/{scan_id}")
 async def websocket_scan_updates(websocket: WebSocket, scan_id: str):
     """WebSocket endpoint for real-time scan updates"""
+    send_update = None
     try:
         await websocket.accept()
         
@@ -70,7 +71,8 @@ async def websocket_scan_updates(websocket: WebSocket, scan_id: str):
         logger.error(f"Error in WebSocket connection: {str(e)}")
     finally:
         try:
-            scanner_orchestrator.unsubscribe(scan_id, send_update)
+            if send_update:
+                scanner_orchestrator.unsubscribe(scan_id, send_update)
             await websocket.close()
         except Exception as e:
             logger.error(f"Error during WebSocket cleanup: {str(e)}")

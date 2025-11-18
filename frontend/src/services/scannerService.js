@@ -1,4 +1,4 @@
-import apiClient, { API_ENDPOINTS, WS_BASE_URL } from "../config/api";
+import apiClient, { API_ENDPOINTS, WS_BASE_URL, getAuthToken } from "../config/api";
 
 class ScannerService {
   constructor() {
@@ -97,8 +97,17 @@ class ScannerService {
 
   setupWebSocket(scanId, callbacks = {}) {
     try {
-      // Construct WebSocket URL
-      const wsUrl = `${WS_BASE_URL}/api/v1/scans/ws/${scanId}`;
+      // Construct WebSocket URL (backend websocket routes live at /ws)
+      const token = getAuthToken();
+      const wsPath = API_ENDPOINTS.scans.comprehensive.ws
+        ? API_ENDPOINTS.scans.comprehensive.ws(scanId)
+        : `/ws/scans/${scanId}`;
+      let wsUrl = `${WS_BASE_URL}${wsPath.startsWith('/') ? '' : '/'}${wsPath}`;
+      if (token) {
+        wsUrl += `?token=${encodeURIComponent(token)}`;
+      } else {
+        console.warn("[WebSocket] No auth token found; connection may be rejected");
+      }
       console.log('[WebSocket] Connecting to:', wsUrl);
 
       const ws = new WebSocket(wsUrl);

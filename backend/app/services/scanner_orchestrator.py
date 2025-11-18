@@ -5,6 +5,7 @@ import json
 import csv
 import threading
 import hashlib
+import inspect
 from contextlib import suppress
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Callable
@@ -403,7 +404,13 @@ class OWASPOrchestrator:
         """Notify all subscribers of an update"""
         for callback in self.subscribers.get(scan_id, []):
             try:
-                callback(data)
+                result = callback(data)
+                if inspect.isawaitable(result):
+                    try:
+                        asyncio.get_running_loop().create_task(result)
+                    except RuntimeError:
+                        # If we're outside the main loop (e.g., background thread), run synchronously
+                        asyncio.run(result)
             except Exception as e:
                 logger.error(f"Subscriber notification failed: {str(e)}")
                 

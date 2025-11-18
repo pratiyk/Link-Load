@@ -26,10 +26,12 @@ class OWASPZAPScanner(BaseScanner):
         self.config = config
         self.zap = None
         self.active_scans: Dict[str, Dict[str, Any]] = {}
+        self._initialized = False
 
     async def initialize(self) -> bool:
         if ZAPv2 is None:
             logger.warning("OWASP ZAP client library not installed; skipping initialization")
+            self._initialized = False
             return False
         try:
             # Initialize ZAP API client
@@ -44,39 +46,77 @@ class OWASPZAPScanner(BaseScanner):
             # Test connection
             version = self.zap.core.version
             logger.info(f"Successfully connected to OWASP ZAP {version}")
+            self._initialized = True
             return True
             
         except Exception as e:
             logger.error(f"Failed to initialize OWASP ZAP scanner: {str(e)}")
+            self.zap = None
+            self._initialized = False
             return False
+
+    async def _ensure_client(self) -> None:
+        """Ensure the ZAP API client is ready before using it."""
+        if ZAPv2 is None:
+            raise RuntimeError("OWASP ZAP client library not installed")
+        if self.zap is None or not self._initialized:
+            initialized = await self.initialize()
+            if not initialized or self.zap is None:
+                raise RuntimeError("OWASP ZAP client not available")
+
+    def _fetch_stats(self, zap_client: Any) -> Dict[str, Any]:
+        """Safely fetch statistics from the ZAP core API."""
+        try:
+            statistics_call = getattr(zap_client.core, 'statistics', None)
+            if callable(statistics_call):
+                stats_result = statistics_call('stats.')
+                if isinstance(stats_result, dict):
+                    return stats_result
+                return {'data': stats_result}
+        except Exception:
+            logger.debug("Failed to fetch ZAP statistics", exc_info=True)
+        return {}
+
+    def _normalize_progress(self, value: Any) -> int:
+        """Convert ZAP progress responses (strings/ints) into an int percentage."""
+        if isinstance(value, (int, float)):
+            return int(value)
+        if isinstance(value, str):
+            try:
+                return int(float(value.strip()))
+            except ValueError:
+                pass
+        return 0
 
     async def start_scan(self, config: ScannerConfig) -> str:
         """Start a new ZAP scan"""
-        if ZAPv2 is None or self.zap is None:
+        await self._ensure_client()
+        if self.zap is None:
             raise RuntimeError("OWASP ZAP client not available")
+        zap_client = self.zap
         try:
             scan_id = str(uuid.uuid4())
             
             # Create context for this scan
-            context_id = self.zap.context.new_context(scan_id)
+            context_id = zap_client.context.new_context(scan_id)
             
             # Configure target
-            self.zap.context.include_in_context(context_id, f"^{config.target_url}.*$")
+            zap_client.context.include_in_context(context_id, f"^{config.target_url}.*$")
             
             # Spider the target
-            spider_scan_id = self.zap.spider.scan(
+            spider_scan_id = zap_client.spider.scan(
                 config.target_url,
                 contextname=scan_id
             )
             
             if config.ajax_spider:
-                self.zap.ajaxSpider.scan(
+                zap_client.ajaxSpider.scan(
                     config.target_url,
                     contextname=scan_id
                 )
             
             # Start active scan when spider completes
-            active_scan_id = self.zap.ascan.scan(
+            active_scan_id = zap_client.ascan.scan(
                 config.target_url,
                 contextid=context_id
             )
@@ -97,8 +137,13 @@ class OWASPZAPScanner(BaseScanner):
 
     async def get_scan_status(self, scan_id: str) -> Dict[str, Any]:
         """Get current status of ZAP scan"""
-        if ZAPv2 is None or self.zap is None:
+        try:
+            await self._ensure_client()
+        except RuntimeError:
             return {'status': 'unavailable'}
+        if self.zap is None:
+            return {'status': 'unavailable'}
+        zap_client = self.zap
         try:
             if scan_id not in self.active_scans:
                 return {'status': 'not_found'}
@@ -106,10 +151,12 @@ class OWASPZAPScanner(BaseScanner):
             scan_info = self.active_scans[scan_id]
             
             # Check spider progress
-            spider_progress = self.zap.spider.status(scan_info['spider_id'])
+            spider_progress_raw = zap_client.spider.status(scan_info['spider_id'])
+            spider_progress = self._normalize_progress(spider_progress_raw)
             
             # Check active scan progress 
-            scan_progress = self.zap.ascan.status(scan_info['scan_id'])
+            scan_progress_raw = zap_client.ascan.status(scan_info['scan_id'])
+            scan_progress = self._normalize_progress(scan_progress_raw)
             
             return {
                 'status': 'running' if scan_progress < 100 else 'completed',
@@ -124,8 +171,10 @@ class OWASPZAPScanner(BaseScanner):
 
     async def get_scan_results(self, scan_id: str) -> ScanResult:
         """Get results from a ZAP scan"""
-        if ZAPv2 is None or self.zap is None:
+        await self._ensure_client()
+        if self.zap is None:
             raise RuntimeError("OWASP ZAP client not available")
+        zap_client = self.zap
         try:
             if scan_id not in self.active_scans:
                 raise ValueError(f"Scan {scan_id} not found")
@@ -133,7 +182,7 @@ class OWASPZAPScanner(BaseScanner):
             scan_info = self.active_scans[scan_id]
             
             # Get alerts
-            alerts = self.zap.core.alerts()
+            alerts = zap_client.core.alerts()
             
             # Format vulnerabilities
             vulnerabilities = []
@@ -161,8 +210,8 @@ class OWASPZAPScanner(BaseScanner):
                 vulnerabilities=vulnerabilities,
                 raw_findings={
                     'alerts': alerts,
-                    'spider_results': self.zap.spider.results(scan_info['spider_id']),
-                    'stats': self.zap.core.statistics('stats.')
+                    'spider_results': zap_client.spider.results(scan_info['spider_id']),
+                    'stats': self._fetch_stats(zap_client)
                 }
             )
 
@@ -172,8 +221,13 @@ class OWASPZAPScanner(BaseScanner):
 
     async def stop_scan(self, scan_id: str) -> bool:
         """Stop a running ZAP scan"""
-        if ZAPv2 is None or self.zap is None:
+        try:
+            await self._ensure_client()
+        except RuntimeError:
             return False
+        if self.zap is None:
+            return False
+        zap_client = self.zap
         try:
             if scan_id not in self.active_scans:
                 return False
@@ -181,8 +235,8 @@ class OWASPZAPScanner(BaseScanner):
             scan_info = self.active_scans[scan_id]
             
             # Stop spider and active scan
-            self.zap.spider.stop(scan_info['spider_id'])
-            self.zap.ascan.stop(scan_info['scan_id'])
+            zap_client.spider.stop(scan_info['spider_id'])
+            zap_client.ascan.stop(scan_info['scan_id'])
             
             return True
             
@@ -192,8 +246,13 @@ class OWASPZAPScanner(BaseScanner):
 
     async def cleanup_scan(self, scan_id: str) -> bool:
         """Clean up a completed ZAP scan"""
-        if ZAPv2 is None or self.zap is None:
+        try:
+            await self._ensure_client()
+        except RuntimeError:
             return False
+        if self.zap is None:
+            return False
+        zap_client = self.zap
         try:
             if scan_id not in self.active_scans:
                 return False
@@ -201,10 +260,10 @@ class OWASPZAPScanner(BaseScanner):
             scan_info = self.active_scans[scan_id]
             
             # Remove context
-            self.zap.context.remove_context(scan_info['context_id'])
+            zap_client.context.remove_context(scan_info['context_id'])
             
             # Clear alerts
-            self.zap.alert.delete_all_alerts()
+            zap_client.alert.delete_all_alerts()
             
             # Remove from active scans
             del self.active_scans[scan_id]
