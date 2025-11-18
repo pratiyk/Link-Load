@@ -240,7 +240,7 @@ export const API_ENDPOINTS = {
       summary: (id) => `/api/v1/scans/comprehensive/${id}/summary`,
       list: "/api/v1/scans/comprehensive/list",
       cancel: (id) => `/api/v1/scans/comprehensive/${id}/cancel`,
-      ws: (id) => `/api/v1/scans/ws/${id}`,
+      ws: (id) => `/ws/scans/${id}`,
     },
     manager: {
       start: "/api/v1/scans",

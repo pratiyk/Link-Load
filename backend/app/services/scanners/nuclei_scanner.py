@@ -176,6 +176,7 @@ class NucleiScanner(BaseScanner):
             scan_info = self.active_scans[scan_id]
             proc = scan_info['process']
             is_windows = scan_info.get('is_windows', False)
+            results_file = scan_info.get('results_file') or f"{scan_info['output_dir']}/results.jsonl"
             
             # Check if process is still running
             if is_windows:
@@ -190,10 +191,17 @@ class NucleiScanner(BaseScanner):
                     'status': 'running',
                     'start_time': scan_info['start_time'].isoformat()
                 }
-            elif return_code == 0:
-                return {'status': 'completed'}
-            else:
-                return {'status': 'failed'}
+            # Treat non-zero exit codes as completed if we still produced results
+            has_output = False
+            try:
+                if results_file and os.path.exists(results_file) and os.path.getsize(results_file) > 0:
+                    has_output = True
+            except Exception:
+                pass
+
+            if return_code == 0 or has_output:
+                return {'status': 'completed', 'return_code': return_code}
+            return {'status': 'failed', 'return_code': return_code}
                 
         except Exception as e:
             logger.error(f"Error getting Nuclei scan status: {str(e)}")
@@ -375,11 +383,25 @@ class NucleiScanner(BaseScanner):
                 
             scan_info = self.active_scans[scan_id]
             proc = scan_info['process']
+            is_windows = scan_info.get('is_windows', False)
             
-            if proc.returncode is None:
+            def _wait_sync() -> bool:
+                try:
+                    proc.wait(timeout=5.0)
+                    return True
+                except subprocess.TimeoutExpired:
+                    return False
+
+            process_running = (proc.poll() if is_windows else proc.returncode) is None
+            if process_running:
                 proc.terminate()
                 try:
-                    await asyncio.wait_for(proc.wait(), timeout=5.0)
+                    if is_windows:
+                        completed = await asyncio.get_event_loop().run_in_executor(self.executor, _wait_sync)
+                        if not completed:
+                            proc.kill()
+                    else:
+                        await asyncio.wait_for(proc.wait(), timeout=5.0)
                 except asyncio.TimeoutError:
                     proc.kill()
             

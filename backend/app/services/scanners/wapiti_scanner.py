@@ -397,11 +397,25 @@ class WapitiScanner(BaseScanner):
                 
             scan_info = self.active_scans[scan_id]
             proc = scan_info['process']
+            is_windows = scan_info.get('is_windows', False)
             
-            if proc.returncode is None:
+            def _wait_sync() -> bool:
+                try:
+                    proc.wait(timeout=5.0)
+                    return True
+                except subprocess.TimeoutExpired:
+                    return False
+
+            process_running = (proc.poll() if is_windows else proc.returncode) is None
+            if process_running:
                 proc.terminate()
                 try:
-                    await asyncio.wait_for(proc.wait(), timeout=5.0)
+                    if is_windows:
+                        completed = await asyncio.get_event_loop().run_in_executor(self.executor, _wait_sync)
+                        if not completed:
+                            proc.kill()
+                    else:
+                        await asyncio.wait_for(proc.wait(), timeout=5.0)
                 except asyncio.TimeoutError:
                     proc.kill()
             
