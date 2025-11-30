@@ -288,41 +288,41 @@ const ScanResults = () => {
 
     return [
       {
-        id: 'overview',
-        label: 'Overview',
-        display: 'Overview'
-      },
-      {
         id: 'summary',
-        label: 'Executive Summary',
-        display: 'Executive Summary',
+        label: 'Mission Brief',
+        display: 'Mission Brief',
         visible: summaryTabVisible
       },
       {
+        id: 'overview',
+        label: 'Recon Report',
+        display: 'Recon Report'
+      },
+      {
         id: 'vulnerabilities',
-        label: 'Vulnerabilities',
-        display: vulnerabilityStats.total ? `Vulnerabilities (${vulnerabilityStats.total})` : 'Vulnerabilities'
+        label: 'Threat Catalog',
+        display: vulnerabilityStats.total ? `Threat Catalog (${vulnerabilityStats.total})` : 'Threat Catalog'
       },
       {
         id: 'mitre',
-        label: 'MITRE Mapping',
-        display: mitreCount ? `MITRE Mapping (${mitreCount})` : 'MITRE Mapping',
+        label: 'Attack Matrix',
+        display: mitreCount ? `Attack Matrix (${mitreCount})` : 'Attack Matrix',
         visible: mitreCount > 0
       },
       {
         id: 'remediation',
-        label: 'Remediation Strategy',
+        label: 'Defense Playbook',
         display: hasRemediationData
           ? (remediationRecommendationsCount
-            ? `Remediation Strategy (${remediationRecommendationsCount})`
-            : 'Remediation Strategy')
+            ? `Defense Playbook (${remediationRecommendationsCount})`
+            : 'Defense Playbook')
           : null,
         visible: hasRemediationData
       },
       {
         id: 'ai',
-        label: 'Threat Intelligence',
-        display: aiInsightsCount ? `Threat Intelligence (${aiInsightsCount})` : 'Threat Intelligence',
+        label: 'Intel Analysis',
+        display: aiInsightsCount ? `Intel Analysis (${aiInsightsCount})` : 'Intel Analysis',
         visible: aiInsightsCount > 0 || vulnerabilityStats.total > 0
       }
     ].filter((tab) => tab.visible === undefined ? true : tab.visible);
@@ -504,7 +504,7 @@ const ScanResults = () => {
     return (
       <section className="results-section detailed-outline">
         <div className="section-header-box yellow">
-          <h2>Detailed Outline</h2>
+          <h2>Threat Catalog</h2>
           <div className="count-badge">{vulnerabilityStats.total}</div>
         </div>
         {vulns.length > 0 ? (
@@ -563,7 +563,7 @@ const ScanResults = () => {
     return (
       <section className="results-section mitre-section">
         <div className="section-header-box green">
-          <h2>MITRE ATT&CK Mapping</h2>
+          <h2>Attack Matrix</h2>
           <div className="count-badge">{techniques.length}</div>
         </div>
 
@@ -603,7 +603,7 @@ const ScanResults = () => {
     return (
       <section className="results-section overview">
         <div className="section-header-box pink">
-          <h2>Overview</h2>
+          <h2>Recon Report</h2>
         </div>
 
         <div className="overview-grid">
@@ -634,24 +634,24 @@ const ScanResults = () => {
   const renderExecutiveSummary = () => (
     <section className="results-section summary-section">
       <div className="section-header-box yellow">
-        <h2>Executive Summary</h2>
-        <div className="count-badge">{summaryCached ? 'AI' : 'LLM'}</div>
+        <h2>Mission Brief</h2>
+        <div className="count-badge">{summaryCached ? 'Cached' : 'Live'}</div>
       </div>
       <div className="executive-summary-card">
         <div className="executive-summary-meta">
           <span className={`llm-badge${summaryCached ? ' cached' : ''}`}>
-            {summaryCached ? 'Groq · Cached' : 'Groq Inference'}
+            {summaryCached ? 'Groq LLM - Cached' : 'Groq LLM - Inference'}
           </span>
         </div>
         <div className="executive-summary-body">
           {summaryLoading && (
-            <p className="summary-status">Generating a concise summary of this scan…</p>
+            <p className="summary-status">Generating technical analysis of this scan...</p>
           )}
 
           {!summaryLoading && summaryError && (
             <div className="summary-error">
               <p>{summaryError}</p>
-              <button type="button" onClick={handleSummaryRetry}>Retry Summary</button>
+              <button type="button" onClick={handleSummaryRetry}>Retry Analysis</button>
             </div>
           )}
 
@@ -768,7 +768,7 @@ const ScanResults = () => {
     return (
       <section className="results-section ai-timeframes">
         <div className="section-header-box coral">
-          <h2>Remediation Timeframes</h2>
+          <h2>Intel Analysis</h2>
           <div className="count-badge">{timelineFindingCount || aiInsights.length || vulnerabilityStats.total}</div>
         </div>
 
@@ -918,7 +918,7 @@ const ScanResults = () => {
     return (
       <section className="results-section remediation-section">
         <div className="section-header-box pink">
-          <h2>Remediation Strategy</h2>
+          <h2>Defense Playbook</h2>
           <div className="count-badge">{recommendations.length}</div>
         </div>
 

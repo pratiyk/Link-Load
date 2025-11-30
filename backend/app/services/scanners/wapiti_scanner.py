@@ -122,8 +122,18 @@ class WapitiScanner(BaseScanner):
                 '--max-parameters', str(self.config.max_parameters)
             ]
             
-            # Add enabled modules (use -m with comma-separated list)
-            if self.config.modules:
+            # Add modules based on scan depth
+            if getattr(config, 'deep_scan', False):
+                # Deep scan: comprehensive module set for thorough testing
+                deep_modules = [
+                    "xss", "sql", "csrf", "ssrf", "redirect", "http_headers", 
+                    "cookieflags", "csp", "xxe", "exec", "file", "backup",
+                    "htaccess", "methods", "ssl", "crlf", "permanentxss"
+                ]
+                cmd.extend(['-m', ','.join(deep_modules)])
+                logger.info(f"[Wapiti] Deep scan mode enabled with {len(deep_modules)} modules")
+            elif self.config.modules:
+                # Standard/Quick: Use configured modules
                 cmd.extend(['-m', ','.join(self.config.modules)])
             
             if not self.config.verify_ssl:

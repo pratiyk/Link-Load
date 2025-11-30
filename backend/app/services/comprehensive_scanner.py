@@ -382,13 +382,26 @@ class ComprehensiveScanner:
 
             scanner = self.scanners[scanner_type]
             
-            # Configure scanner options
+            # Configure scanner options based on scan mode
             from app.services.scanners.base_scanner import ScannerConfig
+            
+            deep_scan = options.get("deep_scan", False)
+            include_low_risk = options.get("include_low_risk", True)
+            timeout_minutes = options.get("timeout_minutes", 30)
+            
             scanner_config = ScannerConfig(
                 target_url=target_url,
                 scan_types=[scanner_type],
                 include_passive=True,
-                max_scan_duration=options.get("timeout_minutes", 30) * 60
+                deep_scan=deep_scan,
+                include_low_risk=include_low_risk,
+                ajax_spider=deep_scan,  # Enable AJAX spider for deep scans
+                max_scan_duration=timeout_minutes * 60
+            )
+            
+            logger.info(
+                f"Scanner config for {scanner_type}: deep_scan={deep_scan}, "
+                f"include_low_risk={include_low_risk}, timeout={timeout_minutes}min"
             )
 
             # Execute scan
@@ -396,8 +409,8 @@ class ComprehensiveScanner:
             logger.info(f"{scanner_type} scan started with task ID: {scan_task_id}")
             
             # Wait for scan to complete (poll status)
-            max_wait = options.get("timeout_minutes", 30) * 60
-            wait_interval = 5  # seconds
+            max_wait = timeout_minutes * 60
+            wait_interval = 10 if deep_scan else 5  # Longer intervals for deep scans
             elapsed = 0
             timed_out = True
             
@@ -779,13 +792,25 @@ class ComprehensiveScanner:
                     risk_score = 0.0
                     risk_level = "Minimal"
                     
-            except ImportError as ie:
-                logger.warning(f"Enhanced risk analyzer not available: {ie}, using basic calculation")
-                # Fallback to basic calculation
+            except Exception as e:
+                logger.warning(f"Enhanced risk analyzer failed: {e}, using basic calculation")
+                # Fallback to basic calculation based on severity counts
                 risk_score = min(
                     10.0,
                     (critical_count * 2.0) + (high_count * 1.5) + (medium_count * 0.8) + (low_count * 0.2)
                 )
+                
+                # If we have vulnerabilities but score is still 0, calculate from CVSS
+                if risk_score == 0 and vulnerabilities:
+                    # Use average CVSS score of all vulnerabilities
+                    cvss_scores = [v.get('cvss_score', 0) or 0 for v in vulnerabilities]
+                    if cvss_scores:
+                        avg_cvss = sum(cvss_scores) / len(cvss_scores)
+                        # Also consider max CVSS for risk
+                        max_cvss = max(cvss_scores)
+                        # Weighted combination: 60% max, 40% average
+                        risk_score = (0.6 * max_cvss) + (0.4 * avg_cvss)
+                        logger.info(f"Calculated risk from CVSS: max={max_cvss}, avg={avg_cvss}, score={risk_score}")
 
                 # Determine risk level
                 if risk_score >= 8:
@@ -826,7 +851,7 @@ class ComprehensiveScanner:
         progress: Optional[int] = None,
         stage: Optional[str] = None
     ) -> None:
-        """Update scan progress in database."""
+        """Update scan progress in database and notify WebSocket subscribers."""
         try:
             update_data = {}
             if status:
@@ -840,5 +865,35 @@ class ComprehensiveScanner:
             
             if update_data:
                 supabase.update_scan(scan_id, update_data)
+                
+                # Notify WebSocket subscribers about progress
+                try:
+                    from app.services.scanner_orchestrator import scanner_orchestrator
+                    
+                    ws_data = {
+                        "type": "progress" if status != "completed" else "result",
+                        "status": {
+                            "scan_id": scan_id,
+                            "status": status or "in_progress",
+                            "progress": progress or 0,
+                            "current_stage": stage or "Processing"
+                        }
+                    }
+                    
+                    # If completed, include results in the notification
+                    if status == "completed":
+                        vulns = supabase.fetch_vulnerabilities(scan_id)
+                        scan = supabase.fetch_scan(scan_id)
+                        ws_data["results"] = {
+                            "scan_id": scan_id,
+                            "status": "completed",
+                            "vulnerabilities": vulns,
+                            "risk_score": scan.get("risk_score") if scan else None,
+                            "risk_level": scan.get("risk_level") if scan else None
+                        }
+                    
+                    scanner_orchestrator.notify_subscribers(scan_id, ws_data)
+                except Exception as ws_err:
+                    logger.debug(f"WebSocket notification failed (non-critical): {ws_err}")
         except Exception as e:
             logger.error(f"Failed to update scan progress: {e}")

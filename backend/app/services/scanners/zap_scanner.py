@@ -103,17 +103,35 @@ class OWASPZAPScanner(BaseScanner):
             # Configure target
             zap_client.context.include_in_context(context_id, f"^{config.target_url}.*$")
             
+            # Check for deep scan mode
+            deep_scan = getattr(config, 'deep_scan', False)
+            use_ajax_spider = config.ajax_spider or deep_scan
+            
+            logger.info(f"[ZAP] Starting scan for {config.target_url} (deep_scan={deep_scan}, ajax_spider={use_ajax_spider})")
+            
             # Spider the target
             spider_scan_id = zap_client.spider.scan(
                 config.target_url,
                 contextname=scan_id
             )
             
-            if config.ajax_spider:
+            # For deep scans, always use AJAX spider for JavaScript-heavy sites
+            if use_ajax_spider:
+                logger.info(f"[ZAP] Starting AJAX spider for JavaScript content")
                 zap_client.ajaxSpider.scan(
                     config.target_url,
                     contextname=scan_id
                 )
+            
+            # Configure scan policy based on depth
+            if deep_scan:
+                # Deep scan: enable all scan policies for thorough testing
+                try:
+                    zap_client.ascan.set_option_max_depth(10)
+                    zap_client.ascan.set_option_max_scan_duration_in_mins(config.max_scan_duration // 60)
+                    logger.info(f"[ZAP] Deep scan: max depth 10, duration {config.max_scan_duration // 60} min")
+                except Exception as e:
+                    logger.debug(f"[ZAP] Could not set advanced options: {e}")
             
             # Start active scan when spider completes
             active_scan_id = zap_client.ascan.scan(
@@ -126,7 +144,8 @@ class OWASPZAPScanner(BaseScanner):
                 'spider_id': spider_scan_id,
                 'scan_id': active_scan_id,
                 'start_time': utc_now(),
-                'config': config.dict()
+                'config': config.dict(),
+                'deep_scan': deep_scan
             }
             
             return scan_id

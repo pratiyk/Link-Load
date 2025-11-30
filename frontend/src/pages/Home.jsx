@@ -16,7 +16,77 @@ const Home = () => {
   const [recentScans, setRecentScans] = useState([]);
   const [error, setError] = useState(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [scanMode, setScanMode] = useState('standard'); // 'quick', 'standard', 'deep'
+  const [showModeDetails, setShowModeDetails] = useState(false);
   const accountMenuRef = useRef(null);
+
+  // Scan mode configurations with detailed feature breakdown
+  const scanModes = {
+    quick: {
+      label: 'Quick',
+      duration: '2-5 min',
+      description: 'Fast security check for common vulnerabilities',
+      scanners: ['nuclei'],
+      timeout: 10,
+      deep_scan: false,
+      include_low_risk: false,
+      features: [
+        { name: 'CVE Detection', enabled: true, description: 'Known vulnerability scanning' },
+        { name: 'Misconfigurations', enabled: true, description: 'Common security misconfigurations' },
+        { name: 'Exposed Panels', enabled: true, description: 'Admin panels & dashboards' },
+        { name: 'SSL/TLS Analysis', enabled: false, description: 'Certificate and protocol checks' },
+        { name: 'SQL Injection', enabled: false, description: 'Database injection attacks' },
+        { name: 'XSS Detection', enabled: false, description: 'Cross-site scripting' },
+        { name: 'AI Analysis', enabled: true, description: 'AI-powered insights' },
+        { name: 'MITRE Mapping', enabled: true, description: 'ATT&CK technique mapping' }
+      ],
+      bestFor: 'Quick health checks, CI/CD pipelines, daily monitoring'
+    },
+    standard: {
+      label: 'Standard',
+      duration: '5-15 min',
+      description: 'Balanced scan with good coverage and speed',
+      scanners: ['nuclei', 'wapiti'],
+      timeout: 30,
+      deep_scan: false,
+      include_low_risk: true,
+      features: [
+        { name: 'CVE Detection', enabled: true, description: 'Known vulnerability scanning' },
+        { name: 'Misconfigurations', enabled: true, description: 'Common security misconfigurations' },
+        { name: 'Exposed Panels', enabled: true, description: 'Admin panels & dashboards' },
+        { name: 'SSL/TLS Analysis', enabled: true, description: 'Certificate and protocol checks' },
+        { name: 'SQL Injection', enabled: true, description: 'Database injection attacks' },
+        { name: 'XSS Detection', enabled: true, description: 'Cross-site scripting' },
+        { name: 'AI Analysis', enabled: true, description: 'AI-powered insights' },
+        { name: 'MITRE Mapping', enabled: true, description: 'ATT&CK technique mapping' }
+      ],
+      bestFor: 'Regular security assessments, pre-deployment checks'
+    },
+    deep: {
+      label: 'Deep',
+      duration: '15-30 min',
+      description: 'Comprehensive analysis with all scanners',
+      scanners: ['owasp', 'nuclei', 'wapiti'],
+      timeout: 60,
+      deep_scan: true,
+      include_low_risk: true,
+      features: [
+        { name: 'CVE Detection', enabled: true, description: 'Known vulnerability scanning' },
+        { name: 'Misconfigurations', enabled: true, description: 'Common security misconfigurations' },
+        { name: 'Exposed Panels', enabled: true, description: 'Admin panels & dashboards' },
+        { name: 'SSL/TLS Analysis', enabled: true, description: 'Certificate and protocol checks' },
+        { name: 'SQL Injection', enabled: true, description: 'Database injection attacks' },
+        { name: 'XSS Detection', enabled: true, description: 'Cross-site scripting' },
+        { name: 'OWASP ZAP Active', enabled: true, description: 'Dynamic application testing' },
+        { name: 'Spider Crawling', enabled: true, description: 'Deep site exploration' },
+        { name: 'Authentication Tests', enabled: true, description: 'Login & session security' },
+        { name: 'API Security', enabled: true, description: 'REST/GraphQL endpoint testing' },
+        { name: 'AI Analysis', enabled: true, description: 'AI-powered insights' },
+        { name: 'MITRE Mapping', enabled: true, description: 'ATT&CK technique mapping' }
+      ],
+      bestFor: 'Thorough security audits, compliance requirements, production assessments'
+    }
+  };
 
   useEffect(() => {
     // Load recent scans only if authenticated
@@ -50,11 +120,16 @@ const Home = () => {
     try {
       console.log('Starting scan for URL:', scanUrl);
 
-      // Start the scan
-      const result = await scannerService.startScan(scanUrl, ['owasp', 'nuclei', 'wapiti'], {
+      // Get scan configuration based on selected mode
+      const modeConfig = scanModes[scanMode];
+
+      // Start the scan with mode-specific settings
+      const result = await scannerService.startScan(scanUrl, modeConfig.scanners, {
         enable_ai_analysis: true,
         enable_mitre_mapping: true,
-        include_low_risk: true
+        include_low_risk: modeConfig.include_low_risk,
+        deep_scan: modeConfig.deep_scan,
+        timeout_minutes: modeConfig.timeout
       });
 
       console.log('Scan started, response:', result);
@@ -71,11 +146,38 @@ const Home = () => {
       let scanCompleted = false;
       const wsTimeout = setTimeout(() => {
         if (!websocketConnected && !scanCompleted) {
-          console.warn('WebSocket did not connect within 5 seconds');
-          setError('Scan started but lost connection. Check console for details.');
+          console.warn('WebSocket did not connect within 15 seconds, polling for status...');
+          // Don't show error immediately, try polling instead
+          pollScanStatus(scanId);
+        }
+      }, 15000);
+
+      // Polling fallback function
+      const pollScanStatus = async (id) => {
+        try {
+          const status = await scannerService.getScanStatus(id);
+          console.log('Polled scan status:', status);
+
+          if (status.status === 'completed') {
+            setScanProgress(100);
+            setCurrentStage('Completed');
+            setIsScanActive(false);
+            navigate(`/scan/${id}`);
+          } else if (status.status === 'failed' || status.status === 'cancelled') {
+            setError(`Scan ${status.status}`);
+            setIsScanActive(false);
+          } else {
+            setScanProgress(status.progress || 0);
+            setCurrentStage(status.current_stage || 'Processing');
+            // Continue polling
+            setTimeout(() => pollScanStatus(id), 3000);
+          }
+        } catch (err) {
+          console.error('Error polling scan status:', err);
+          setError('Unable to get scan status. Please check the scan history.');
           setIsScanActive(false);
         }
-      }, 5000);
+      };
 
       // Setup WebSocket for real-time updates
       scannerService.setupWebSocket(scanId, {
@@ -279,6 +381,83 @@ const Home = () => {
                 className="scan-input"
                 disabled={isScanActive}
               />
+
+              {/* Scan Mode Selector */}
+              {isAuthenticated && !isScanActive && (
+                <div className="scan-mode-container">
+                  <div className="scan-mode-header">
+                    <span className="scan-mode-title">Scan Depth</span>
+                    <button
+                      type="button"
+                      className="scan-mode-info-btn"
+                      onClick={() => setShowModeDetails(!showModeDetails)}
+                      title="Peek scan details"
+                    >
+                      {showModeDetails ? 'Close' : 'Peek'}
+                    </button>
+                  </div>
+
+                  <div className="scan-mode-selector">
+                    {Object.entries(scanModes).map(([mode, config]) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        className={`scan-mode-btn ${scanMode === mode ? 'active' : ''}`}
+                        onClick={() => setScanMode(mode)}
+                        title={config.description}
+                      >
+                        <span className="mode-label">{config.label}</span>
+                        <span className="mode-time">{config.duration}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Expanded Mode Details */}
+                  {showModeDetails && (
+                    <div className="scan-mode-details">
+                      <div className="mode-details-header">
+                        <div className="mode-details-badge">{scanModes[scanMode].label}</div>
+                        <div className="mode-details-title">
+                          <h4>{scanModes[scanMode].label} Scan</h4>
+                          <p>{scanModes[scanMode].description}</p>
+                        </div>
+                      </div>
+
+                      <div className="mode-details-scanners">
+                        <span className="scanners-label">Scanners:</span>
+                        <div className="scanners-tags">
+                          {scanModes[scanMode].scanners.map(scanner => (
+                            <span key={scanner} className={`scanner-tag scanner-${scanner}`}>
+                              {scanner === 'owasp' ? 'OWASP ZAP' :
+                                scanner === 'nuclei' ? 'Nuclei' :
+                                  scanner === 'wapiti' ? 'Wapiti' : scanner}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="mode-features-grid">
+                        {scanModes[scanMode].features.map((feature, idx) => (
+                          <div
+                            key={idx}
+                            className={`mode-feature ${feature.enabled ? 'enabled' : 'disabled'}`}
+                            title={feature.description}
+                          >
+                            <span className="feature-status">{feature.enabled ? 'YES' : 'NO'}</span>
+                            <span className="feature-name">{feature.name}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="mode-best-for">
+                        <span className="best-for-label">Best for:</span>
+                        <span className="best-for-text">{scanModes[scanMode].bestFor}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <button
                 onClick={handleScan}
                 className="scan-button"
@@ -296,36 +475,42 @@ const Home = () => {
           </div>
         </section>
 
-        {/* Recent Scans Section */}
-        {recentScans.length > 0 && (
+        {/* Recent Scans Section - Always visible for authenticated users */}
+        {isAuthenticated && (
           <section className="recent-scans-section" id="history">
             <h2 className="section-title">Recent Scans</h2>
-            <div className="recent-scans-list">
-              {recentScans.map((scan) => (
-                <div
-                  key={scan.scan_id}
-                  className="recent-scan-item"
-                  onClick={() => handleScanFromHistory(scan.scan_id)}
-                >
-                  <div className="scan-info">
-                    <div className="scan-url">{scan.target_url}</div>
-                    <div className="scan-meta">
-                      {scan.status && (
-                        <span className={`status-badge ${scan.status}`}>
-                          {scan.status.toUpperCase()}
-                        </span>
-                      )}
-                      {scan.started_at && (
-                        <span className="scan-time">
-                          {new Date(scan.started_at).toLocaleDateString()}
-                        </span>
-                      )}
+            {recentScans.length > 0 ? (
+              <div className="recent-scans-list">
+                {recentScans.map((scan) => (
+                  <div
+                    key={scan.scan_id}
+                    className="recent-scan-item"
+                    onClick={() => handleScanFromHistory(scan.scan_id)}
+                  >
+                    <div className="scan-info">
+                      <div className="scan-url">{scan.target_url}</div>
+                      <div className="scan-meta">
+                        {scan.status && (
+                          <span className={`status-badge ${scan.status}`}>
+                            {scan.status.toUpperCase()}
+                          </span>
+                        )}
+                        {scan.started_at && (
+                          <span className="scan-time">
+                            {new Date(scan.started_at).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
                     </div>
+                    <div className="scan-arrow">→</div>
                   </div>
-                  <div className="scan-arrow">→</div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="no-scans-message">
+                <p>No territory charted yet. Launch your first reconnaissance scan to map the landscape and uncover hidden treasures... or threats.</p>
+              </div>
+            )}
           </section>
         )}
 

@@ -157,44 +157,57 @@ class OpenAIProvider(LLMProvider):
     ) -> str:
         """Generate executive summary using GPT-4"""
         
-        prompt = f"""
-        Generate a concise executive summary (2-3 paragraphs) of security scan results.
+        # Prepare top vulnerabilities for context
+        top_vulns = self._prepare_vulnerability_summary(vulnerabilities[:5]) if vulnerabilities else "None detected"
         
-        Total Vulnerabilities: {len(vulnerabilities)}
-        Risk Score: {risk_score}/10
-        Risk Level: {risk_level}
-        
-        Severity Breakdown:
-        - Critical: {sum(1 for v in vulnerabilities if v.get('severity') == 'critical')}
-        - High: {sum(1 for v in vulnerabilities if v.get('severity') == 'high')}
-        - Medium: {sum(1 for v in vulnerabilities if v.get('severity') == 'medium')}
-        - Low: {sum(1 for v in vulnerabilities if v.get('severity') == 'low')}
-        
-        Format:
-        1. Current state assessment
-        2. Key risks
-        3. Recommended actions
-        """
+        prompt = f"""Analyze this security scan and generate a technical summary for security professionals.
+
+SCAN METRICS:
+- Total Vulnerabilities: {len(vulnerabilities)}
+- Risk Score: {risk_score:.1f}/10 ({risk_level})
+- Critical: {sum(1 for v in vulnerabilities if v.get('severity') == 'critical')}
+- High: {sum(1 for v in vulnerabilities if v.get('severity') == 'high')}
+- Medium: {sum(1 for v in vulnerabilities if v.get('severity') == 'medium')}
+- Low: {sum(1 for v in vulnerabilities if v.get('severity') == 'low')}
+
+TOP FINDINGS:
+{top_vulns}
+
+GENERATE A TECHNICAL SUMMARY (3 paragraphs, third person):
+
+1. SECURITY POSTURE: Assess the target's security state. Reference specific vulnerability types found (e.g., XSS, SQL injection, misconfigurations). Be direct about severity.
+
+2. TECHNICAL RISKS: Identify the most critical attack vectors. Explain potential exploitation scenarios and business impact. Reference CVE IDs or CWE categories if applicable.
+
+3. REMEDIATION PRIORITIES: Provide specific, actionable remediation steps ordered by priority. Include technical fixes (e.g., "implement Content-Security-Policy headers", "upgrade to version X", "sanitize user input with parameterized queries").
+
+RULES:
+- Write in third person ("The target application...", "The scan identified...", "Administrators should...")
+- Be technical and specific - this is for security professionals
+- Do NOT include any headers like "Executive Summary" or "Security Assessment"
+- Do NOT use markdown formatting (no **, ##, or bullet points)
+- Keep each paragraph 2-4 sentences
+- If no vulnerabilities found, state the target has a strong security posture but recommend continuous monitoring"""
         
         try:
             response = await self.client.chat.completions.create(
-                model="gpt-3.5-turbo",  # Using GPT-3.5-turbo for better compatibility
+                model="gpt-3.5-turbo",
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a cybersecurity executive summarizing scan results."
+                        "content": "You are a senior penetration tester writing technical security reports. Be concise, technical, and actionable. Never use first person. Never include section headers in your output."
                     },
                     {
                         "role": "user",
                         "content": prompt
                     }
                 ],
-                temperature=0.7,
-                max_tokens=500,
-                timeout=15
+                temperature=0.5,
+                max_tokens=700,
+                timeout=20
             )
             
-            return response.choices[0].message.content
+            return response.choices[0].message.content.strip()
         
         except Exception as e:
             logger.error(f"Executive summary generation failed: {e}")
@@ -318,19 +331,37 @@ class GroqProvider(LLMProvider):
     ) -> str:
         """Generate executive summary using Groq"""
         
-        prompt = f"""
-        Generate a concise executive summary (2-3 paragraphs) of security scan results.
+        # Prepare top vulnerabilities for context
+        top_vulns = self._prepare_vulnerability_summary(vulnerabilities[:5]) if vulnerabilities else "None detected"
         
-        Total Vulnerabilities: {len(vulnerabilities)}
-        Risk Score: {risk_score}/10
-        Risk Level: {risk_level}
-        
-        Severity Breakdown:
-        - Critical: {sum(1 for v in vulnerabilities if v.get('severity') == 'critical')}
-        - High: {sum(1 for v in vulnerabilities if v.get('severity') == 'high')}
-        - Medium: {sum(1 for v in vulnerabilities if v.get('severity') == 'medium')}
-        - Low: {sum(1 for v in vulnerabilities if v.get('severity') == 'low')}
-        """
+        prompt = f"""Analyze this security scan and generate a technical summary for security professionals.
+
+SCAN METRICS:
+- Total Vulnerabilities: {len(vulnerabilities)}
+- Risk Score: {risk_score:.1f}/10 ({risk_level})
+- Critical: {sum(1 for v in vulnerabilities if v.get('severity') == 'critical')}
+- High: {sum(1 for v in vulnerabilities if v.get('severity') == 'high')}
+- Medium: {sum(1 for v in vulnerabilities if v.get('severity') == 'medium')}
+- Low: {sum(1 for v in vulnerabilities if v.get('severity') == 'low')}
+
+TOP FINDINGS:
+{top_vulns}
+
+GENERATE A TECHNICAL SUMMARY (3 paragraphs, third person):
+
+1. SECURITY POSTURE: Assess the target's security state. Reference specific vulnerability types found (e.g., XSS, SQL injection, misconfigurations). Be direct about severity.
+
+2. TECHNICAL RISKS: Identify the most critical attack vectors. Explain potential exploitation scenarios and business impact. Reference CVE IDs or CWE categories if applicable.
+
+3. REMEDIATION PRIORITIES: Provide specific, actionable remediation steps ordered by priority. Include technical fixes (e.g., "implement Content-Security-Policy headers", "upgrade to version X", "sanitize user input with parameterized queries").
+
+RULES:
+- Write in third person ("The target application...", "The scan identified...", "Administrators should...")
+- Be technical and specific - this is for security professionals
+- Do NOT include any headers like "Executive Summary" or "Security Assessment"
+- Do NOT use markdown formatting (no **, ##, or bullet points)
+- Keep each paragraph 2-4 sentences
+- If no vulnerabilities found, state the target has a strong security posture but recommend continuous monitoring"""
         
         try:
             response = await self.client.chat.completions.create(
@@ -338,18 +369,18 @@ class GroqProvider(LLMProvider):
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a cybersecurity executive summarizing scan results."
+                        "content": "You are a senior penetration tester writing technical security reports. Be concise, technical, and actionable. Never use first person. Never include section headers in your output."
                     },
                     {
                         "role": "user",
                         "content": prompt
                     }
                 ],
-                temperature=0.7,
-                max_tokens=500
+                temperature=0.5,
+                max_tokens=700
             )
             
-            return response.choices[0].message.content
+            return response.choices[0].message.content.strip()
         
         except Exception as e:
             logger.error(f"Executive summary generation failed: {e}")
@@ -470,24 +501,43 @@ class AnthropicProvider(LLMProvider):
     ) -> str:
         """Generate executive summary using Claude"""
         
-        prompt = f"""
-        Generate a concise executive summary (2-3 paragraphs) of security scan results.
+        # Prepare top vulnerabilities for context
+        top_vulns = self._prepare_vulnerability_summary(vulnerabilities[:5]) if vulnerabilities else "None detected"
         
-        Total Vulnerabilities: {len(vulnerabilities)}
-        Risk Score: {risk_score}/10
-        Risk Level: {risk_level}
-        
-        Severity Breakdown:
-        - Critical: {sum(1 for v in vulnerabilities if v.get('severity') == 'critical')}
-        - High: {sum(1 for v in vulnerabilities if v.get('severity') == 'high')}
-        - Medium: {sum(1 for v in vulnerabilities if v.get('severity') == 'medium')}
-        - Low: {sum(1 for v in vulnerabilities if v.get('severity') == 'low')}
-        """
+        prompt = f"""Analyze this security scan and generate a technical summary for security professionals.
+
+SCAN METRICS:
+- Total Vulnerabilities: {len(vulnerabilities)}
+- Risk Score: {risk_score:.1f}/10 ({risk_level})
+- Critical: {sum(1 for v in vulnerabilities if v.get('severity') == 'critical')}
+- High: {sum(1 for v in vulnerabilities if v.get('severity') == 'high')}
+- Medium: {sum(1 for v in vulnerabilities if v.get('severity') == 'medium')}
+- Low: {sum(1 for v in vulnerabilities if v.get('severity') == 'low')}
+
+TOP FINDINGS:
+{top_vulns}
+
+GENERATE A TECHNICAL SUMMARY (3 paragraphs, third person):
+
+1. SECURITY POSTURE: Assess the target's security state. Reference specific vulnerability types found (e.g., XSS, SQL injection, misconfigurations). Be direct about severity.
+
+2. TECHNICAL RISKS: Identify the most critical attack vectors. Explain potential exploitation scenarios and business impact. Reference CVE IDs or CWE categories if applicable.
+
+3. REMEDIATION PRIORITIES: Provide specific, actionable remediation steps ordered by priority. Include technical fixes (e.g., "implement Content-Security-Policy headers", "upgrade to version X", "sanitize user input with parameterized queries").
+
+RULES:
+- Write in third person ("The target application...", "The scan identified...", "Administrators should...")
+- Be technical and specific - this is for security professionals
+- Do NOT include any headers like "Executive Summary" or "Security Assessment"
+- Do NOT use markdown formatting (no **, ##, or bullet points)
+- Keep each paragraph 2-4 sentences
+- If no vulnerabilities found, state the target has a strong security posture but recommend continuous monitoring"""
         
         try:
             response = await self.client.messages.create(
                 model="claude-3-sonnet-20240229",
-                max_tokens=500,
+                max_tokens=700,
+                system="You are a senior penetration tester writing technical security reports. Be concise, technical, and actionable. Never use first person. Never include section headers in your output.",
                 messages=[
                     {
                         "role": "user",
@@ -496,7 +546,7 @@ class AnthropicProvider(LLMProvider):
                 ]
             )
             
-            return response.content[0].text
+            return response.content[0].text.strip()
         
         except Exception as e:
             logger.error(f"Executive summary generation failed: {e}")
@@ -556,16 +606,63 @@ class FallbackProvider(LLMProvider):
         risk_score: float,
         risk_level: str
     ) -> str:
-        """Generate basic summary"""
-        return f"""
-Security Scan Summary:
-- Total Issues Found: {len(vulnerabilities)}
-- Risk Level: {risk_level}
-- Risk Score: {risk_score}/10
-
-This is a basic summary. Configure LLM integration (OpenAI/Claude) 
-in environment variables for detailed analysis and recommendations.
-"""
+        """Generate basic summary when no LLM is configured"""
+        
+        critical = sum(1 for v in vulnerabilities if v.get('severity') == 'critical')
+        high = sum(1 for v in vulnerabilities if v.get('severity') == 'high')
+        medium = sum(1 for v in vulnerabilities if v.get('severity') == 'medium')
+        low = sum(1 for v in vulnerabilities if v.get('severity') == 'low')
+        
+        if not vulnerabilities:
+            return ("The target application demonstrates a strong security posture with no vulnerabilities detected during this scan. "
+                    "However, security is an ongoing process and administrators should implement continuous monitoring, "
+                    "regular dependency updates, and periodic penetration testing to maintain this secure state.")
+        
+        # Build severity description
+        severity_parts = []
+        if critical > 0:
+            severity_parts.append(f"{critical} critical")
+        if high > 0:
+            severity_parts.append(f"{high} high")
+        if medium > 0:
+            severity_parts.append(f"{medium} medium")
+        if low > 0:
+            severity_parts.append(f"{low} low")
+        severity_desc = ", ".join(severity_parts) if severity_parts else "various"
+        
+        # Get top vulnerability types
+        vuln_types = set()
+        for v in vulnerabilities[:10]:
+            title = v.get('title', '').lower()
+            if 'xss' in title or 'cross-site' in title:
+                vuln_types.add('Cross-Site Scripting (XSS)')
+            elif 'sql' in title or 'injection' in title:
+                vuln_types.add('SQL Injection')
+            elif 'csrf' in title:
+                vuln_types.add('CSRF')
+            elif 'header' in title or 'csp' in title or 'hsts' in title:
+                vuln_types.add('missing security headers')
+            elif 'ssl' in title or 'tls' in title or 'certificate' in title:
+                vuln_types.add('TLS/SSL issues')
+            elif 'auth' in title or 'session' in title:
+                vuln_types.add('authentication weaknesses')
+        
+        types_desc = ", ".join(list(vuln_types)[:3]) if vuln_types else "security misconfigurations"
+        
+        paragraph1 = (f"The scan identified {len(vulnerabilities)} vulnerabilities across the target application "
+                      f"with a risk score of {risk_score:.1f}/10 ({risk_level}). "
+                      f"The severity breakdown includes {severity_desc} severity findings, "
+                      f"with notable issues including {types_desc}.")
+        
+        paragraph2 = ("These findings indicate potential attack vectors that could be exploited by malicious actors. "
+                      "Critical and high severity issues should be treated as immediate priorities as they may allow "
+                      "unauthorized access, data exfiltration, or service disruption.")
+        
+        paragraph3 = ("Administrators should prioritize patching critical vulnerabilities first, implement proper input validation, "
+                      "configure security headers (CSP, HSTS, X-Frame-Options), and ensure all dependencies are updated. "
+                      "Configure an LLM provider (Groq/OpenAI/Anthropic) for detailed AI-powered remediation guidance.")
+        
+        return f"{paragraph1}\n\n{paragraph2}\n\n{paragraph3}"
 
 
 class LLMService:

@@ -10,7 +10,7 @@ from pydantic import BaseModel, HttpUrl, Field
 from datetime import datetime, timezone
 
 from app.services.comprehensive_scanner import ComprehensiveScanner
-from app.core.security import get_current_user_optional, get_current_user
+from app.core.security import get_current_user
 from app.database.supabase_client import supabase
 from app.core.config import settings
 from app.services.llm_service import llm_service
@@ -133,7 +133,7 @@ active_connections: Dict[str, WebSocket] = {}
 async def start_comprehensive_scan(
     request: StartScanRequest,
     background_tasks: BackgroundTasks,
-    current_user = Depends(get_current_user_optional)
+    current_user = Depends(get_current_user)
 ):
     """
     Start a comprehensive security scan
@@ -145,8 +145,8 @@ async def start_comprehensive_scan(
         # Generate unique scan ID
         scan_id = f"scan_{uuid.uuid4().hex[:12]}"
         
-        # Create scan record
-        user_id = current_user.id if current_user else "anonymous"
+        # Create scan record (explicitly require authenticated user)
+        user_id = current_user.id
         scan_record = {
             "scan_id": scan_id,
             "user_id": user_id,

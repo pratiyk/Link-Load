@@ -331,8 +331,10 @@ class EnhancedRiskAnalyzer:
 
     def _calculate_base_risk(self, vulnerability: Dict[str, Any]) -> float:
         """Calculate base risk score from CVSS and severity."""
-        cvss_score = vulnerability.get('cvss_score', 0.0)
-        if cvss_score:
+        cvss_score = vulnerability.get('cvss_score')
+        
+        # Check if cvss_score is a valid number greater than 0
+        if cvss_score is not None and cvss_score > 0:
             return min(1.0, cvss_score / 10.0)
 
         # Fallback to severity mapping
@@ -341,9 +343,9 @@ class EnhancedRiskAnalyzer:
             'high': 0.8,
             'medium': 0.5,
             'low': 0.2,
-            'info': 0.0
+            'info': 0.1  # Give info some weight rather than 0
         }
-        severity = vulnerability.get('severity', 'info').lower()
+        severity = (vulnerability.get('severity') or 'medium').lower()
         return severity_map.get(severity, 0.5)
 
     def _get_attack_complexity_score(self, vulnerability: Dict[str, Any]) -> float:

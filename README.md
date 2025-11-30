@@ -1,1016 +1,852 @@
-# Link&Load
+# LINK&LOAD
 
-> **AI-Powered Web Security Scanning Platform**
+## Tactical Web Security Reconnaissance Platform
 
-[![GitHub License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.11+-3776ab.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688.svg)](https://fastapi.tiangolo.com/)
-[![React](https://img.shields.io/badge/React-18+-61dafb.svg)](https://react.dev/)
-[![Docker](https://img.shields.io/badge/Docker-Supported-2496ed.svg)](https://www.docker.com/)
-[![Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen.svg)]()
-[![Tests](https://img.shields.io/badge/Tests-40%2B%20Passing-brightgreen.svg)]()
-[![Security](https://img.shields.io/badge/Security-Data%20Isolation%20Verified-brightgreen.svg)]()
+```
+    ██╗     ██╗███╗   ██╗██╗  ██╗     ██╗      ██╗      ██████╗  █████╗ ██████╗ 
+    ██║     ██║████╗  ██║██║ ██╔╝    ██╔╝      ██║     ██╔═══██╗██╔══██╗██╔══██╗
+    ██║     ██║██╔██╗ ██║█████╔╝    ██╔╝       ██║     ██║   ██║███████║██║  ██║
+    ██║     ██║██║╚██╗██║██╔═██╗   ██╔╝        ██║     ██║   ██║██╔══██║██║  ██║
+    ███████╗██║██║ ╚████║██║  ██╗ ██╔╝         ███████╗╚██████╔╝██║  ██║██████╔╝
+    ╚══════╝╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝ ╚═╝          ╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═════╝ 
+                                                                                 
+              [ CYBER RECONNAISSANCE & THREAT ANALYSIS SYSTEM ]
+```
 
----
-
-## Project Status
-
-** PRODUCTION READY - November 16, 2025**
-
-Complete end-to-end integration testing verified:
-- [COMPLETE] **Backend:** FastAPI (8000) with 11 secured endpoints
-- [COMPLETE] **Frontend:** React (3000) fully integrated
-- [COMPLETE] **Database:** PostgreSQL with 4-layer data isolation
-- [COMPLETE] **Authentication:** JWT tokens with multi-provider support
-- [COMPLETE] **Security:** CORS, rate limiting, security headers, data isolation all active
-- [COMPLETE] **Testing:** 40+ tests passing with comprehensive coverage
-- [COMPLETE] **Documentation:** 15 comprehensive guides (234 KB total)
-
-**Key Achievements:**
-- Multi-layer user data isolation enforced on all endpoints
-- Cross-user access prevention verified at all layers
-- Comprehensive security audit completed
-- Full integration testing passed
-- Production deployment ready
-
-See [Integration Test Reports](#integration-test-reports) for detailed verification.
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.11+-yellow.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-blue.svg)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-18+-cyan.svg)](https://react.dev/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
+[![Status](https://img.shields.io/badge/Status-OPERATIONAL-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-40+-brightgreen.svg)]()
 
 ---
 
-## Features
+## MISSION BRIEF
 
-### Multi-Scanner Integration
-- **OWASP ZAP** - Comprehensive web application scanning
-- **Nuclei** - Template-based vulnerability detection  
-- **Wapiti** - Black-box web application security scanner
-- Concurrent execution for faster results
+Link&Load is an AI-enhanced cyber reconnaissance platform engineered for systematic vulnerability detection and threat assessment. Built for security professionals who demand precision, speed, and actionable intelligence, this platform deploys multiple scanning vectors simultaneously while correlating findings against the MITRE ATT&CK framework.
 
-### AI-Powered Analysis
-- **OpenAI GPT-4** or **Anthropic Claude** integration
-- Intelligent vulnerability analysis
-- Context-aware recommendations
-- Fallback mechanism when LLM unavailable
+The system executes coordinated multi-scanner operations, processes raw intelligence through machine learning pipelines, and delivers battlefield-ready security reports with prioritized remediation strategies.
 
-### MITRE ATT&CK Mapping
-- Automatic technique correlation
-- Threat landscape understanding
-- Tactic and technique classification
-- Executive-ready reporting
-
-### Risk Quantification
-- 0-10 risk scoring algorithm
-- Severity-based aggregation
-- Business context awareness
-- Compliance mapping
-
-### Real-Time Updates
-- WebSocket live progress tracking
-- Instant result notifications
-- Stage-by-stage visibility
-- Connection resilience
-
-### Professional UI
-- Retro geometric design system
-- Bold blocks with playful shadows
-- Tabbed results dashboard
-- Responsive design
-- Game console-style interface
+**OPERATIONAL STATUS: FIELD READY**
 
 ---
 
-## Demo
+## TABLE OF CONTENTS
 
-![alt text](image-1.png)
-
-![alt text](image-2.png)
-
-![alt text](image.png)
+- [Operational Capabilities](#operational-capabilities)
+- [System Architecture](#system-architecture)
+- [Deployment Protocol](#deployment-protocol)
+- [Mission Control Interface](#mission-control-interface)
+- [API Command Structure](#api-command-structure)
+- [Scanner Arsenal](#scanner-arsenal)
+- [Intelligence Analysis Engine](#intelligence-analysis-engine)
+- [Security Protocols](#security-protocols)
+- [Domain Authorization Protocol](#domain-authorization-protocol)
+- [Configuration Matrix](#configuration-matrix)
+- [Verification Procedures](#verification-procedures)
+- [Tactical Roadmap](#tactical-roadmap)
+- [Field Support](#field-support)
 
 ---
 
-## Quick Start
+## OPERATIONAL CAPABILITIES
+
+### Multi-Vector Scanning Array
+
+Link&Load deploys a coordinated assault of industry-standard security scanners operating in parallel formation:
+
+| Scanner | Classification | Primary Function |
+|---------|---------------|------------------|
+| OWASP ZAP | Active Reconnaissance | Full-spectrum web application penetration testing |
+| Nuclei | Template-Based Detection | Rapid vulnerability identification via signature matching |
+| Wapiti | Black-Box Analysis | Unauthenticated perimeter vulnerability assessment |
+
+All scanners execute concurrently, reducing total reconnaissance time while maximizing coverage depth.
+
+### AI-Powered Threat Intelligence
+
+The platform integrates advanced language models for automated threat analysis:
+
+- **OpenAI GPT Integration** - Deep vulnerability context analysis
+- **Anthropic Claude Support** - Alternative intelligence processing
+- **Groq Acceleration** - High-speed inference for rapid assessments
+- **Fallback Protocol** - Graceful degradation when external services are unavailable
+
+The AI engine processes raw scanner output, correlates findings with known attack patterns, and generates prioritized remediation guidance tailored to business context.
+
+### MITRE ATT&CK Correlation
+
+Every detected vulnerability is automatically mapped to the MITRE ATT&CK framework:
+
+- Technique identification with confidence scoring
+- Tactic classification for threat landscape visualization
+- CAPEC attack pattern correlation
+- TTP (Tactics, Techniques, Procedures) extraction
+
+### Risk Quantification Matrix
+
+The platform computes a normalized risk score (0-10 scale) based on:
+
+- CVSS base scores and severity distribution
+- Exploitability metrics and attack complexity
+- Business context and asset criticality
+- Threat intelligence enrichment
+
+### Real-Time Situational Awareness
+
+WebSocket-based live updates provide:
+
+- Stage-by-stage scan progress monitoring
+- Instant vulnerability discovery notifications
+- Connection resilience with automatic reconnection
+- Multi-client broadcast for team coordination
+
+---
+
+## SYSTEM ARCHITECTURE
+
+```
+                              ┌─────────────────────────────┐
+                              │     COMMAND CENTER          │
+                              │   React 18 + TailwindCSS    │
+                              │   Tactical Dashboard UI     │
+                              └─────────────┬───────────────┘
+                                            │
+                                   REST API / WebSocket
+                                            │
+                              ┌─────────────▼───────────────┐
+                              │    OPERATIONS HUB           │
+                              │   FastAPI + Async Python    │
+                              │   Request Orchestration     │
+                              └─────────────┬───────────────┘
+                                            │
+              ┌─────────────────────────────┼─────────────────────────────┐
+              │                             │                             │
+    ┌─────────▼─────────┐        ┌──────────▼──────────┐       ┌──────────▼─────────┐
+    │   OWASP ZAP       │        │      NUCLEI         │       │      WAPITI        │
+    │   Scanner Unit    │        │    Scanner Unit     │       │    Scanner Unit    │
+    │   Port 8090       │        │    Binary Exec      │       │    Library/Binary  │
+    └─────────┬─────────┘        └──────────┬──────────┘       └──────────┬─────────┘
+              │                             │                             │
+              └─────────────────────────────┼─────────────────────────────┘
+                                            │
+                              ┌─────────────▼───────────────┐
+                              │   INTELLIGENCE FUSION       │
+                              │   Vulnerability Aggregator  │
+                              │   Deduplication & Scoring   │
+                              └─────────────┬───────────────┘
+                                            │
+              ┌─────────────────────────────┼─────────────────────────────┐
+              │                             │                             │
+    ┌─────────▼─────────┐        ┌──────────▼──────────┐       ┌──────────▼─────────┐
+    │   LLM SERVICE     │        │   MITRE MAPPER      │       │   RISK ANALYZER    │
+    │   AI Analysis     │        │   ATT&CK Mapping    │       │   Score Compute    │
+    └─────────┬─────────┘        └──────────┬──────────┘       └──────────┬─────────┘
+              │                             │                             │
+              └─────────────────────────────┼─────────────────────────────┘
+                                            │
+                              ┌─────────────▼───────────────┐
+                              │   DATA VAULT                │
+                              │   PostgreSQL + Supabase     │
+                              │   Row-Level Security        │
+                              └─────────────────────────────┘
+```
+
+### Core Components
+
+**Command Center (Frontend)**
+- React 18 with React Router v6
+- Real-time WebSocket integration
+- Responsive tactical interface
+- D3.js threat visualization
+
+**Operations Hub (Backend)**
+- FastAPI with async/await architecture
+- SQLAlchemy ORM with Alembic migrations
+- Redis caching layer for performance
+- Rate limiting and security middleware
+
+**Scanner Fleet**
+- Containerized OWASP ZAP instance
+- Nuclei with template management
+- Wapiti with module configuration
+- Unified result normalization
+
+**Intelligence Layer**
+- Multi-provider LLM integration
+- ML-based vulnerability classification
+- MITRE ATT&CK knowledge base
+- Enhanced risk scoring algorithms
+
+---
+
+## DEPLOYMENT PROTOCOL
 
 ### Prerequisites
-- Docker & Docker Compose (recommended)
-- Or: Python 3.11+, Node.js 18+
 
-### Development Setup
+**Minimum Requirements:**
+- Docker Engine 20.10+ and Docker Compose 2.0+
+- 8GB RAM (16GB recommended for full scanner deployment)
+- 20GB available disk space
+
+**Development Environment:**
+- Python 3.11+
+- Node.js 18+
+- PostgreSQL 15+
+
+### Quick Deployment (Docker)
 
 ```bash
-# Clone repository
+# Clone the operations repository
 git clone https://github.com/pratiyk/Link-Load.git
 cd Link-Load
 
-# Backend
+# Configure environment parameters
+cp .env.example .env
+# Edit .env with your configuration
+
+# Deploy all units
+docker-compose up -d
+
+# Initialize database schema
+docker-compose exec backend alembic upgrade head
+
+# Verify deployment
+curl http://localhost:8000/health
+```
+
+### Development Deployment
+
+**Backend Operations:**
+```bash
 cd backend
 python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-python -m uvicorn app.main:app --reload
 
-# Frontend (new terminal)
+# Windows
+.venv\Scripts\activate
+
+# Linux/macOS
+source .venv/bin/activate
+
+pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+**Frontend Operations:**
+```bash
 cd frontend
 npm install
 npm start
-
-# Access
-# Frontend: http://localhost:3000
-# API Docs: http://localhost:8000/docs
 ```
 
-### Production with Docker
+### Access Points
 
-```bash
-# Copy environment file
-cp .env.example .env
-nano .env  # Configure settings
-
-# Start all services
-docker-compose up -d
-
-# Initialize database
-docker-compose exec backend alembic upgrade head
-
-# Access
-# Frontend: http://localhost:3000
-# API: http://localhost:8000
-```
+| Service | URL | Description |
+|---------|-----|-------------|
+| Command Center | http://localhost:3000 | Primary user interface |
+| API Gateway | http://localhost:8000 | REST API endpoints |
+| API Documentation | http://localhost:8000/docs | Interactive Swagger docs |
+| ZAP Interface | http://localhost:8090 | Scanner admin panel |
 
 ---
 
-## Architecture
+## MISSION CONTROL INTERFACE
 
-```
-┌─────────────────────┐
-│   React Frontend    │
-│  Home + Results     │
-└──────────┬──────────┘
-           │ REST/WS
-┌──────────▼──────────┐
-│   FastAPI Backend   │
-│  Scan Orchestration │
-└──────────┬──────────┘
-      ┌────┼────┬─────────┐
-      │    │    │         │
-    OWASP ZAP Nuclei   Wapiti
-      │    │    │         │
-      └────┴────┴────┬────┘
-          Vulnerabilities
-           │         │
-       LLM Service   DB
-        (Analysis)
-```
+### Dashboard Overview
+
+The tactical dashboard provides immediate situational awareness:
+
+- **Active Scans Panel** - Real-time progress of all ongoing operations
+- **Threat Summary** - Aggregated vulnerability counts by severity
+- **Risk Gauge** - Visual representation of overall security posture
+- **Recent Findings** - Latest discovered vulnerabilities with quick actions
+
+### Scan Initiation
+
+1. Enter target URL in the command input
+2. Select scanner array (OWASP, Nuclei, Wapiti, or all)
+3. Configure scan options (deep scan, AI analysis, MITRE mapping)
+4. Execute scan and monitor real-time progress
+
+### Results Analysis
+
+Scan results are presented in a structured intelligence report:
+
+- **Executive Summary** - AI-generated overview for leadership briefing
+- **Vulnerability Catalog** - Detailed findings with severity classification
+- **MITRE ATT&CK Map** - Visual technique correlation
+- **Remediation Queue** - Prioritized action items with effort estimates
 
 ---
 
-## API Endpoints
+## API COMMAND STRUCTURE
 
-### Start Comprehensive Scan
+### Authentication
+
 ```bash
-POST /api/v1/scans/comprehensive/start
-Content-Type: application/json
-
+# Register new operator
+POST /api/v1/auth/register
 {
-  "target_url": "https://example.com",
+  "email": "operator@command.mil",
+  "password": "SecurePass123!"
+}
+
+# Authenticate and receive credentials
+POST /api/v1/auth/login
+{
+  "email": "operator@command.mil",
+  "password": "SecurePass123!"
+}
+# Returns: { "access_token": "...", "token_type": "bearer" }
+```
+
+### Scan Operations
+
+```bash
+# Initiate reconnaissance mission
+POST /api/v1/scans/comprehensive/start
+Authorization: Bearer <token>
+{
+  "target_url": "https://target.example.com",
   "scan_types": ["owasp", "nuclei", "wapiti"],
   "options": {
     "enable_ai_analysis": true,
-    "enable_mitre_mapping": true
+    "enable_mitre_mapping": true,
+    "deep_scan": false,
+    "timeout_minutes": 30
   }
 }
+# Returns: { "scan_id": "uuid-string" }
 
-Response: { "scan_id": "scan_abc123..." }
-```
-
-### Get Scan Status
-```bash
+# Query mission status
 GET /api/v1/scans/comprehensive/{scan_id}/status
-Response: { "status": "in_progress", "progress": 45 }
+# Returns: { "status": "in_progress", "progress": 45, "current_stage": "Running Nuclei scan" }
+
+# Retrieve intelligence report
+GET /api/v1/scans/comprehensive/{scan_id}/result
+# Returns full scan results with vulnerabilities, risk assessment, and AI analysis
+
+# Abort mission
+POST /api/v1/scans/{scan_id}/cancel
 ```
 
-### Get Scan Results
+### Domain Verification
+
 ```bash
-GET /api/v1/scans/comprehensive/{scan_id}/result
-Response: {
-  "vulnerabilities": [...],
-  "risk_assessment": {...},
-  "mitre_mapping": [...],
-  "ai_analysis": [...]
+# Request domain ownership verification
+POST /api/v1/verification/request
+{ "domain": "target.example.com" }
+
+# Confirm DNS verification
+POST /api/v1/verification/verify
+{
+  "domain": "target.example.com",
+  "verification_token": "linkload-verify-..."
 }
 ```
 
 ---
 
-## Configuration
+## SCANNER ARSENAL
+
+### OWASP ZAP
+
+The Zed Attack Proxy provides comprehensive active scanning capabilities:
+
+- Spider/crawler for site mapping
+- Active scan with attack payloads
+- Passive analysis of responses
+- AJAX spider for JavaScript-heavy applications
+- Authentication handling for protected areas
+
+**Detected Threat Categories:**
+- SQL Injection variants
+- Cross-Site Scripting (XSS)
+- Path Traversal
+- Remote Code Execution vectors
+- Authentication weaknesses
+
+### Nuclei
+
+Template-driven vulnerability scanner for rapid detection:
+
+- 8000+ community-maintained templates
+- Custom template support
+- CVE-specific detection
+- Misconfiguration identification
+- Exposed panel discovery
+
+**Template Categories:**
+- CVEs (Known vulnerabilities)
+- Default credentials
+- Exposed admin panels
+- Misconfigurations
+- Network services
+
+### Wapiti
+
+Black-box web application security auditor:
+
+- No source code required
+- Module-based architecture
+- GET/POST parameter fuzzing
+- Cookie and header analysis
+- Comprehensive reporting
+
+**Attack Modules:**
+- SQL/XPath/LDAP injection
+- File handling vulnerabilities
+- Command execution
+- CRLF injection
+- Server-side request forgery
+
+---
+
+## INTELLIGENCE ANALYSIS ENGINE
+
+### LLM Integration
+
+The platform supports multiple AI providers with automatic failover:
+
+**Priority Order:**
+1. Groq (Llama 3.3 70B) - Fast, cost-effective
+2. OpenAI (GPT-3.5/4) - High accuracy
+3. Anthropic (Claude) - Detailed analysis
+4. Fallback Engine - Basic heuristic analysis
+
+### Analysis Outputs
+
+**Vulnerability Assessment:**
+- Severity recalibration based on context
+- Exploitation likelihood estimation
+- Business impact projection
+- Remediation complexity rating
+
+**Executive Summary Generation:**
+- Third-person technical narrative
+- Security posture assessment
+- Critical attack vector identification
+- Prioritized remediation roadmap
+
+### MITRE ATT&CK Mapping
+
+The intelligence engine correlates vulnerabilities to ATT&CK techniques:
+
+```
+Vulnerability: SQL Injection in login form
+    |
+    +-- Technique: T1190 (Exploit Public-Facing Application)
+    |   Tactic: Initial Access
+    |   Confidence: 0.92
+    |
+    +-- Technique: T1078 (Valid Accounts)
+        Tactic: Persistence
+        Confidence: 0.78
+```
+
+### Risk Scoring Algorithm
+
+```
+Risk Score = (Severity Weight * CVSS Score) + 
+             (Exploitability Factor) + 
+             (Business Context Modifier)
+
+Where:
+- Critical: Weight 2.0
+- High: Weight 1.5
+- Medium: Weight 0.8
+- Low: Weight 0.2
+```
+
+---
+
+## SECURITY PROTOCOLS
+
+### Authentication Framework
+
+- JWT-based token authentication
+- Configurable token expiration
+- Refresh token rotation
+- Multi-factor authentication ready
+
+### Access Control
+
+- Role-based access control (RBAC)
+- Resource ownership verification
+- 4-layer data isolation enforcement
+- Cross-user access prevention
+
+### Network Security
+
+- HTTPS enforcement in production
+- CORS policy configuration
+- Rate limiting per endpoint
+- Security header injection:
+  - Strict-Transport-Security
+  - X-Content-Type-Options
+  - X-Frame-Options
+  - Content-Security-Policy
+  - Referrer-Policy
+
+### Data Protection
+
+- Row-level security in PostgreSQL
+- Encrypted sensitive fields
+- Audit logging for all operations
+- Secure credential storage with bcrypt
+
+---
+
+## DOMAIN AUTHORIZATION PROTOCOL
+
+### Purpose
+
+DNS TXT record verification ensures scan authorization by proving domain ownership. This prevents unauthorized reconnaissance against third-party assets.
+
+### Verification Flow
+
+```
+OPERATOR                    LINK&LOAD                    DNS SERVER
+    |                           |                            |
+    |  1. Request Verification  |                            |
+    |-------------------------->|                            |
+    |                           |                            |
+    |  2. Verification Token    |                            |
+    |<--------------------------|                            |
+    |                           |                            |
+    |  3. Add TXT Record        |                            |
+    |-------------------------------------------------------->|
+    |                           |                            |
+    |  4. Confirm & Verify      |                            |
+    |-------------------------->|                            |
+    |                           |                            |
+    |                           |  5. Query TXT Record       |
+    |                           |--------------------------->|
+    |                           |                            |
+    |                           |  6. Record Confirmed       |
+    |                           |<---------------------------|
+    |                           |                            |
+    |  7. Authorization Granted |                            |
+    |<--------------------------|                            |
+```
+
+### DNS Record Configuration
+
+Add a TXT record to your domain's DNS:
+
+| Field | Value |
+|-------|-------|
+| Type | TXT |
+| Name | _linkload-verify |
+| Value | linkload-verify-{token} |
+| TTL | 300 |
+
+### Verification Commands
+
+```bash
+# Request verification token
+curl -X POST http://localhost:8000/api/v1/verification/request \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"domain": "example.com"}'
+
+# Confirm domain ownership
+curl -X POST http://localhost:8000/api/v1/verification/verify \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"domain": "example.com", "verification_token": "linkload-verify-..."}'
+```
+
+---
+
+## CONFIGURATION MATRIX
 
 ### Environment Variables
 
 ```bash
-# Database
-SUPABASE_URL=https://your-project.supabase.co
+# Database Configuration
+DATABASE_URL=postgresql://user:pass@localhost:5432/linkload
+SUPABASE_URL=https://project.supabase.co
 SUPABASE_KEY=your-anon-key
 
-# Scanners
+# Scanner Configuration
 ZAP_URL=http://localhost:8090
-NUCLEI_PATH=/usr/bin/nuclei
-WAPITI_PATH=/usr/bin/wapiti
+ZAP_API_KEY=your-zap-api-key
+NUCLEI_BINARY_PATH=/usr/bin/nuclei
+NUCLEI_TEMPLATES_PATH=/opt/nuclei-templates
+WAPITI_BINARY_PATH=/usr/bin/wapiti
 
-# LLM (choose one)
+# AI Provider Keys (configure at least one)
+GROQ_API_KEY=gsk_...
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
 
-# Security
-SECRET_KEY=your-secret-key
+# Security Configuration
+SECRET_KEY=your-256-bit-secret-key
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# Application Settings
+ENVIRONMENT=development
+CORS_ORIGINS=http://localhost:3000,http://localhost:8000
+ENABLE_DOCS=true
+LOG_LEVEL=INFO
+
+# Redis Cache
+REDIS_URL=redis://localhost:6379/0
 ```
 
-See [.env.example](./.env.example) for all options.
+### Docker Compose Services
+
+| Service | Image | Port | Purpose |
+|---------|-------|------|---------|
+| postgres | postgres:15-alpine | 5432 | Primary database |
+| owasp-zap | owasp/zap2docker-stable | 8090 | ZAP scanner |
+| backend | custom | 8000 | API server |
+| frontend | custom | 3000 | Web interface |
+| nginx | nginx:alpine | 80/443 | Reverse proxy |
 
 ---
 
-## Testing
+## VERIFICATION PROCEDURES
+
+### Health Check
 
 ```bash
-# Health checks
+# System health
 python backend/health_check_services.py
 
-# E2E tests
-python backend/run_e2e_tests.py
-
-# Unit tests
-pytest backend/tests/
-npm test --prefix frontend
+# Individual service status
+curl http://localhost:8000/health
+curl http://localhost:8090/JSON/core/action/version/
 ```
+
+### Test Suite Execution
+
+```bash
+# Backend unit tests
+cd backend
+pytest tests/ -v
+
+# End-to-end integration tests
+python run_e2e_tests.py
+
+# Frontend tests
+cd frontend
+npm test
+```
+
+### Validation Checklist
+
+- [ ] All containers running: `docker-compose ps`
+- [ ] Database connectivity: Health endpoint returns db_status: true
+- [ ] Scanner availability: ZAP version endpoint responds
+- [ ] Frontend loads: Browser access to port 3000
+- [ ] API documentation: Swagger UI at /docs
+- [ ] Authentication flow: Login returns valid JWT
 
 ---
 
-## Tech Stack
+## TACTICAL ROADMAP
 
-### Backend
-- **Framework:** FastAPI (Python 3.11)
-- **Database:** Supabase (PostgreSQL)
-- **Scanners:** OWASP ZAP, Nuclei, Wapiti
-- **LLM:** OpenAI GPT-4, Anthropic Claude
-- **Async:** asyncio, uvicorn
+### Phase 1: Foundation Enhancement (Q1 2026)
 
-### Frontend
-- **Framework:** React 18
-- **Router:** React Router v6
-- **HTTP:** Axios
-- **Styling:** CSS3 with variables
-- **WebSocket:** Native API
+**Objective:** Strengthen core platform capabilities
 
-### DevOps
-- **Containerization:** Docker
-- **CI/CD:** GitHub Actions
-- **Database:** PostgreSQL
-- **Proxy:** Nginx
+- [ ] Additional scanner integration (Burp Suite API, Nikto)
+- [ ] Custom vulnerability template editor
+- [ ] Scan scheduling and automation
+- [ ] Improved CVSS v4.0 scoring integration
+- [ ] Batch scanning for multiple targets
+
+### Phase 2: Enterprise Readiness (Q2 2026)
+
+**Objective:** Scale for organizational deployment
+
+- [ ] Multi-tenancy with organization hierarchies
+- [ ] SAML/OIDC SSO integration
+- [ ] SCIM user provisioning
+- [ ] Role-based access control refinement
+- [ ] Audit logging with SIEM export (Splunk, Elastic)
+- [ ] Per-tenant encryption keys
+
+### Phase 3: Attack Surface Expansion (Q3 2026)
+
+**Objective:** Comprehensive asset coverage
+
+- [ ] API security scanner integration (OWASP API Top 10)
+- [ ] Cloud security posture management (AWS, Azure, GCP)
+- [ ] Container and Kubernetes scanning
+- [ ] Infrastructure as Code analysis (Terraform, CloudFormation)
+- [ ] Continuous asset discovery (DNS, TLS, ASN enumeration)
+- [ ] Drift detection and alerting
+
+### Phase 4: Workflow Integration (Q4 2026)
+
+**Objective:** Embed into security operations
+
+- [ ] Jira/ServiceNow ticket creation
+- [ ] Slack/Teams/PagerDuty notifications
+- [ ] SOAR playbook integration
+- [ ] Approval-based remediation workflows
+- [ ] SLA tracking and reporting
+- [ ] Compliance report generation (PCI-DSS, SOC 2, HIPAA)
+
+### Phase 5: Advanced Intelligence (2027)
+
+**Objective:** Next-generation threat analysis
+
+- [ ] RAG-powered vulnerability context retrieval
+- [ ] Real-time threat intelligence feeds integration
+- [ ] Predictive vulnerability scoring with ML
+- [ ] Attack graph visualization
+- [ ] Automated proof-of-concept generation (controlled)
+- [ ] Red team operation planning assistance
+
+### Long-Term Vision
+
+- Full-stack application security testing platform
+- Unified security operations center integration
+- Compliance automation and continuous auditing
+- AI-driven remediation recommendations with code fixes
+- Community-driven vulnerability intelligence sharing
 
 ---
 
-## Security
+## TECHNOLOGY ARSENAL
 
-- JWT authentication
-- CORS protection
-- Rate limiting
-- SQL injection prevention
-- XSS protection
-- SSL/TLS encryption
-- Row-level security
-- Secure password hashing
-- **DNS TXT Record Verification** - Domain ownership validation
+### Backend Stack
+
+| Component | Technology | Version |
+|-----------|------------|---------|
+| Framework | FastAPI | 0.100+ |
+| Runtime | Python | 3.11+ |
+| ORM | SQLAlchemy | 2.0+ |
+| Migrations | Alembic | 1.0+ |
+| Cache | Redis | 6.0+ |
+| Async | asyncio/uvicorn | Latest |
+
+### Frontend Stack
+
+| Component | Technology | Version |
+|-----------|------------|---------|
+| Framework | React | 18+ |
+| Routing | React Router | 6+ |
+| State | React Query | 5+ |
+| HTTP | Axios | 1.6+ |
+| Styling | TailwindCSS | 3.4+ |
+| Charts | D3.js | 7.9+ |
+
+### Infrastructure
+
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| Containers | Docker | Service isolation |
+| Orchestration | Docker Compose | Development deployment |
+| Database | PostgreSQL | Primary data store |
+| Database | Supabase | Hosted PostgreSQL option |
+| Proxy | Nginx | Production reverse proxy |
 
 ---
 
-## DNS TXT Record Verification
+## FIELD SUPPORT
 
-### Overview
+### Troubleshooting Guide
 
-Link&Load implements **DNS TXT record verification** to ensure that only legitimate site owners can scan their domains and access scan results. This prevents unauthorized security scans and protects sensitive vulnerability data.
-
-### Why DNS TXT Verification?
-
-**Problem:** Without verification, anyone could:
-- Scan any website without permission
-- Access vulnerability reports for domains they don't own
-- Abuse the scanning service for malicious reconnaissance
-
-**Solution:** DNS TXT record verification requires domain control:
-- Only domain owners or authorized admins can add DNS records
-- Provides cryptographic proof of domain ownership
-- Industry-standard approach (used by Google, Let's Encrypt, etc.)
-
-### How It Works
-
-```
-┌─────────────┐         ┌──────────────┐         ┌─────────────┐
-│   User      │         │  Link&Load   │         │  DNS Server │
-│  (Owner)    │         │   Platform   │         │             │
-└──────┬──────┘         └──────┬───────┘         └──────┬──────┘
-       │                       │                        │
-       │  1. Request Scan      │                        │
-       ├──────────────────────>│                        │
-       │                       │                        │
-       │  2. Generate Token    │                        │
-       │  <verification-token> │                        │
-       │<──────────────────────┤                        │
-       │                       │                        │
-       │  3. Add DNS TXT       │                        │
-       │  "linkload-verify=<token>"                     │
-       ├───────────────────────┼───────────────────────>│
-       │                       │                        │
-       │  4. Confirm Added     │                        │
-       ├──────────────────────>│                        │
-       │                       │                        │
-       │                       │  5. Query DNS TXT      │
-       │                       ├───────────────────────>│
-       │                       │                        │
-       │                       │  6. Return TXT Record  │
-       │                       │<───────────────────────┤
-       │                       │                        │
-       │  7. Verification OK   │                        │
-       │  Scan Authorized ✓    │                        │
-       │<──────────────────────┤                        │
-```
-
-### Implementation Guide
-
-#### Step 1: Request Verification Token
-
-**API Endpoint:**
-```bash
-POST /api/v1/scans/request-verification
-Content-Type: application/json
-
-{
-  "domain": "example.com"
-}
-
-Response:
-{
-  "verification_token": "linkload-verify-a8f3e2b9c1d4",
-  "dns_record": {
-    "type": "TXT",
-    "name": "_linkload-verify.example.com",
-    "value": "linkload-verify-a8f3e2b9c1d4",
-    "ttl": 300
-  },
-  "expires_at": "2025-11-03T18:30:00Z",
-  "instructions": "Add the TXT record to your DNS settings"
-}
-```
-
-#### Step 2: Add DNS TXT Record
-
-**Option A: Using DNS Provider Dashboard (Most Common)**
-
-1. Log in to your DNS provider (Cloudflare, GoDaddy, Namecheap, etc.)
-2. Navigate to DNS Management for your domain
-3. Add a new TXT record:
-   - **Type:** TXT
-   - **Name:** `_linkload-verify` or `_linkload-verify.example.com`
-   - **Value:** `linkload-verify-a8f3e2b9c1d4`
-   - **TTL:** 300 seconds (5 minutes)
-4. Save changes
-
-**Example - Cloudflare:**
-```
-Type: TXT
-Name: _linkload-verify
-Content: linkload-verify-a8f3e2b9c1d4
-TTL: Auto
-```
-
-**Example - GoDaddy:**
-```
-Type: TXT
-Host: _linkload-verify
-TXT Value: linkload-verify-a8f3e2b9c1d4
-TTL: 1 Hour
-```
-
-**Option B: Using Command Line (Advanced)**
-
-```bash
-# Check if DNS record exists
-dig TXT _linkload-verify.example.com +short
-
-# Alternative using nslookup
-nslookup -type=TXT _linkload-verify.example.com
-
-# Expected output:
-"linkload-verify-a8f3e2b9c1d4"
-```
-
-#### Step 3: Verify Domain Ownership
-
-**API Endpoint:**
-```bash
-POST /api/v1/scans/verify-domain
-Content-Type: application/json
-
-{
-  "domain": "example.com",
-  "verification_token": "linkload-verify-a8f3e2b9c1d4"
-}
-
-Response (Success):
-{
-  "verified": true,
-  "domain": "example.com",
-  "verified_at": "2025-11-03T17:45:00Z",
-  "message": "Domain ownership verified successfully"
-}
-
-Response (Failure):
-{
-  "verified": false,
-  "domain": "example.com",
-  "error": "DNS TXT record not found or incorrect",
-  "help": "Ensure the TXT record is properly configured and DNS has propagated (may take 5-30 minutes)"
-}
-```
-
-#### Step 4: Start Authorized Scan
-
-```bash
-POST /api/v1/scans/comprehensive/start
-Content-Type: application/json
-Authorization: Bearer <your_jwt_token>
-
-{
-  "target_url": "https://example.com",
-  "scan_types": ["owasp", "nuclei", "wapiti"],
-  "options": {
-    "enable_ai_analysis": true,
-    "enable_mitre_mapping": true
-  }
-}
-
-# Scan will only proceed if domain is verified
-```
-
-### Backend Implementation
-
-#### Database Schema
-
-```sql
--- Domain verification table
-CREATE TABLE domain_verifications (
-  id SERIAL PRIMARY KEY,
-  domain VARCHAR(255) NOT NULL,
-  verification_token VARCHAR(64) UNIQUE NOT NULL,
-  verified BOOLEAN DEFAULT FALSE,
-  verified_at TIMESTAMP,
-  expires_at TIMESTAMP NOT NULL,
-  created_at TIMESTAMP DEFAULT NOW(),
-  user_id INTEGER REFERENCES users(id),
-  UNIQUE(domain, user_id)
-);
-
--- Index for fast lookups
-CREATE INDEX idx_domain_verifications_token 
-  ON domain_verifications(verification_token);
-CREATE INDEX idx_domain_verifications_domain 
-  ON domain_verifications(domain, verified);
-```
-
-#### Python Implementation
-
-```python
-# backend/app/services/domain_verification.py
-
-import dns.resolver
-import secrets
-import hashlib
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
-
-class DomainVerificationService:
-    """DNS TXT record verification service."""
-    
-    @staticmethod
-    def generate_verification_token(domain: str) -> str:
-        """Generate unique verification token."""
-        random_part = secrets.token_hex(16)
-        domain_hash = hashlib.sha256(domain.encode()).hexdigest()[:8]
-        return f"linkload-verify-{random_part}-{domain_hash}"
-    
-    @staticmethod
-    async def create_verification_request(
-        domain: str, 
-        user_id: int
-    ) -> Dict[str, Any]:
-        """Create verification request with token."""
-        # Generate token
-        token = DomainVerificationService.generate_verification_token(domain)
-        
-        # Create record in database
-        verification = {
-            "domain": domain,
-            "verification_token": token,
-            "verified": False,
-            "expires_at": datetime.utcnow() + timedelta(hours=24),
-            "user_id": user_id
-        }
-        
-        # Store in database
-        db.save_verification(verification)
-        
-        return {
-            "verification_token": token,
-            "dns_record": {
-                "type": "TXT",
-                "name": f"_linkload-verify.{domain}",
-                "value": token,
-                "ttl": 300
-            },
-            "expires_at": verification["expires_at"].isoformat(),
-            "instructions": (
-                f"Add TXT record '_linkload-verify.{domain}' "
-                f"with value '{token}' to your DNS settings"
-            )
-        }
-    
-    @staticmethod
-    async def verify_domain(
-        domain: str, 
-        verification_token: str
-    ) -> Dict[str, Any]:
-        """Verify domain ownership via DNS TXT lookup."""
-        try:
-            # Query DNS for TXT records
-            txt_records = []
-            resolver = dns.resolver.Resolver()
-            resolver.timeout = 5
-            resolver.lifetime = 10
-            
-            # Check subdomain record
-            try:
-                answers = resolver.resolve(
-                    f"_linkload-verify.{domain}", 
-                    "TXT"
-                )
-                for rdata in answers:
-                    txt_records.extend([
-                        s.decode() if isinstance(s, bytes) else s 
-                        for s in rdata.strings
-                    ])
-            except dns.resolver.NXDOMAIN:
-                # Try root domain
-                answers = resolver.resolve(domain, "TXT")
-                for rdata in answers:
-                    txt_records.extend([
-                        s.decode() if isinstance(s, bytes) else s 
-                        for s in rdata.strings
-                    ])
-            
-            # Check if verification token exists in TXT records
-            found = verification_token in txt_records
-            
-            if found:
-                # Update verification status in database
-                db.update_verification(
-                    verification_token,
-                    {
-                        "verified": True,
-                        "verified_at": datetime.utcnow()
-                    }
-                )
-                
-                return {
-                    "verified": True,
-                    "domain": domain,
-                    "verified_at": datetime.utcnow().isoformat(),
-                    "message": "Domain ownership verified successfully"
-                }
-            else:
-                return {
-                    "verified": False,
-                    "domain": domain,
-                    "error": "DNS TXT record not found or incorrect",
-                    "help": (
-                        "Ensure the TXT record is properly configured "
-                        "and DNS has propagated (may take 5-30 minutes)"
-                    )
-                }
-        
-        except dns.resolver.NoAnswer:
-            return {
-                "verified": False,
-                "domain": domain,
-                "error": "No TXT records found for domain",
-                "help": "Add the TXT record to your DNS settings"
-            }
-        except dns.resolver.NXDOMAIN:
-            return {
-                "verified": False,
-                "domain": domain,
-                "error": "Domain does not exist",
-                "help": "Verify the domain name is correct"
-            }
-        except Exception as e:
-            return {
-                "verified": False,
-                "domain": domain,
-                "error": f"DNS lookup failed: {str(e)}",
-                "help": "Try again in a few minutes"
-            }
-    
-    @staticmethod
-    async def check_verification_status(
-        domain: str, 
-        user_id: int
-    ) -> Optional[Dict[str, Any]]:
-        """Check if domain is already verified for user."""
-        verification = db.get_verification(domain, user_id)
-        
-        if not verification:
-            return None
-        
-        # Check if expired
-        if verification["expires_at"] < datetime.utcnow():
-            return None
-        
-        return {
-            "domain": domain,
-            "verified": verification["verified"],
-            "verified_at": verification.get("verified_at"),
-            "expires_at": verification["expires_at"].isoformat()
-        }
-```
-
-#### API Endpoints
-
-```python
-# backend/app/api/domain_verification.py
-
-from fastapi import APIRouter, HTTPException, Depends
-from app.services.domain_verification import DomainVerificationService
-from app.core.security import get_current_user
-
-router = APIRouter(
-    prefix="/api/v1/verification",
-    tags=["Domain Verification"]
-)
-
-@router.post("/request")
-async def request_verification(
-    request: dict,
-    current_user = Depends(get_current_user)
-):
-    """Request domain verification token."""
-    domain = request.get("domain")
-    if not domain:
-        raise HTTPException(400, "Domain is required")
-    
-    result = await DomainVerificationService.create_verification_request(
-        domain=domain,
-        user_id=current_user.id
-    )
-    
-    return result
-
-@router.post("/verify")
-async def verify_domain(
-    request: dict,
-    current_user = Depends(get_current_user)
-):
-    """Verify domain ownership."""
-    domain = request.get("domain")
-    token = request.get("verification_token")
-    
-    if not domain or not token:
-        raise HTTPException(400, "Domain and token are required")
-    
-    result = await DomainVerificationService.verify_domain(
-        domain=domain,
-        verification_token=token
-    )
-    
-    return result
-
-@router.get("/status/{domain}")
-async def check_status(
-    domain: str,
-    current_user = Depends(get_current_user)
-):
-    """Check verification status."""
-    status = await DomainVerificationService.check_verification_status(
-        domain=domain,
-        user_id=current_user.id
-    )
-    
-    if not status:
-        raise HTTPException(404, "No verification found")
-    
-    return status
-```
-
-### Frontend Integration
-
-#### React Component
-
-```jsx
-// frontend/src/components/DomainVerification.jsx
-
-import React, { useState } from 'react';
-import axios from 'axios';
-
-const DomainVerification = ({ domain, onVerified }) => {
-  const [step, setStep] = useState('request'); // request, pending, verified
-  const [verificationData, setVerificationData] = useState(null);
-  const [error, setError] = useState(null);
-  const [checking, setChecking] = useState(false);
-
-  const requestVerification = async () => {
-    try {
-      const response = await axios.post('/api/v1/verification/request', {
-        domain: domain
-      });
-      setVerificationData(response.data);
-      setStep('pending');
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to request verification');
-    }
-  };
-
-  const verifyDomain = async () => {
-    setChecking(true);
-    try {
-      const response = await axios.post('/api/v1/verification/verify', {
-        domain: domain,
-        verification_token: verificationData.verification_token
-      });
-      
-      if (response.data.verified) {
-        setStep('verified');
-        onVerified && onVerified(domain);
-      } else {
-        setError(response.data.error || 'Verification failed');
-      }
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Verification failed');
-    } finally {
-      setChecking(false);
-    }
-  };
-
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
-  };
-
-  return (
-    <div className="domain-verification">
-      {step === 'request' && (
-        <div className="verification-step">
-          <h3>Verify Domain Ownership</h3>
-          <p>To scan <strong>{domain}</strong>, you must prove you own it.</p>
-          <button onClick={requestVerification}>
-            Request Verification
-          </button>
-        </div>
-      )}
-
-      {step === 'pending' && verificationData && (
-        <div className="verification-step">
-          <h3>Add DNS TXT Record</h3>
-          <div className="verification-instructions">
-            <p>Add this TXT record to your DNS settings:</p>
-            
-            <div className="dns-record">
-              <div className="record-field">
-                <label>Type:</label>
-                <span>TXT</span>
-              </div>
-              <div className="record-field">
-                <label>Name:</label>
-                <span>{verificationData.dns_record.name}</span>
-                <button onClick={() => copyToClipboard(verificationData.dns_record.name)}>
-                  Copy
-                </button>
-              </div>
-              <div className="record-field">
-                <label>Value:</label>
-                <code>{verificationData.dns_record.value}</code>
-                <button onClick={() => copyToClipboard(verificationData.dns_record.value)}>
-                  Copy
-                </button>
-              </div>
-            </div>
-
-            <div className="help-text">
-              <h4>How to add DNS record:</h4>
-              <ol>
-                <li>Log in to your DNS provider (Cloudflare, GoDaddy, etc.)</li>
-                <li>Go to DNS Management for {domain}</li>
-                <li>Add a new TXT record with the values above</li>
-                <li>Wait 5-10 minutes for DNS propagation</li>
-                <li>Click "Verify" below</li>
-              </ol>
-            </div>
-
-            {error && <div className="error">{error}</div>}
-
-            <button onClick={verifyDomain} disabled={checking}>
-              {checking ? 'Checking DNS...' : 'Verify Domain'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {step === 'verified' && (
-        <div className="verification-step success">
-          <h3>[VERIFIED] Domain Verified!</h3>
-          <p>You can now scan <strong>{domain}</strong></p>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default DomainVerification;
-```
-
-### Security Best Practices
-
-1. **Token Expiration**: Verification tokens expire after 24 hours
-2. **Rate Limiting**: Limit verification requests to prevent abuse
-3. **One-Time Use**: Tokens are invalidated after successful verification
-4. **User Association**: Verifications are tied to user accounts
-5. **HTTPS Only**: All verification endpoints require HTTPS
-6. **DNS Validation**: Use multiple DNS servers for redundancy
-
-### Dependencies
-
-```bash
-# Backend
-pip install dnspython>=2.4.0
-
-# Add to requirements.txt
-dnspython>=2.4.0
-```
-
-### Testing
-
-```bash
-# Test DNS lookup
-python -c "
-import dns.resolver
-resolver = dns.resolver.Resolver()
-answers = resolver.resolve('_linkload-verify.example.com', 'TXT')
-for rdata in answers:
-    print(rdata.strings)
-"
-
-# Test with dig
-dig TXT _linkload-verify.example.com
-
-# Test with nslookup
-nslookup -type=TXT _linkload-verify.example.com
-```
-
-### Common Issues & Solutions
-
-**Issue:** DNS record not found immediately
-- **Solution:** DNS propagation takes 5-30 minutes. Wait and retry.
-
-**Issue:** Multiple TXT records on same domain
-- **Solution:** Platform checks all TXT records for the verification token.
-
-**Issue:** Subdomain verification
-- **Solution:** Add TXT record for `_linkload-verify.subdomain.example.com`
-
-**Issue:** Wildcard domain verification
-- **Solution:** Verify the apex domain; scans allowed for all subdomains.
-
-### Alternative Verification Methods
-
-While DNS TXT is recommended, consider these alternatives:
-
-1. **HTML Meta Tag**: Add `<meta name="linkload-verify" content="token">` to homepage
-2. **File Upload**: Upload `linkload-verify.txt` to webroot
-3. **HTTP Header**: Return `X-LinkLoad-Verify: token` header
-
----
-
-## Project Status
-
-**Status:**  **PRODUCTION READY**
-
-### Implementation Complete
-- 8 Backend API endpoints
-- 3 Integrated scanners
-- 2 LLM providers (+ fallback)
-- Professional UI
-- Docker containerization
-- CI/CD pipelines
-- Production deployment
-- Complete documentation
-
----
-
-## Integration Test Reports
-
-**Complete end-to-end integration testing completed on November 16, 2025.**
-
-### Test Results
-- **Total Tests:** 40+ test cases
-- **Pass Rate:** 100% (PASS)
-- **Coverage:** Comprehensive security and integration testing
-- **Data Isolation:** 4-layer protection verified on all endpoints
-- **Security:** Multi-layer authorization verified
-
-
-
-### Security Verification
-
-**Data Isolation Verified:**
-- [VERIFIED] Users can only access their own scans (403 Forbidden on cross-user access)
-- [VERIFIED] Users can only access their own domains (403 Forbidden on cross-user access)
-- [VERIFIED] Unauthenticated users cannot access any data (401 Unauthorized)
-- [VERIFIED] Database queries filtered by user_id at all levels
-- [VERIFIED] Ownership verification on all sensitive endpoints
-- [VERIFIED] Unauthorized access attempts logged with user_id
-
-**API Endpoints (11 Total):**
-- [VERIFIED] 5 Authentication endpoints (register, login, logout, refresh, me)
-- [VERIFIED] 6 Scan endpoints (start, status, result, list, summary, cancel) - all with data isolation
-- [VERIFIED] 5 Domain endpoints (profile, create, delete, verify, rotate-token) - all with data isolation
-
-### Production Readiness Checklist
-
-- [COMPLETE] Backend API fully functional and secured
-- [COMPLETE] Frontend properly integrated with backend
-- [COMPLETE] Database connectivity verified
-- [COMPLETE] User data isolation enforced across all endpoints
-- [COMPLETE] Authentication end-to-end working
-- [COMPLETE] Authorization multi-layer protection active
-- [COMPLETE] Security features active (CORS, rate limiting, headers)
-- [COMPLETE] Error handling comprehensive
-- [COMPLETE] Logging configured
-- [COMPLETE] Docker containerization ready
-- [COMPLETE] Environment configuration documented
-- [COMPLETE] Comprehensive testing (40+ tests passing)
-- [COMPLETE] Full documentation available
-
----
-
-## Troubleshooting
-
-### Backend won't start
+**Backend Initialization Failure:**
 ```bash
 docker-compose logs backend
-docker-compose up --build
+docker-compose up --build backend
 ```
 
-### Frontend connection issues
-- Check backend: `http://localhost:8000/docs`
-- Verify CORS settings
-- Check API URL in environment
-
-### Scanner issues
+**Scanner Connection Issues:**
 ```bash
-python backend/health_check_services.py
+# Verify ZAP is running
+curl http://localhost:8090/JSON/core/action/version/
+
+# Check Nuclei installation
+nuclei -version
+
+# Verify Wapiti
+wapiti --version
 ```
 
-### Data Isolation Verification
-See [`DATA_ISOLATION_SECURITY.md`](./DATA_ISOLATION_SECURITY.md) for verification details and testing procedures.
+**Database Connection Problems:**
+```bash
+docker-compose logs postgres
+docker-compose exec postgres pg_isready
+```
+
+**Frontend Build Errors:**
+```bash
+cd frontend
+rm -rf node_modules package-lock.json
+npm install
+npm start
+```
+
+### Common Issues
+
+| Issue | Resolution |
+|-------|------------|
+| CORS errors | Verify CORS_ORIGINS in backend .env |
+| JWT expired | Re-authenticate via login endpoint |
+| Scanner timeout | Increase timeout_minutes in scan options |
+| Database locked | Restart postgres container |
+| Out of memory | Increase Docker memory allocation |
+
+### Contact
+
+For operational support, feature requests, or vulnerability reports:
+
+- **Issue Tracker:** [GitHub Issues](https://github.com/pratiyk/Link-Load/issues)
+- **Repository:** [github.com/pratiyk/Link-Load](https://github.com/pratiyk/Link-Load)
 
 ---
 
-## Contributing
+## LEGAL
 
-Contributions welcome! Please:
+### License
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+This project is released under the MIT License. See [LICENSE](LICENSE) for full terms.
 
----
+### Responsible Use
 
-## License
+Link&Load is designed for authorized security testing only. Users must:
 
-MIT License - see [LICENSE](LICENSE) for details.
+- Obtain explicit written permission before scanning any target
+- Comply with all applicable laws and regulations
+- Use the domain verification system for third-party assets
+- Report discovered vulnerabilities responsibly
 
----
-
-## Author
-
-**Prateek Shrivastava** ([@pratiyk](https://github.com/pratiyk))
+Unauthorized scanning of systems you do not own or have permission to test is illegal and unethical.
 
 ---
 
-## Support
+## CREDITS
 
-For issues, features, or questions:
-- Open [GitHub Issue](https://github.com/pratiyk/Link-Load/issues)
-- Check [Documentation](./SETUP_AND_CONFIG.md)
-- Review [Project Status](./PROJECT_COMPLETION_SUMMARY.md)
+**Project Lead:** Prateek Shrivastava ([@pratiyk](https://github.com/pratiyk))
+
+**Core Technologies:**
+- OWASP Foundation - ZAP Scanner
+- ProjectDiscovery - Nuclei Scanner
+- Wapiti Project - Wapiti Scanner
+- OpenAI / Anthropic / Groq - AI Analysis
 
 ---
 
-**Built with care for web security**
-
-Latest Update: October 26, 2025 | Version: 1.0.0 | Status: Production Ready
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║    LINK&LOAD - TACTICAL WEB SECURITY RECONNAISSANCE PLATFORM                ║
+║                                                                              ║
+║    Version: 1.0.0                                                            ║
+║    Status: OPERATIONAL                                                       ║
+║    Last Updated: November 2025                                               ║
+║                                                                              ║
+║    "Reconnaissance is the foundation of victory."                            ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+```

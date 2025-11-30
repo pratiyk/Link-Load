@@ -105,6 +105,20 @@ class NucleiScanner(BaseScanner):
                 '-retries', str(self.config.retries)
             ] + templates_arg
 
+            # Deep scan mode: use more thorough scanning options
+            if getattr(config, 'deep_scan', False):
+                logger.info(f"[Nuclei] Deep scan mode enabled for {config.target_url}")
+                # Include all severity levels for deep scans
+                cmd.extend(['-severity', 'critical,high,medium,low,info'])
+                # Enable headless browser for JavaScript rendering
+                cmd.append('-headless')
+            else:
+                # Quick/Standard: Focus on higher severity issues
+                if not getattr(config, 'include_low_risk', True):
+                    cmd.extend(['-severity', 'critical,high,medium'])
+                else:
+                    cmd.extend(['-severity', 'critical,high,medium,low'])
+
             # Optional debug output
             if self.config.debug:
                 cmd.append('-debug')

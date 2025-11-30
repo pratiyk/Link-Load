@@ -8,31 +8,60 @@ from fastapi import Request
 from typing import Optional
 import os
 
+try:  # Redis is optional when running in-memory limits
+    import redis  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - redis optional in tests
+    redis = None
+
 # Initialize rate limiter
 # For development, we'll use in-memory storage
 # For production, use Redis for distributed rate limiting
-REDIS_URL = os.getenv("REDIS_URL")
+def _should_force_memory_storage() -> bool:
+    """Determine if rate limiting should use in-memory storage."""
+    if os.getenv("RATE_LIMIT_ENABLED", "true").lower() in {"0", "false", "no"}:
+        return True
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        return True
+    return False
 
-if REDIS_URL:
+
+def _resolve_storage_uri() -> str:
+    """Return the storage URI, falling back to memory if Redis is unavailable."""
+    if _should_force_memory_storage():
+        return "memory://"
+
+    storage_uri = os.getenv("RATE_LIMIT_STORAGE_URI") or os.getenv("REDIS_URL")
+    if not storage_uri:
+        return "memory://"
+
+    if storage_uri.startswith("redis") and redis is not None:
+        try:
+            redis.from_url(storage_uri, socket_connect_timeout=1).ping()
+            return storage_uri
+        except Exception:
+            # Redis configured but unreachable – fall back to memory for reliability
+            return "memory://"
+
+    return storage_uri
+
+
+def _create_limiter() -> Limiter:
+    storage_uri = _resolve_storage_uri()
     try:
-        limiter = Limiter(
+        return Limiter(
             key_func=get_remote_address,
-            storage_uri=REDIS_URL,
+            storage_uri=storage_uri,
             default_limits=["60/minute", "1000/hour"]
         )
     except ConfigurationError:
-        limiter = Limiter(
+        return Limiter(
             key_func=get_remote_address,
             storage_uri="memory://",
             default_limits=["60/minute", "1000/hour"]
         )
-else:
-    # Development: Use in-memory storage
-    limiter = Limiter(
-        key_func=get_remote_address,
-        storage_uri="memory://",
-        default_limits=["60/minute", "1000/hour"]
-    )
+
+
+limiter = _create_limiter()
 
 
 async def get_user_id_from_token(request: Request) -> str:

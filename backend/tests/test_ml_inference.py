@@ -2,11 +2,32 @@
 Test ML Model Inference Pipeline
 Tests for phishing detection ML models and integration
 """
-import pytest
 import os
 from pathlib import Path
+
 import joblib
 import numpy as np
+import pytest
+
+
+TEST_MODELS_DIR = Path(__file__).parent.parent / "test_models"
+REQUIRED_MODELS = [
+    "rf_model_latest.joblib",
+    "xgb_model_latest.joblib",
+    "lgb_model_latest.joblib",
+]
+
+_models_available = TEST_MODELS_DIR.exists() and all(
+    (TEST_MODELS_DIR / model_name).exists() for model_name in REQUIRED_MODELS
+)
+
+if os.getenv("SKIP_ML_TESTS") in {"1", "true", "TRUE", "True"}:
+    _models_available = False
+
+pytestmark = pytest.mark.skipif(
+    not _models_available,
+    reason="ML inference assets missing; place joblib models under backend/test_models or set SKIP_ML_TESTS=0",
+)
 
 
 @pytest.fixture

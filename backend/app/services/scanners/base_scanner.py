@@ -9,6 +9,8 @@ class ScannerConfig(BaseModel):
     scan_types: List[str] = Field(default_factory=list, description="Types of scans to perform")
     include_passive: bool = Field(default=True, description="Include passive scanning")
     ajax_spider: bool = Field(default=False, description="Use AJAX Spider")
+    deep_scan: bool = Field(default=False, description="Enable deep/thorough scanning mode")
+    include_low_risk: bool = Field(default=True, description="Include low risk findings")
     auth_config: Optional[Dict[str, Any]] = Field(default=None, description="Authentication configuration")
     max_scan_duration: int = Field(default=3600, description="Maximum scan duration in seconds")
     risk_threshold: float = Field(default=0.0, description="Minimum risk threshold for reporting")
