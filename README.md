@@ -827,7 +827,7 @@ Unauthorized scanning of systems you do not own or have permission to test is il
 
 ## CREDITS
 
-**Project Lead:** Prateek Shrivastava ([@pratiyk](https://github.com/pratiyk))
+Prateek Shrivastava ([@pratiyk](https://github.com/pratiyk))
 
 **Core Technologies:**
 - OWASP Foundation - ZAP Scanner
