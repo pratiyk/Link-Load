@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 
 import dns.exception
 import dns.resolver
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Response
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -285,12 +285,12 @@ async def register_domain(
     return _domain_to_response(domain_record)
 
 
-@router.delete("/{domain_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{domain_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def delete_domain(
     domain_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> None:
+):
     """Delete a domain for the authenticated user.
     
     SECURITY: Users can only delete their own domains.
@@ -305,7 +305,6 @@ async def delete_domain(
         db.rollback()
         logger.exception("Failed to delete domain %s for user %s", domain_id, user_id)
         raise DatabaseException("Unable to remove domain at the moment.") from exc
-    return None
 
 
 @router.post("/{domain_id}/verify", response_model=DomainVerificationResult)

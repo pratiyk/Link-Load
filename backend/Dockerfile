@@ -3,16 +3,17 @@ FROM python:3.11-slim
 
 WORKDIR /app/backend
 
-# Install system dependencies
+# Install system dependencies including libgomp for LightGBM
 RUN apt-get update && apt-get install -y \
     curl \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
-COPY requirements.txt .
+# Copy requirements (using Docker-optimized requirements for faster builds)
+COPY requirements-docker.txt .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements-docker.txt
 
 # Copy application code
 COPY . .

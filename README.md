@@ -204,20 +204,111 @@ git clone https://github.com/pratiyk/Link-Load.git
 cd Link-Load
 
 # Configure environment parameters
-cp .env.example .env
-# Edit .env with your configuration
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+# Edit .env files with your configuration
 
-# Deploy all units
+# Deploy all units (development mode)
 docker-compose up -d
 
-# Initialize database schema
-docker-compose exec backend alembic upgrade head
+# View logs during startup
+docker-compose logs -f
 
 # Verify deployment
 curl http://localhost:8000/health
 ```
 
-### Development Deployment
+### Docker Container Architecture
+
+The platform runs as a multi-container Docker application with the following services:
+
+| Container | Image | Port | Purpose |
+|-----------|-------|------|---------|
+| `linkload-backend` | python:3.11-slim | 8000 | FastAPI REST API server |
+| `linkload-frontend` | node:18-alpine | 3000 | React production build served via `serve` |
+| `linkload-zap` | ghcr.io/zaproxy/zaproxy:stable | 8090 | OWASP ZAP security scanner |
+| `linkload-postgres` | postgres:15-alpine | 15432 | Local PostgreSQL database |
+| `linkload-nginx` | nginx:alpine | 80/443 | Reverse proxy (production profile) |
+
+### Docker Commands Reference
+
+```bash
+# ===== Building =====
+docker-compose build                    # Build all containers
+docker-compose build backend            # Rebuild specific service
+docker-compose build --no-cache         # Force fresh build
+
+# ===== Running =====
+docker-compose up                       # Start in foreground
+docker-compose up -d                    # Start in background (detached)
+docker-compose --profile production up  # Include nginx reverse proxy
+
+# ===== Monitoring =====
+docker-compose ps                       # List running containers
+docker-compose logs -f                  # Stream all logs
+docker-compose logs -f backend          # Stream backend logs only
+docker-compose logs -f frontend         # Stream frontend logs only
+
+# ===== Stopping =====
+docker-compose stop                     # Stop containers (preserve data)
+docker-compose down                     # Stop and remove containers
+docker-compose down -v                  # Stop and remove volumes (clean slate)
+
+# ===== Cleanup =====
+docker-compose down --rmi all           # Remove containers and images
+docker system prune -af                 # Clean all unused Docker resources
+docker builder prune -af                # Clean build cache
+```
+
+### Container Health Checks
+
+All containers include health checks for automatic recovery:
+
+```bash
+# Check container health status
+docker-compose ps
+
+# Backend health endpoint
+curl http://localhost:8000/health
+
+# Frontend health check
+curl -s http://localhost:3000 | head -1
+
+# OWASP ZAP version check
+curl http://localhost:8090/JSON/core/view/version/
+```
+
+### Environment Variable Configuration
+
+The Docker setup supports configuration via environment variables:
+
+**Backend Container (`backend/.env`):**
+```bash
+# Database (Supabase cloud or local PostgreSQL)
+DATABASE_URL=postgresql://user:pass@host:port/db
+SUPABASE_URL=https://project.supabase.co
+SUPABASE_KEY=your-anon-key
+
+# LLM Providers (configure at least one for AI analysis)
+GROQ_API_KEY=gsk_...          # Recommended: Fast & free
+OPENAI_API_KEY=sk-...         # Alternative: GPT-3.5/4
+ANTHROPIC_API_KEY=sk-ant-...  # Alternative: Claude
+
+# Scanner settings
+ZAP_BASE_URL=http://owasp-zap:8090
+NUCLEI_BINARY_PATH=/usr/bin/nuclei
+WAPITI_BINARY_PATH=/usr/bin/wapiti
+```
+
+**Frontend Container (`frontend/.env`):**
+```bash
+REACT_APP_API_URL=http://localhost:8000
+REACT_APP_WS_URL=ws://localhost:8000
+REACT_APP_SUPABASE_URL=https://project.supabase.co
+REACT_APP_SUPABASE_ANON_KEY=your-anon-key
+```
+
+### Development Deployment (Local)
 
 **Backend Operations:**
 ```bash
@@ -241,6 +332,15 @@ npm install
 npm start
 ```
 
+**Using Start Scripts (Windows):**
+```powershell
+# Start backend
+.\backend\start_backend.ps1
+
+# Start frontend
+.\frontend\start_frontend.ps1
+```
+
 ### Access Points
 
 | Service | URL | Description |
@@ -249,6 +349,7 @@ npm start
 | API Gateway | http://localhost:8000 | REST API endpoints |
 | API Documentation | http://localhost:8000/docs | Interactive Swagger docs |
 | ZAP Interface | http://localhost:8090 | Scanner admin panel |
+| PostgreSQL (Docker) | localhost:15432 | Local database access |
 
 ---
 
@@ -410,11 +511,21 @@ Black-box web application security auditor:
 
 The platform supports multiple AI providers with automatic failover:
 
-**Priority Order:**
-1. Groq (Llama 3.3 70B) - Fast, cost-effective
-2. OpenAI (GPT-3.5/4) - High accuracy
-3. Anthropic (Claude) - Detailed analysis
-4. Fallback Engine - Basic heuristic analysis
+**Provider Priority Order:**
+1. **Groq** (Llama 3.3 70B) - Fast, cost-effective, recommended
+2. **OpenAI** (GPT-3.5/4) - High accuracy, broad knowledge
+3. **Anthropic** (Claude) - Detailed analysis, reasoning
+4. **Fallback Engine** - Basic heuristic analysis (no API required)
+
+**Configuration:**
+Set at least one API key in `backend/.env`:
+```bash
+GROQ_API_KEY=gsk_...          # Get from console.groq.com
+OPENAI_API_KEY=sk-...         # Get from platform.openai.com
+ANTHROPIC_API_KEY=sk-ant-...  # Get from console.anthropic.com
+```
+
+The system automatically selects the highest-priority available provider.
 
 ### Analysis Outputs
 
@@ -565,48 +676,74 @@ curl -X POST http://localhost:8000/api/v1/verification/verify \
 
 ### Environment Variables
 
+**Backend Configuration (`backend/.env`):**
 ```bash
-# Database Configuration
+# ===== Database Configuration =====
 DATABASE_URL=postgresql://user:pass@localhost:5432/linkload
 SUPABASE_URL=https://project.supabase.co
 SUPABASE_KEY=your-anon-key
+SUPABASE_SERVICE_KEY=your-service-key
 
-# Scanner Configuration
-ZAP_URL=http://localhost:8090
+# ===== Scanner Configuration =====
+ZAP_BASE_URL=http://localhost:8090
 ZAP_API_KEY=your-zap-api-key
-NUCLEI_BINARY_PATH=/usr/bin/nuclei
+NUCLEI_BINARY_PATH=/usr/bin/nuclei          # Docker
+NUCLEI_BINARY_PATH=C:\tools\nuclei.exe      # Windows
 NUCLEI_TEMPLATES_PATH=/opt/nuclei-templates
-WAPITI_BINARY_PATH=/usr/bin/wapiti
+WAPITI_BINARY_PATH=/usr/bin/wapiti          # Docker
+WAPITI_BINARY_PATH=C:\venv\Scripts\wapiti   # Windows
+SCAN_TIMEOUT=600
 
-# AI Provider Keys (configure at least one)
-GROQ_API_KEY=gsk_...
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
+# ===== AI Provider Keys (configure at least one) =====
+GROQ_API_KEY=gsk_...          # Recommended: Fast, free tier available
+OPENAI_API_KEY=sk-...         # Alternative: GPT-3.5/4
+ANTHROPIC_API_KEY=sk-ant-...  # Alternative: Claude
 
-# Security Configuration
+# ===== Security Configuration =====
 SECRET_KEY=your-256-bit-secret-key
 ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
+ACCESS_TOKEN_EXPIRE_MINUTES=10080
+REFRESH_TOKEN_EXPIRE_DAYS=30
 
-# Application Settings
+# ===== Application Settings =====
 ENVIRONMENT=development
 CORS_ORIGINS=http://localhost:3000,http://localhost:8000
 ENABLE_DOCS=true
 LOG_LEVEL=INFO
 
-# Redis Cache
+# ===== Rate Limiting =====
+RATE_LIMIT_PER_MINUTE=60
+MAX_CONCURRENT_SCANS=3
+MAX_SCANS_PER_USER_PER_DAY=10
+
+# ===== Redis Cache (Optional) =====
 REDIS_URL=redis://localhost:6379/0
+
+# ===== External Intelligence APIs (Optional) =====
+VT_API_KEY=...           # VirusTotal
+SHODAN_API_KEY=...       # Shodan
+NVD_API_KEY=...          # National Vulnerability Database
+ABUSEIPDB_API_KEY=...    # AbuseIPDB
+```
+
+**Frontend Configuration (`frontend/.env`):**
+```bash
+REACT_APP_API_URL=http://localhost:8000
+REACT_APP_WS_URL=ws://localhost:8000
+REACT_APP_API_TIMEOUT=30000
+REACT_APP_SUPABASE_URL=https://project.supabase.co
+REACT_APP_SUPABASE_ANON_KEY=your-anon-key
 ```
 
 ### Docker Compose Services
 
-| Service | Image | Port | Purpose |
-|---------|-------|------|---------|
-| postgres | postgres:15-alpine | 5432 | Primary database |
-| owasp-zap | owasp/zap2docker-stable | 8090 | ZAP scanner |
-| backend | custom | 8000 | API server |
-| frontend | custom | 3000 | Web interface |
-| nginx | nginx:alpine | 80/443 | Reverse proxy |
+| Service | Image | Port | Purpose | Resources |
+|---------|-------|------|---------|-----------|
+| backend | python:3.11-slim | 8000 | FastAPI server | - |
+| frontend | node:18-alpine | 3000 | React app (serve) | - |
+| postgres | postgres:15-alpine | 15432 | Database | - |
+| owasp-zap | zaproxy/zaproxy:stable | 8090 | ZAP scanner | 2 CPU, 4GB RAM |
+| nginx | nginx:alpine | 80/443 | Reverse proxy | Production only |
 
 ---
 
@@ -615,12 +752,18 @@ REDIS_URL=redis://localhost:6379/0
 ### Health Check
 
 ```bash
-# System health
+# System health (all services)
 python backend/health_check_services.py
 
-# Individual service status
+# Backend health endpoint
 curl http://localhost:8000/health
-curl http://localhost:8090/JSON/core/action/version/
+# Returns: {"status": "healthy", "database": true, "version": "1.0.0"}
+
+# OWASP ZAP version
+curl http://localhost:8090/JSON/core/view/version/
+
+# Docker container status
+docker-compose ps
 ```
 
 ### Test Suite Execution
@@ -630,6 +773,9 @@ curl http://localhost:8090/JSON/core/action/version/
 cd backend
 pytest tests/ -v
 
+# Backend with coverage
+pytest tests/ -v --cov=app --cov-report=html
+
 # End-to-end integration tests
 python run_e2e_tests.py
 
@@ -638,14 +784,53 @@ cd frontend
 npm test
 ```
 
+### Scanner Verification
+
+```bash
+# Verify Nuclei installation
+nuclei -version                          # Local
+docker-compose exec backend nuclei -version  # Docker
+
+# Verify Wapiti installation
+wapiti --version                         # Local
+docker-compose exec backend wapiti --version # Docker
+
+# Test Nuclei scan
+nuclei -target "http://testhtml5.vulnweb.com" -severity critical,high,medium,low,info
+
+# Verify ZAP API
+curl http://localhost:8090/JSON/core/action/version/
+```
+
+### LLM Provider Verification
+
+```bash
+# Check LLM configuration (from backend directory)
+cd backend
+python -c "
+from app.core.config import settings
+print('GROQ_API_KEY:', 'SET' if settings.GROQ_API_KEY else 'NOT SET')
+print('OPENAI_API_KEY:', 'SET' if settings.OPENAI_API_KEY else 'NOT SET')
+"
+
+# Test LLM service
+python -c "
+import asyncio
+from app.services.llm_service import llm_service
+print(f'Active Provider: {type(llm_service._provider).__name__}')
+"
+```
+
 ### Validation Checklist
 
 - [ ] All containers running: `docker-compose ps`
-- [ ] Database connectivity: Health endpoint returns db_status: true
+- [ ] Database connectivity: Health endpoint returns `database: true`
 - [ ] Scanner availability: ZAP version endpoint responds
 - [ ] Frontend loads: Browser access to port 3000
 - [ ] API documentation: Swagger UI at /docs
 - [ ] Authentication flow: Login returns valid JWT
+- [ ] LLM configured: At least one provider set (Groq/OpenAI/Anthropic)
+- [ ] Nuclei templates: Templates directory exists and populated
 
 ---
 
@@ -755,47 +940,114 @@ npm test
 
 ### Troubleshooting Guide
 
+**Docker Build Failures:**
+```bash
+# Clean and rebuild
+docker-compose down -v
+docker system prune -af
+docker builder prune -af
+docker-compose build --no-cache
+docker-compose up -d
+```
+
 **Backend Initialization Failure:**
 ```bash
+# View detailed logs
 docker-compose logs backend
-docker-compose up --build backend
+
+# Rebuild backend only
+docker-compose build backend
+docker-compose up -d backend
+
+# Check Python dependencies
+docker-compose exec backend pip list
 ```
 
 **Scanner Connection Issues:**
 ```bash
-# Verify ZAP is running
-curl http://localhost:8090/JSON/core/action/version/
+# Verify ZAP is running and healthy
+docker-compose ps owasp-zap
+curl http://localhost:8090/JSON/core/view/version/
 
-# Check Nuclei installation
-nuclei -version
+# Check Nuclei installation (in container)
+docker-compose exec backend nuclei -version
 
-# Verify Wapiti
-wapiti --version
+# Check Wapiti installation (in container)
+docker-compose exec backend wapiti --version
+
+# View ZAP logs
+docker-compose logs owasp-zap
 ```
 
 **Database Connection Problems:**
 ```bash
+# Check PostgreSQL container
 docker-compose logs postgres
 docker-compose exec postgres pg_isready
+
+# Connect to database
+docker-compose exec postgres psql -U linkload -d linkload
+
+# For Supabase issues, verify credentials in backend/.env
 ```
 
 **Frontend Build Errors:**
 ```bash
+# Clean install
 cd frontend
 rm -rf node_modules package-lock.json
 npm install
 npm start
+
+# Docker rebuild
+docker-compose build --no-cache frontend
+```
+
+**LLM Provider Issues:**
+```bash
+# Check if API keys are loaded
+cd backend
+python -c "from app.core.config import settings; print('GROQ:', bool(settings.GROQ_API_KEY))"
+
+# Test LLM directly
+python -c "
+import asyncio
+from app.services.llm_service import llm_service
+result = asyncio.run(llm_service.analyze_vulnerabilities(
+    [{'title': 'Test', 'severity': 'high'}], 
+    'http://test.com'
+))
+print('Provider:', type(llm_service._provider).__name__)
+print('Result keys:', list(result.keys()))
+"
+```
+
+**Port Conflicts:**
+```bash
+# Check what's using ports
+netstat -ano | findstr :8000    # Windows
+netstat -ano | findstr :3000    # Windows
+lsof -i :8000                   # Linux/Mac
+lsof -i :3000                   # Linux/Mac
+
+# Kill process by PID
+taskkill /PID <pid> /F          # Windows
+kill -9 <pid>                   # Linux/Mac
 ```
 
 ### Common Issues
 
 | Issue | Resolution |
 |-------|------------|
-| CORS errors | Verify CORS_ORIGINS in backend .env |
+| CORS errors | Verify CORS_ORIGINS in backend .env includes frontend URL |
 | JWT expired | Re-authenticate via login endpoint |
-| Scanner timeout | Increase timeout_minutes in scan options |
-| Database locked | Restart postgres container |
-| Out of memory | Increase Docker memory allocation |
+| Scanner timeout | Increase SCAN_TIMEOUT in .env (default: 600 seconds) |
+| Database locked | Restart postgres: `docker-compose restart postgres` |
+| Out of memory | Increase Docker memory (ZAP needs 4GB+) |
+| LLM fallback mode | Set GROQ_API_KEY or OPENAI_API_KEY in backend/.env |
+| Nuclei no results | Ensure severity filter includes 'info' level |
+| Container unhealthy | Check logs: `docker-compose logs <service>` |
+| Build cache issues | Run: `docker builder prune -af` |
 
 ### Contact
 
@@ -842,11 +1094,62 @@ Prateek Shrivastava ([@pratiyk](https://github.com/pratiyk))
 ║                                                                              ║
 ║    LINK&LOAD - TACTICAL WEB SECURITY RECONNAISSANCE PLATFORM                ║
 ║                                                                              ║
-║    Version: 1.0.0                                                            ║
+║    Version: 1.1.0                                                            ║
 ║    Status: OPERATIONAL                                                       ║
-║    Last Updated: November 2025                                               ║
+║    Last Updated: December 2025                                               ║
 ║                                                                              ║
 ║    "Reconnaissance is the foundation of victory."                            ║
 ║                                                                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ```
+
+---
+
+## CHANGELOG
+
+### Version 1.1.0 (December 2025)
+
+**Docker Containerization Improvements:**
+- Multi-stage Docker builds for optimized image sizes
+- Frontend uses `serve` for production-ready static file hosting
+- Backend includes all scanner dependencies (Nuclei, Wapiti)
+- OWASP ZAP container with proper health checks and resource limits
+- PostgreSQL container for local development
+- Nginx reverse proxy (production profile)
+- Comprehensive docker-compose configuration with all environment variables
+
+**LLM Provider Integration Fixes:**
+- Fixed environment variable loading for GROQ_API_KEY and OPENAI_API_KEY
+- LLM service now uses pydantic settings for proper .env file loading
+- Added Groq (Llama 3.3 70B) as primary AI provider
+- Automatic fallback chain: Groq → OpenAI → Anthropic → Basic Analysis
+- Improved executive summary generation with technical language
+
+**Scanner Enhancements:**
+- Nuclei severity filter now includes 'info' level by default
+- Better vulnerability deduplication across multiple scanners
+- Improved error handling for scanner failures
+- Scanner availability verification at startup
+
+**API & Backend:**
+- Enhanced health check endpoint with database status
+- Rate limiting configuration via environment variables
+- Improved CORS configuration for Docker networking
+- WebSocket support for real-time scan progress
+
+**Frontend:**
+- Production build with environment variable injection at build time
+- Supabase integration for authentication
+- Responsive tactical dashboard interface
+- Real-time scan progress via WebSocket
+
+### Version 1.0.0 (November 2025)
+
+- Initial release
+- Multi-scanner integration (OWASP ZAP, Nuclei, Wapiti)
+- AI-powered vulnerability analysis
+- MITRE ATT&CK mapping
+- Risk scoring algorithm
+- JWT authentication
+- Domain verification system
+- React frontend with TailwindCSS

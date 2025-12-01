@@ -715,7 +715,7 @@ class ComprehensiveScanner:
     ) -> None:
         """Calculate comprehensive risk score and assessment with business context."""
         try:
-            logger.info(f"Calculating risk assessment for scan {scan_id}")
+            logger.info(f"Calculating risk assessment for scan {scan_id} with {len(vulnerabilities)} vulnerabilities")
             
             await self._update_scan_progress(
                 scan_id,
@@ -729,8 +729,113 @@ class ComprehensiveScanner:
             medium_count = len([v for v in vulnerabilities if (v.get("severity") or "").lower() == "medium"])
             low_count = len([v for v in vulnerabilities if (v.get("severity") or "").lower() == "low"])
             info_count = len([v for v in vulnerabilities if (v.get("severity") or "").lower() == "info"])
-
-            # Try to use enhanced risk analyzer
+            
+            total_vulns = len(vulnerabilities)
+            
+            # ============================================
+            # ROBUST RISK SCORE CALCULATION (0-10 scale)
+            # ============================================
+            # Formula considers:
+            # 1. CVSS scores (if available)
+            # 2. Severity distribution with weighted multipliers
+            # 3. Vulnerability count impact (diminishing returns)
+            # 4. Diversity of vulnerability types
+            
+            risk_score = 0.0
+            risk_level = "Minimal"
+            
+            if vulnerabilities:
+                # Method 1: CVSS-based calculation
+                cvss_scores = []
+                for v in vulnerabilities:
+                    cvss = v.get('cvss_score')
+                    if cvss is not None and isinstance(cvss, (int, float)) and cvss > 0:
+                        cvss_scores.append(float(cvss))
+                
+                if cvss_scores:
+                    max_cvss = max(cvss_scores)
+                    avg_cvss = sum(cvss_scores) / len(cvss_scores)
+                    # 90th percentile approximation for robust high-end score
+                    sorted_cvss = sorted(cvss_scores, reverse=True)
+                    top_10_percent_idx = max(1, len(sorted_cvss) // 10)
+                    top_cvss_avg = sum(sorted_cvss[:top_10_percent_idx]) / top_10_percent_idx
+                    
+                    # Weighted CVSS score: prioritize max and top percentile
+                    cvss_risk = (0.4 * max_cvss) + (0.35 * top_cvss_avg) + (0.25 * avg_cvss)
+                    logger.info(f"CVSS-based risk: max={max_cvss}, top_avg={top_cvss_avg}, avg={avg_cvss}, combined={cvss_risk}")
+                else:
+                    cvss_risk = 0.0
+                
+                # Method 2: Severity-weighted calculation
+                # Weights represent risk contribution (Critical=10, High=7.5, Medium=5, Low=2, Info=0.5)
+                severity_weights = {
+                    'critical': 10.0,
+                    'high': 7.5,
+                    'medium': 5.0,
+                    'low': 2.0,
+                    'info': 0.5
+                }
+                
+                weighted_sum = (
+                    critical_count * severity_weights['critical'] +
+                    high_count * severity_weights['high'] +
+                    medium_count * severity_weights['medium'] +
+                    low_count * severity_weights['low'] +
+                    info_count * severity_weights['info']
+                )
+                
+                # Normalize by count with logarithmic scaling (diminishing returns for many vulns)
+                if total_vulns > 0:
+                    # Base score from average weighted severity
+                    base_severity_score = weighted_sum / total_vulns
+                    
+                    # Volume multiplier: more vulns = higher risk, but with diminishing returns
+                    # log2(n+1) grows slowly: 1->1, 5->2.58, 10->3.46, 50->5.67, 100->6.66
+                    import math
+                    volume_multiplier = 1 + (math.log2(total_vulns + 1) / 10)  # Adds 0.1 to 0.67
+                    
+                    severity_risk = min(10.0, base_severity_score * volume_multiplier)
+                else:
+                    severity_risk = 0.0
+                
+                logger.info(f"Severity-based risk: weighted_sum={weighted_sum}, base={weighted_sum/max(1,total_vulns)}, final={severity_risk}")
+                
+                # Method 3: Critical/High presence escalation
+                # If any critical vulns exist, floor the risk score at 7.0
+                # If any high vulns exist, floor at 5.0
+                presence_floor = 0.0
+                if critical_count > 0:
+                    presence_floor = 7.0 + min(2.0, critical_count * 0.5)  # 7.0 to 9.0
+                elif high_count > 0:
+                    presence_floor = 5.0 + min(2.0, high_count * 0.3)  # 5.0 to 7.0
+                elif medium_count > 0:
+                    presence_floor = 3.0 + min(1.5, medium_count * 0.2)  # 3.0 to 4.5
+                elif low_count > 0:
+                    presence_floor = 1.0 + min(1.5, low_count * 0.1)  # 1.0 to 2.5
+                
+                # Combine all methods
+                # Use max of CVSS and severity for accuracy, but ensure presence floor is met
+                calculated_risk = max(cvss_risk, severity_risk)
+                risk_score = max(calculated_risk, presence_floor)
+                
+                # Cap at 10.0
+                risk_score = min(10.0, round(risk_score, 2))
+                
+                logger.info(f"Final risk calculation: cvss_risk={cvss_risk}, severity_risk={severity_risk}, presence_floor={presence_floor}, final={risk_score}")
+                
+                # Determine risk level based on score
+                if risk_score >= 9.0:
+                    risk_level = "Critical"
+                elif risk_score >= 7.0:
+                    risk_level = "High"
+                elif risk_score >= 5.0:
+                    risk_level = "Medium"
+                elif risk_score >= 2.0:
+                    risk_level = "Low"
+                else:
+                    risk_level = "Minimal"
+            
+            # Try enhanced analyzer for additional context (optional enhancement)
             try:
                 from app.services.intelligence.enhanced_risk_analyzer import EnhancedRiskAnalyzer, IndustryType
                 
@@ -758,7 +863,7 @@ class ComprehensiveScanner:
                 # Get MITRE mapping for context
                 mitre_techniques = scan_data.get('mitre_mapping', []) if scan_data else []
                 
-                # Analyze highest risk vulnerability
+                # Analyze highest risk vulnerability for remediation strategies
                 if vulnerabilities:
                     highest_risk_vuln = max(vulnerabilities, key=lambda v: v.get('cvss_score', 0) or 0)
                     
@@ -766,13 +871,17 @@ class ComprehensiveScanner:
                         vulnerability=highest_risk_vuln,
                         business_context=business_context,
                         mitre_techniques=mitre_techniques if isinstance(mitre_techniques, list) else [],
-                        threat_intel=None  # Can be enhanced with real-time threat intel
+                        threat_intel=None
                     )
                     
-                    risk_score = comprehensive_risk['risk_score']
-                    risk_level = comprehensive_risk['risk_level'].title()
+                    # Only use enhanced score if it's higher than our calculated score
+                    enhanced_score = comprehensive_risk.get('risk_score', 0)
+                    if enhanced_score > risk_score:
+                        risk_score = enhanced_score
+                        risk_level = comprehensive_risk.get('risk_level', risk_level).title()
+                        logger.info(f"Enhanced analyzer provided higher score: {risk_score}")
                     
-                    # Store comprehensive risk analysis
+                    # Store comprehensive risk analysis for remediation strategies
                     remediation_strategies = {
                         'priority_matrix': comprehensive_risk.get('remediation_priority'),
                         'cost_benefit': comprehensive_risk.get('cost_benefit_analysis'),
@@ -785,44 +894,11 @@ class ComprehensiveScanner:
                         "remediation_strategies": remediation_strategies
                     })
                     
-                    logger.info(f"Enhanced risk assessment: Score={risk_score}, Priority={comprehensive_risk['remediation_priority']['priority']}")
-                
-                else:
-                    # No vulnerabilities found
-                    risk_score = 0.0
-                    risk_level = "Minimal"
+                    logger.info(f"Enhanced risk context added for scan {scan_id}")
                     
             except Exception as e:
-                logger.warning(f"Enhanced risk analyzer failed: {e}, using basic calculation")
-                # Fallback to basic calculation based on severity counts
-                risk_score = min(
-                    10.0,
-                    (critical_count * 2.0) + (high_count * 1.5) + (medium_count * 0.8) + (low_count * 0.2)
-                )
-                
-                # If we have vulnerabilities but score is still 0, calculate from CVSS
-                if risk_score == 0 and vulnerabilities:
-                    # Use average CVSS score of all vulnerabilities
-                    cvss_scores = [v.get('cvss_score', 0) or 0 for v in vulnerabilities]
-                    if cvss_scores:
-                        avg_cvss = sum(cvss_scores) / len(cvss_scores)
-                        # Also consider max CVSS for risk
-                        max_cvss = max(cvss_scores)
-                        # Weighted combination: 60% max, 40% average
-                        risk_score = (0.6 * max_cvss) + (0.4 * avg_cvss)
-                        logger.info(f"Calculated risk from CVSS: max={max_cvss}, avg={avg_cvss}, score={risk_score}")
-
-                # Determine risk level
-                if risk_score >= 8:
-                    risk_level = "Critical"
-                elif risk_score >= 6:
-                    risk_level = "High"
-                elif risk_score >= 4:
-                    risk_level = "Medium"
-                elif risk_score >= 2:
-                    risk_level = "Low"
-                else:
-                    risk_level = "Minimal"
+                logger.warning(f"Enhanced risk analyzer failed (using base calculation): {e}")
+                # We already have risk_score and risk_level calculated, so just continue
 
             # Update scan with risk assessment
             supabase.update_scan(
@@ -837,7 +913,7 @@ class ComprehensiveScanner:
                 }
             )
 
-            logger.info(f"Risk assessment calculated: Score={risk_score}, Level={risk_level}")
+            logger.info(f"Risk assessment saved: Score={risk_score}, Level={risk_level}, Vulns={total_vulns}")
 
         except Exception as e:
             logger.error(f"Risk assessment calculation failed: {e}")

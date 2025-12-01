@@ -260,12 +260,22 @@ async def get_scan_results(
         
         # Fetch scan
         scan = supabase.fetch_scan(scan_id)
+        logger.info(f"Fetched scan {scan_id}: status={scan.get('status')}, risk_score={scan.get('risk_score')}")
         
         # Verify ownership
         verify_scan_ownership(scan, user_id)
         
         # Fetch vulnerabilities
         vulns = supabase.fetch_vulnerabilities(scan_id)
+        logger.info(f"Fetched {len(vulns)} vulnerabilities for scan {scan_id}")
+        
+        # Log vulnerability details for debugging
+        if vulns:
+            severity_counts = {}
+            for v in vulns:
+                sev = (v.get("severity") or "unknown").lower()
+                severity_counts[sev] = severity_counts.get(sev, 0) + 1
+            logger.info(f"Vulnerability severity breakdown: {severity_counts}")
         
         # Build response
         return ScanResultsResponse(

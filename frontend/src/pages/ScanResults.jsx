@@ -549,7 +549,20 @@ const ScanResults = () => {
           </div>
         ) : (
           <div className="no-results">
-            <p>No vulnerabilities found. Your application is secure!</p>
+            <div className="no-vulns-container">
+              <div className="no-vulns-icon">OK</div>
+              <h3>No Threats Detected</h3>
+              <p>The scan completed without identifying vulnerabilities in the target.</p>
+              <div className="no-vulns-details">
+                <p><strong>Note:</strong> This does not guarantee the application is secure. Consider:</p>
+                <ul>
+                  <li>Running a Deep scan for more comprehensive analysis</li>
+                  <li>Checking if the target URL was accessible during the scan</li>
+                  <li>Verifying authentication if the target requires login</li>
+                  <li>Manual security testing for business logic flaws</li>
+                </ul>
+              </div>
+            </div>
           </div>
         )}
       </section>

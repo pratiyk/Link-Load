@@ -4,39 +4,81 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 import joblib
-import mlflow
-import torch
-import torch.nn as nn
+
+# Optional ML dependencies - make imports conditional
+try:
+    import mlflow
+    MLFLOW_AVAILABLE = True
+except ImportError:
+    mlflow = None  # type: ignore
+    MLFLOW_AVAILABLE = False
+
+try:
+    import torch
+    import torch.nn as nn
+    TORCH_AVAILABLE = True
+except ImportError:
+    torch = None  # type: ignore
+    nn = None  # type: ignore
+    TORCH_AVAILABLE = False
+
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from xgboost import XGBRegressor
 from lightgbm import LGBMRegressor
-from catboost import CatBoostRegressor
-import optuna
-import shap
 
-class DeepRiskNet(nn.Module):
-    """Deep neural network for risk scoring."""
-    
-    def __init__(self, input_size: int, hidden_sizes: List[int] = [64, 32, 16]):
-        super().__init__()
-        layers = []
-        prev_size = input_size
-        
-        for hidden_size in hidden_sizes:
-            layers.extend([
-                nn.Linear(prev_size, hidden_size),
-                nn.ReLU(),
-                nn.BatchNorm1d(hidden_size),
-                nn.Dropout(0.3)
-            ])
-            prev_size = hidden_size
-        
-        layers.append(nn.Linear(hidden_sizes[-1], 1))
-        self.network = nn.Sequential(*layers)
+try:
+    from catboost import CatBoostRegressor
+    CATBOOST_AVAILABLE = True
+except ImportError:
+    CatBoostRegressor = None  # type: ignore
+    CATBOOST_AVAILABLE = False
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.network(x)
+try:
+    import optuna
+    OPTUNA_AVAILABLE = True
+except ImportError:
+    optuna = None  # type: ignore
+    OPTUNA_AVAILABLE = False
+
+try:
+    import shap
+    SHAP_AVAILABLE = True
+except ImportError:
+    shap = None  # type: ignore
+    SHAP_AVAILABLE = False
+
+
+# Only define DeepRiskNet if torch is available
+if TORCH_AVAILABLE:
+    class DeepRiskNet(nn.Module):
+        """Deep neural network for risk scoring."""
+        
+        def __init__(self, input_size: int, hidden_sizes: List[int] = [64, 32, 16]):
+            super().__init__()
+            layers = []
+            prev_size = input_size
+            
+            for hidden_size in hidden_sizes:
+                layers.extend([
+                    nn.Linear(prev_size, hidden_size),
+                    nn.ReLU(),
+                    nn.BatchNorm1d(hidden_size),
+                    nn.Dropout(0.3)
+                ])
+                prev_size = hidden_size
+            
+            layers.append(nn.Linear(hidden_sizes[-1], 1))
+            self.network = nn.Sequential(*layers)
+
+        def forward(self, x):
+            return self.network(x)
+else:
+    # Fallback stub when torch is not available
+    class DeepRiskNet:  # type: ignore
+        """Stub DeepRiskNet when torch is not available."""
+        def __init__(self, *args, **kwargs):
+            pass
 
 class EnsembleModel:
     """Stacked ensemble model for vulnerability risk scoring."""
@@ -81,6 +123,9 @@ class EnsembleModel:
 
     def optimize_hyperparameters(self, X: np.ndarray, y: np.ndarray, n_trials: int = 50) -> Dict[str, Any]:
         """Optimize hyperparameters using Optuna."""
+        if not OPTUNA_AVAILABLE:
+            return self.config  # Return default config if optuna not available
+            
         def objective(trial):
             params = {
                 'xgboost_params': {
@@ -143,11 +188,16 @@ class EnsembleModel:
         self.base_models = [
             ('xgb', XGBRegressor(**self.config['xgboost_params'])),
             ('lgb', LGBMRegressor(**self.config['lightgbm_params'])),
-            ('cat', CatBoostRegressor(**self.config['catboost_params'], verbose=False))
         ]
         
-        # Train deep learning model if GPU is available
-        if torch.cuda.is_available():
+        # Add CatBoost only if available
+        if CATBOOST_AVAILABLE:
+            self.base_models.append(
+                ('cat', CatBoostRegressor(**self.config['catboost_params'], verbose=False))
+            )
+        
+        # Train deep learning model if torch and GPU is available
+        if TORCH_AVAILABLE and torch.cuda.is_available():
             self._train_deep_model(X, y)
         
         # Generate base model predictions
@@ -171,6 +221,9 @@ class EnsembleModel:
 
     def _train_deep_model(self, X: np.ndarray, y: np.ndarray) -> None:
         """Train deep learning model."""
+        if not TORCH_AVAILABLE:
+            return
+            
         params = self.config['deep_learning_params']
         model = DeepRiskNet(X.shape[1], params['hidden_sizes'])
         
@@ -203,23 +256,24 @@ class EnsembleModel:
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """Generate ensemble predictions."""
-        base_predictions = np.column_stack([
-            model.predict(X) if not isinstance(model, DeepRiskNet)
-            else model(torch.FloatTensor(X).cuda() if torch.cuda.is_available() else torch.FloatTensor(X)).detach().cpu().numpy()
-            for name, model in self.base_models
-        ])
+        predictions = []
+        for name, model in self.base_models:
+            if TORCH_AVAILABLE and isinstance(model, DeepRiskNet):
+                tensor_input = torch.FloatTensor(X).cuda() if torch.cuda.is_available() else torch.FloatTensor(X)
+                predictions.append(model(tensor_input).detach().cpu().numpy().flatten())
+            else:
+                predictions.append(model.predict(X))
         
+        base_predictions = np.column_stack(predictions)
         return self.meta_model.predict(base_predictions)
 
     def predict_proba(self, X: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Generate predictions with confidence intervals."""
         predictions = []
         for name, model in self.base_models:
-            if isinstance(model, DeepRiskNet):
-                pred = model(
-                    torch.FloatTensor(X).cuda() if torch.cuda.is_available() 
-                    else torch.FloatTensor(X)
-                ).detach().cpu().numpy()
+            if TORCH_AVAILABLE and isinstance(model, DeepRiskNet):
+                tensor_input = torch.FloatTensor(X).cuda() if torch.cuda.is_available() else torch.FloatTensor(X)
+                pred = model(tensor_input).detach().cpu().numpy().flatten()
             else:
                 pred = model.predict(X)
             predictions.append(pred)
@@ -238,6 +292,13 @@ class EnsembleModel:
 
     def explain_prediction(self, X: np.ndarray) -> Dict[str, Any]:
         """Generate SHAP explanations for predictions."""
+        if not SHAP_AVAILABLE:
+            return {
+                'shap_values': None,
+                'expected_value': None,
+                'note': 'SHAP not available - install shap package for explanations'
+            }
+            
         explainer = shap.TreeExplainer(self.base_models[0][1])  # Use XGBoost for SHAP
         shap_values = explainer.shap_values(X)
         self.shap_values = shap_values
@@ -262,7 +323,8 @@ class EnsembleModel:
             'metrics': metrics
         })
         
-        mlflow.log_metrics(metrics)
+        if MLFLOW_AVAILABLE:
+            mlflow.log_metrics(metrics)
 
     def save_model(self, path: str) -> None:
         """Save model to disk."""

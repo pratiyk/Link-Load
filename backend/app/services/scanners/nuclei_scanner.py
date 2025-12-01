@@ -113,11 +113,13 @@ class NucleiScanner(BaseScanner):
                 # Enable headless browser for JavaScript rendering
                 cmd.append('-headless')
             else:
-                # Quick/Standard: Focus on higher severity issues
+                # Quick/Standard: Include info level to capture technology detection
+                # Many useful nuclei templates are info-level (tech detection, version disclosure)
                 if not getattr(config, 'include_low_risk', True):
                     cmd.extend(['-severity', 'critical,high,medium'])
                 else:
-                    cmd.extend(['-severity', 'critical,high,medium,low'])
+                    # Include info so tech detection and version disclosure findings appear
+                    cmd.extend(['-severity', 'critical,high,medium,low,info'])
 
             # Optional debug output
             if self.config.debug:

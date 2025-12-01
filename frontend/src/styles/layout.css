@@ -172,3 +172,96 @@
 .content-area::-webkit-scrollbar-thumb:hover {
   background: #ced4da;
 }
+
+/* Tactical Footer */
+.tactical-footer {
+  flex-shrink: 0;
+  background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.02) 100%);
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  padding: 12px 24px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+.footer-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 1400px;
+  margin: 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.footer-callsign {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: #6c757d;
+}
+
+.footer-bracket {
+  color: #adb5bd;
+  font-weight: 300;
+}
+
+.footer-label {
+  color: #495057;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+}
+
+.footer-divider {
+  color: #ced4da;
+  margin: 0 6px;
+  font-weight: 300;
+}
+
+.footer-status {
+  color: #868e96;
+  font-size: 9px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.footer-credits {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  color: #adb5bd;
+  letter-spacing: 0.3px;
+}
+
+.footer-operator {
+  color: #868e96;
+}
+
+.footer-year {
+  color: #adb5bd;
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+@media (max-width: 600px) {
+  .tactical-footer {
+    padding: 10px 16px;
+  }
+
+  .footer-content {
+    flex-direction: column;
+    text-align: center;
+    gap: 4px;
+  }
+
+  .footer-callsign,
+  .footer-credits {
+    justify-content: center;
+  }
+
+  .footer-status {
+    display: none;
+  }
+}

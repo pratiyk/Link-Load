@@ -361,10 +361,14 @@ class SupabaseClient:
     def insert_vulnerabilities(self, scan_id: str, vulns: List[Dict[str, Any]]) -> int:
         """Bulk insert vulnerabilities; adds scan_id to each record"""
         try:
+            logger.info(f"insert_vulnerabilities called for scan {scan_id} with {len(vulns)} vulns")
             normalized = self.cache_vulnerabilities(scan_id, vulns)
             if not normalized:
+                logger.warning(f"No normalized vulnerabilities for scan {scan_id}")
                 return 0
 
+            logger.info(f"Cached {len(normalized)} normalized vulnerabilities for scan {scan_id}")
+            
             # Try DB insert best-effort
             try:
                 allowed_columns = {
@@ -386,9 +390,13 @@ class SupabaseClient:
                 ]
 
                 if db_records:
+                    logger.info(f"Attempting DB insert of {len(db_records)} records for scan {scan_id}")
                     res = self.admin.table("owasp_vulnerabilities").insert(db_records).execute()
                     if res.data:
+                        logger.info(f"Successfully inserted {len(res.data)} vulnerabilities to DB for scan {scan_id}")
                         return len(res.data)
+                    else:
+                        logger.warning(f"DB insert returned no data for scan {scan_id}")
             except Exception as db_err:
                 logger.warning(f"DB insert_vulnerabilities failed, using memory store: {db_err}")
             return len(self._memory_vulns.get(scan_id, []))
@@ -419,15 +427,25 @@ class SupabaseClient:
             if user_id:
                 scan = self.fetch_scan(scan_id, user_id=user_id)
                 if not scan:
+                    logger.warning(f"Scan {scan_id} not found or not owned by user {user_id}")
                     return []
             
-            res = self.client.table("owasp_vulnerabilities").select("*").eq("scan_id", scan_id).execute()
+            # Use admin client to bypass RLS since vulnerabilities don't have user_id
+            # The ownership check is done via the scan record above
+            res = self.admin.table("owasp_vulnerabilities").select("*").eq("scan_id", scan_id).execute()
+            logger.info(f"Fetched {len(res.data) if res.data else 0} vulnerabilities for scan {scan_id}")
+            
             if res.data:
                 # Sync memory cache
                 self._memory_vulns[scan_id] = list(res.data)
                 return res.data
-            # Fallback to memory
-            return self._memory_vulns.get(scan_id, [])
+            
+            # Fallback to memory cache
+            memory_vulns = self._memory_vulns.get(scan_id, [])
+            if memory_vulns:
+                logger.info(f"Using {len(memory_vulns)} cached vulnerabilities for scan {scan_id}")
+            return memory_vulns
+            
         except Exception as e:
             logger.error(f"Failed to fetch vulnerabilities for {scan_id}: {str(e)}", exc_info=True)
             return self._memory_vulns.get(scan_id, [])

@@ -4,9 +4,10 @@ LLM Integration Service for AI-powered security analysis.
 Supports:
 - OpenAI GPT-4
 - Anthropic Claude
+- Groq (Llama/Mixtral)
 - Fallback mechanism
 
-Run: Configure OPENAI_API_KEY or ANTHROPIC_API_KEY in .env
+Run: Configure GROQ_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY in .env
 """
 
 import os
@@ -14,6 +15,8 @@ import asyncio
 from typing import Optional, List, Dict, Any
 from abc import ABC, abstractmethod
 import logging
+
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +49,7 @@ class OpenAIProvider(LLMProvider):
     """OpenAI GPT-4 integration"""
     
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or os.getenv('OPENAI_API_KEY')
+        self.api_key = api_key or settings.OPENAI_API_KEY
         if not self.api_key:
             raise ValueError("OPENAI_API_KEY environment variable not set")
         
@@ -231,7 +234,7 @@ class GroqProvider(LLMProvider):
     """Groq AI integration - Fast, free, and powerful"""
     
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or os.getenv('GROQ_API_KEY')
+        self.api_key = api_key or settings.GROQ_API_KEY
         if not self.api_key:
             raise ValueError("GROQ_API_KEY environment variable not set")
         
@@ -404,7 +407,7 @@ class AnthropicProvider(LLMProvider):
     """Anthropic Claude integration"""
     
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or os.getenv('ANTHROPIC_API_KEY')
+        self.api_key = api_key or os.getenv('ANTHROPIC_API_KEY')  # Not in settings yet
         if not self.api_key:
             raise ValueError("ANTHROPIC_API_KEY environment variable not set")
         
@@ -680,15 +683,15 @@ class LLMService:
     def _initialize_provider(self):
         """Initialize the appropriate LLM provider"""
         # Priority: Groq (free, fast) > OpenAI > Anthropic > Fallback
-        if os.getenv('GROQ_API_KEY'):
+        if settings.GROQ_API_KEY:
             try:
                 self._provider = GroqProvider()
-                logger.info("LLM Service: Using Groq (Mixtral)")
+                logger.info("LLM Service: Using Groq (Llama 3.3)")
             except Exception as e:
                 logger.warning(f"Groq initialization failed: {e}, trying alternatives")
                 self._try_alternative_providers()
         
-        elif os.getenv('OPENAI_API_KEY'):
+        elif settings.OPENAI_API_KEY:
             try:
                 self._provider = OpenAIProvider()
                 logger.info("LLM Service: Using OpenAI GPT-3.5")
@@ -710,7 +713,7 @@ class LLMService:
     
     def _try_alternative_providers(self):
         """Try alternative providers if primary fails"""
-        if os.getenv('OPENAI_API_KEY'):
+        if settings.OPENAI_API_KEY:
             try:
                 self._provider = OpenAIProvider()
                 logger.info("LLM Service: Fallback to OpenAI GPT-3.5")

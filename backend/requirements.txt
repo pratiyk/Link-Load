@@ -13,7 +13,8 @@ pydantic-settings>=2.0.0
 zaproxy>=0.4.0
 supabase>=2.0.0
 wapiti3>=3.2.0
-mitmproxy>=11.0.0
+# mitmproxy version pinned to match wapiti3 requirements
+mitmproxy==10.2.3
 # NOTE: python-owasp-zap-v2.4, nuclei-sdk, and python-nuclei are not published on PyPI.
 # Install their vendor binaries instead (tools/zap, tools/nuclei) and point env vars to them.
 aiohttp-client-cache>=0.8.1

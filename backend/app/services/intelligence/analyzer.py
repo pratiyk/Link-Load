@@ -1,26 +1,63 @@
-from typing import List, Dict, Any
-import torch
-from transformers import pipeline
+from typing import List, Dict, Any, Optional
 from app.core.config import settings
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
 import joblib
 import os
 from loguru import logger
 
+# Optional ML dependencies
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    torch = None  # type: ignore
+    TORCH_AVAILABLE = False
+
+try:
+    from transformers import pipeline
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    pipeline = None  # type: ignore
+    TRANSFORMERS_AVAILABLE = False
+
+try:
+    from sklearn.preprocessing import StandardScaler
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    StandardScaler = None  # type: ignore
+    SKLEARN_AVAILABLE = False
+
+
 class VulnerabilityAnalyzer:
     def __init__(self):
-        self.llm_analyzer = pipeline(
-            "text-classification",
-            model="microsoft/codebert-base-mlm",
-            device=0 if torch.cuda.is_available() else -1
-        )
+        self.llm_analyzer = None
+        self.risk_model = None
+        self.severity_model = None
+        self.scaler = None
+        self._initialized = False
         
-        # Load ML models
+        # Only initialize if all dependencies are available
+        if TRANSFORMERS_AVAILABLE and TORCH_AVAILABLE:
+            try:
+                device = 0 if torch.cuda.is_available() else -1
+                self.llm_analyzer = pipeline(
+                    "text-classification",
+                    model="microsoft/codebert-base-mlm",
+                    device=device
+                )
+            except Exception as e:
+                logger.warning(f"Could not initialize LLM analyzer: {e}")
+        
+        # Load ML models if available
         models_path = "ml_models/vulnerability_analysis"
-        self.risk_model = joblib.load(os.path.join(models_path, "risk_model.joblib"))
-        self.severity_model = joblib.load(os.path.join(models_path, "severity_model.joblib"))
-        self.scaler = joblib.load(os.path.join(models_path, "scaler.joblib"))
+        if os.path.exists(models_path):
+            try:
+                self.risk_model = joblib.load(os.path.join(models_path, "risk_model.joblib"))
+                self.severity_model = joblib.load(os.path.join(models_path, "severity_model.joblib"))
+                self.scaler = joblib.load(os.path.join(models_path, "scaler.joblib"))
+                self._initialized = True
+            except Exception as e:
+                logger.warning(f"Could not load ML models: {e}")
         
     async def analyze_vulnerability(self, finding: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze a vulnerability finding using ML models and LLM"""
@@ -64,11 +101,15 @@ class VulnerabilityAnalyzer:
     
     def _predict_risk(self, features: pd.DataFrame) -> float:
         """Predict risk score using ML model"""
+        if self.scaler is None or self.risk_model is None:
+            return 0.5  # Default medium risk
         scaled_features = self.scaler.transform(features)
         return self.risk_model.predict_proba(scaled_features)[0][1]
     
     def _predict_severity(self, features: pd.DataFrame) -> str:
         """Predict severity level using ML model"""
+        if self.severity_model is None:
+            return "medium"  # Default severity
         severity_map = {
             0: "low",
             1: "medium",
@@ -80,6 +121,9 @@ class VulnerabilityAnalyzer:
     
     async def _get_llm_analysis(self, finding: Dict[str, Any]) -> str:
         """Get LLM-based analysis of the vulnerability"""
+        if self.llm_analyzer is None:
+            return "LLM analysis not available - transformers package not installed"
+            
         try:
             context = f"""
             Vulnerability: {finding.get('title', 'Unknown')}
@@ -111,5 +155,14 @@ class VulnerabilityAnalyzer:
             
         return min(confidence, 1.0)
 
-# Global analyzer instance
-analyzer = VulnerabilityAnalyzer()
+# Global analyzer instance - lazy initialization
+_analyzer: Optional[VulnerabilityAnalyzer] = None
+
+def get_analyzer() -> VulnerabilityAnalyzer:
+    global _analyzer
+    if _analyzer is None:
+        _analyzer = VulnerabilityAnalyzer()
+    return _analyzer
+
+# For backwards compatibility
+analyzer = None  # Will be initialized on first use
