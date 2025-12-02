@@ -21,8 +21,6 @@ const Layout = ({ children }) => {
                         </div>
                         <div className="footer-credits">
                             <span className="footer-operator">Operator: Prateek Shrivastava</span>
-                            <span className="footer-divider">|</span>
-                            <span className="footer-year">Field Deployed {currentYear}</span>
                         </div>
                     </div>
                 </footer>

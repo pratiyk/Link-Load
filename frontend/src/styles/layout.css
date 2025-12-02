@@ -238,8 +238,9 @@
   color: #868e96;
 }
 
-.footer-year {
-  color: #adb5bd;
+.footer-version {
+  color: #4dabf7;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 8px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
