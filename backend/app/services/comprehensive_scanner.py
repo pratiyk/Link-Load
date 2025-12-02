@@ -198,6 +198,7 @@ class ComprehensiveScanner:
             tasks = []
             task_scanners: List[str] = []
             scanner_counts: Dict[str, int] = {}
+            result_types: Dict[str, str] = {}
             for scanner_type in scan_types:
                 if scanner_type.lower() in self.scanners:
                     tasks.append(
@@ -214,7 +215,6 @@ class ComprehensiveScanner:
             if tasks:
                 results = await asyncio.gather(*tasks, return_exceptions=True)
 
-                result_types: Dict[str, str] = {}
                 for scanner_name, result in zip(task_scanners, results):
                     if isinstance(result, Exception):
                         logger.error(f"Scanner {scanner_name} raised error: {result}")

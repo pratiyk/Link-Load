@@ -149,9 +149,23 @@ const ScanResults = () => {
     const mediumCount = baseRisk.medium_count ?? fallbackCounts.medium;
     const lowCount = baseRisk.low_count ?? fallbackCounts.low;
 
+    // Use provided score only if it's a finite number AND either:
+    // 1. It's greater than 0, OR
+    // 2. There are no vulnerabilities (score of 0 is correct)
     const providedScore = Number.isFinite(baseRisk.overall_risk_score)
       ? Number(baseRisk.overall_risk_score)
       : null;
+
+    // If backend returned 0 but we have vulnerabilities, recalculate
+    const shouldRecalculate = providedScore === 0 && vulnerabilityStats.total > 0;
+
+    console.log('[RISK] Risk calculation:', {
+      providedScore,
+      vulnerabilityTotal: vulnerabilityStats.total,
+      avgCvss: vulnerabilityStats.avgCvss,
+      shouldRecalculate,
+      fallbackCounts
+    });
 
     let fallbackScore = 0;
     if (vulnerabilityStats.avgCvss !== null) {
@@ -164,11 +178,14 @@ const ScanResults = () => {
       fallbackScore = Math.min(10, weightedSum / vulnerabilityStats.total);
     }
 
-    const normalizedScore = providedScore !== null
+    const normalizedScore = (providedScore !== null && !shouldRecalculate)
       ? providedScore
       : Number(fallbackScore.toFixed(2));
 
-    const riskLevel = baseRisk.risk_level || deriveRiskLevel(normalizedScore);
+    // If we recalculated the score, also recalculate the risk level
+    const riskLevel = shouldRecalculate
+      ? deriveRiskLevel(normalizedScore)
+      : (baseRisk.risk_level || deriveRiskLevel(normalizedScore));
 
     return {
       ...baseRisk,
@@ -503,7 +520,7 @@ const ScanResults = () => {
 
     return (
       <section className="results-section detailed-outline">
-        <div className="section-header-box yellow">
+        <div className="section-header-box coral">
           <h2>Threat Catalog</h2>
           <div className="count-badge">{vulnerabilityStats.total}</div>
         </div>
@@ -554,13 +571,17 @@ const ScanResults = () => {
               <h3>No Threats Detected</h3>
               <p>The scan completed without identifying vulnerabilities in the target.</p>
               <div className="no-vulns-details">
-                <p><strong>Note:</strong> This does not guarantee the application is secure. Consider:</p>
-                <ul>
-                  <li>Running a Deep scan for more comprehensive analysis</li>
-                  <li>Checking if the target URL was accessible during the scan</li>
-                  <li>Verifying authentication if the target requires login</li>
-                  <li>Manual security testing for business logic flaws</li>
-                </ul>
+                <div className="no-vulns-details-header">
+                  <span>Security Note</span>
+                </div>
+                <div className="no-vulns-details-content">
+                  <ul>
+                    <li>Run a Deep scan for more comprehensive analysis</li>
+                    <li>Verify the target URL was accessible during the scan</li>
+                    <li>Check authentication if the target requires login</li>
+                    <li>Consider manual testing for business logic flaws</li>
+                  </ul>
+                </div>
               </div>
             </div>
           </div>
@@ -780,7 +801,7 @@ const ScanResults = () => {
 
     return (
       <section className="results-section ai-timeframes">
-        <div className="section-header-box coral">
+        <div className="section-header-box purple">
           <h2>Intel Analysis</h2>
           <div className="count-badge">{timelineFindingCount || aiInsights.length || vulnerabilityStats.total}</div>
         </div>
@@ -930,7 +951,7 @@ const ScanResults = () => {
 
     return (
       <section className="results-section remediation-section">
-        <div className="section-header-box pink">
+        <div className="section-header-box cyan">
           <h2>Defense Playbook</h2>
           <div className="count-badge">{recommendations.length}</div>
         </div>
@@ -1210,15 +1231,25 @@ const ScanResults = () => {
 
         {availableTabs.length > 0 && (
           <div className="tabs-container">
-            {availableTabs.map((tab) => (
-              <button
-                key={tab.id}
-                className={`tab ${activeTab === tab.id ? 'active' : ''}`}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                {tab.display}
-              </button>
-            ))}
+            {availableTabs.map((tab) => {
+              const tabColors = {
+                summary: 'tab-yellow',
+                overview: 'tab-pink',
+                vulnerabilities: 'tab-coral',
+                mitre: 'tab-green',
+                remediation: 'tab-cyan',
+                ai: 'tab-purple'
+              };
+              return (
+                <button
+                  key={tab.id}
+                  className={`tab ${tabColors[tab.id] || ''} ${activeTab === tab.id ? 'active' : ''}`}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  {tab.display}
+                </button>
+              );
+            })}
           </div>
         )}
 

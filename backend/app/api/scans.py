@@ -498,6 +498,100 @@ async def cancel_scan(
         raise HTTPException(status_code=500, detail="Error cancelling scan")
 
 
+@router.delete("/comprehensive/{scan_id}")
+async def delete_scan(
+    scan_id: str,
+    current_user = Depends(get_current_user)
+):
+    """Permanently delete a scan and all its associated data.
+    
+    This action is irreversible. The scan record, all vulnerabilities,
+    and any cached data will be permanently removed.
+    
+    SECURITY: Only the owner of the scan can delete it.
+    """
+    try:
+        # Require authentication and get user_id
+        user_id = get_user_id(current_user)
+        
+        # Fetch scan to verify it exists and ownership
+        scan = supabase.fetch_scan(scan_id)
+        if not scan:
+            raise HTTPException(status_code=404, detail="Scan not found")
+        
+        # Verify ownership
+        verify_scan_ownership(scan, user_id)
+        
+        # Delete the scan and all associated data
+        deleted = supabase.delete_scan(scan_id, user_id=user_id)
+        
+        if deleted:
+            return {
+                "message": "Scan deleted successfully",
+                "scan_id": scan_id,
+                "deleted": True
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to delete scan")
+            
+    except HTTPException:
+        raise
+    except AccessDeniedException as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error deleting scan {scan_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error deleting scan")
+
+
+@router.delete("/comprehensive/bulk")
+async def delete_multiple_scans(
+    scan_ids: List[str],
+    current_user = Depends(get_current_user)
+):
+    """Permanently delete multiple scans.
+    
+    This action is irreversible. All scan records, vulnerabilities,
+    and cached data will be permanently removed.
+    
+    SECURITY: Only scans owned by the current user will be deleted.
+    """
+    try:
+        user_id = get_user_id(current_user)
+        
+        deleted_count = 0
+        failed_ids = []
+        
+        for scan_id in scan_ids:
+            try:
+                # Verify ownership and delete
+                scan = supabase.fetch_scan(scan_id)
+                if scan:
+                    verify_scan_ownership(scan, user_id)
+                    if supabase.delete_scan(scan_id, user_id=user_id):
+                        deleted_count += 1
+                    else:
+                        failed_ids.append(scan_id)
+                else:
+                    failed_ids.append(scan_id)
+            except AccessDeniedException:
+                failed_ids.append(scan_id)
+            except Exception as e:
+                logger.warning(f"Failed to delete scan {scan_id}: {e}")
+                failed_ids.append(scan_id)
+        
+        return {
+            "message": f"Deleted {deleted_count} scans",
+            "deleted_count": deleted_count,
+            "failed_ids": failed_ids
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in bulk delete: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error deleting scans")
+
+
 # ============================================================================
 # BACKGROUND TASKS
 # ============================================================================

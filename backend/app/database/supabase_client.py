@@ -286,6 +286,10 @@ class SupabaseClient:
                 "options",
                 "risk_score",
                 "risk_level",
+                "critical_count",
+                "high_count",
+                "medium_count",
+                "low_count",
                 "ai_analysis",
                 "mitre_mapping",
                 "remediation_strategies",
@@ -588,6 +592,90 @@ class SupabaseClient:
         except Exception as e:
             logger.error(f"Failed to fetch batch scan results for {batch_id}: {str(e)}", exc_info=True)
             return []
+
+    def delete_scan(self, scan_id: str, user_id: Optional[str] = None) -> bool:
+        """Permanently delete a scan and all associated vulnerabilities.
+        
+        Args:
+            scan_id: The scan ID to delete
+            user_id: If provided, verify the scan belongs to this user before deleting
+            
+        Returns:
+            True if deletion was successful, False otherwise
+            
+        Raises:
+            Exception: If user_id is provided but scan doesn't belong to user
+        """
+        try:
+            # Verify ownership if user_id provided
+            if user_id:
+                scan = self.fetch_scan(scan_id, user_id=user_id)
+                if not scan:
+                    logger.warning(f"Scan {scan_id} not found or not owned by user {user_id}")
+                    return False
+            
+            # Delete vulnerabilities first (foreign key constraint)
+            try:
+                vuln_res = self.admin.table("owasp_vulnerabilities").delete().eq("scan_id", scan_id).execute()
+                vuln_count = len(vuln_res.data) if vuln_res.data else 0
+                logger.info(f"Deleted {vuln_count} vulnerabilities for scan {scan_id}")
+            except Exception as vuln_err:
+                logger.warning(f"Failed to delete vulnerabilities for scan {scan_id}: {vuln_err}")
+            
+            # Delete the scan record
+            res = self.admin.table("owasp_scans").delete().eq("scan_id", scan_id).execute()
+            
+            # Clean up memory cache
+            if scan_id in self._memory_scans:
+                del self._memory_scans[scan_id]
+            if scan_id in self._memory_vulns:
+                del self._memory_vulns[scan_id]
+            
+            deleted = len(res.data) > 0 if res.data else False
+            if deleted:
+                logger.info(f"Successfully deleted scan {scan_id}")
+            else:
+                logger.warning(f"Scan {scan_id} not found in database")
+            
+            return deleted
+            
+        except Exception as e:
+            logger.error(f"Failed to delete scan {scan_id}: {str(e)}", exc_info=True)
+            return False
+
+    def delete_user_scans(self, user_id: str, before_date: Optional[datetime] = None) -> int:
+        """Delete all scans for a user, optionally filtered by date.
+        
+        Args:
+            user_id: The user ID whose scans to delete
+            before_date: If provided, only delete scans created before this date
+            
+        Returns:
+            Number of scans deleted
+        """
+        try:
+            # Get all scan IDs for the user
+            query = self.admin.table("owasp_scans").select("scan_id").eq("user_id", user_id)
+            if before_date:
+                query = query.lt("created_at", before_date.isoformat())
+            
+            res = query.execute()
+            if not res.data:
+                return 0
+            
+            scan_ids = [r["scan_id"] for r in res.data]
+            deleted_count = 0
+            
+            for scan_id in scan_ids:
+                if self.delete_scan(scan_id):
+                    deleted_count += 1
+            
+            logger.info(f"Deleted {deleted_count} scans for user {user_id}")
+            return deleted_count
+            
+        except Exception as e:
+            logger.error(f"Failed to delete user scans for {user_id}: {str(e)}", exc_info=True)
+            return 0
 
 # Global instance
 supabase = SupabaseClient()

@@ -95,6 +95,26 @@ class ScannerService {
     }
   }
 
+  async deleteScan(scanId) {
+    try {
+      const response = await apiClient.delete(API_ENDPOINTS.scans.comprehensive.delete(scanId));
+      return response.data;
+    } catch (error) {
+      throw new Error(error?.response?.data?.detail || "Failed to delete scan");
+    }
+  }
+
+  async deleteMultipleScans(scanIds) {
+    try {
+      const response = await apiClient.delete(API_ENDPOINTS.scans.comprehensive.deleteBulk, {
+        data: scanIds
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(error?.response?.data?.detail || "Failed to delete scans");
+    }
+  }
+
   setupWebSocket(scanId, callbacks = {}) {
     try {
       // Construct WebSocket URL (backend websocket routes live at /ws)

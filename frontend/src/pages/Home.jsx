@@ -24,48 +24,53 @@ const Home = () => {
   const scanModes = {
     quick: {
       label: 'Quick',
-      duration: '2-5 min',
-      description: 'Fast security check for common vulnerabilities',
+      duration: '5-10 min',
+      description: 'Full Nuclei scan with all templates and severity levels',
       scanners: ['nuclei'],
-      timeout: 10,
-      deep_scan: false,
-      include_low_risk: false,
+      timeout: 15,
+      deep_scan: true,  // Enable deep scan for comprehensive Nuclei coverage
+      include_low_risk: true,  // Include all severity levels including info
       features: [
         { name: 'CVE Detection', enabled: true, description: 'Known vulnerability scanning' },
         { name: 'Misconfigurations', enabled: true, description: 'Common security misconfigurations' },
         { name: 'Exposed Panels', enabled: true, description: 'Admin panels & dashboards' },
-        { name: 'SSL/TLS Analysis', enabled: false, description: 'Certificate and protocol checks' },
-        { name: 'SQL Injection', enabled: false, description: 'Database injection attacks' },
-        { name: 'XSS Detection', enabled: false, description: 'Cross-site scripting' },
+        { name: 'Tech Detection', enabled: true, description: 'Technology fingerprinting' },
+        { name: 'SSL/TLS Analysis', enabled: true, description: 'Certificate and protocol checks' },
+        { name: 'Headless Browser', enabled: true, description: 'JavaScript rendering for dynamic content' },
+        { name: 'All Severity Levels', enabled: true, description: 'Critical, High, Medium, Low, Info' },
         { name: 'AI Analysis', enabled: true, description: 'AI-powered insights' },
         { name: 'MITRE Mapping', enabled: true, description: 'ATT&CK technique mapping' }
       ],
-      bestFor: 'Quick health checks, CI/CD pipelines, daily monitoring'
+      bestFor: 'Fast comprehensive checks, CI/CD pipelines, quick assessments'
     },
     standard: {
       label: 'Standard',
-      duration: '5-15 min',
-      description: 'Balanced scan with good coverage and speed',
+      duration: '10-20 min',
+      description: 'In-depth scan with Nuclei and Wapiti combined',
       scanners: ['nuclei', 'wapiti'],
       timeout: 30,
-      deep_scan: false,
+      deep_scan: true,  // Enable deep scan for both scanners
       include_low_risk: true,
       features: [
         { name: 'CVE Detection', enabled: true, description: 'Known vulnerability scanning' },
         { name: 'Misconfigurations', enabled: true, description: 'Common security misconfigurations' },
         { name: 'Exposed Panels', enabled: true, description: 'Admin panels & dashboards' },
+        { name: 'Tech Detection', enabled: true, description: 'Technology fingerprinting' },
         { name: 'SSL/TLS Analysis', enabled: true, description: 'Certificate and protocol checks' },
         { name: 'SQL Injection', enabled: true, description: 'Database injection attacks' },
         { name: 'XSS Detection', enabled: true, description: 'Cross-site scripting' },
+        { name: 'CSRF Detection', enabled: true, description: 'Cross-site request forgery' },
+        { name: 'SSRF Detection', enabled: true, description: 'Server-side request forgery' },
+        { name: 'Headless Browser', enabled: true, description: 'JavaScript rendering' },
         { name: 'AI Analysis', enabled: true, description: 'AI-powered insights' },
         { name: 'MITRE Mapping', enabled: true, description: 'ATT&CK technique mapping' }
       ],
-      bestFor: 'Regular security assessments, pre-deployment checks'
+      bestFor: 'Regular security assessments, pre-deployment checks, weekly scans'
     },
     deep: {
       label: 'Deep',
-      duration: '15-30 min',
-      description: 'Comprehensive analysis with all scanners',
+      duration: '20-45 min',
+      description: 'Maximum coverage with all three scanners in-depth',
       scanners: ['owasp', 'nuclei', 'wapiti'],
       timeout: 60,
       deep_scan: true,
@@ -74,13 +79,18 @@ const Home = () => {
         { name: 'CVE Detection', enabled: true, description: 'Known vulnerability scanning' },
         { name: 'Misconfigurations', enabled: true, description: 'Common security misconfigurations' },
         { name: 'Exposed Panels', enabled: true, description: 'Admin panels & dashboards' },
+        { name: 'Tech Detection', enabled: true, description: 'Technology fingerprinting' },
         { name: 'SSL/TLS Analysis', enabled: true, description: 'Certificate and protocol checks' },
         { name: 'SQL Injection', enabled: true, description: 'Database injection attacks' },
         { name: 'XSS Detection', enabled: true, description: 'Cross-site scripting' },
         { name: 'OWASP ZAP Active', enabled: true, description: 'Dynamic application testing' },
         { name: 'Spider Crawling', enabled: true, description: 'Deep site exploration' },
+        { name: 'AJAX Spider', enabled: true, description: 'JavaScript app crawling' },
         { name: 'Authentication Tests', enabled: true, description: 'Login & session security' },
         { name: 'API Security', enabled: true, description: 'REST/GraphQL endpoint testing' },
+        { name: 'XXE Detection', enabled: true, description: 'XML external entity attacks' },
+        { name: 'Command Injection', enabled: true, description: 'OS command injection' },
+        { name: 'File Inclusion', enabled: true, description: 'LFI/RFI vulnerabilities' },
         { name: 'AI Analysis', enabled: true, description: 'AI-powered insights' },
         { name: 'MITRE Mapping', enabled: true, description: 'ATT&CK technique mapping' }
       ],
@@ -225,6 +235,20 @@ const Home = () => {
 
   const handleScanFromHistory = (scanId) => {
     navigate(`/scan/${scanId}`);
+  };
+
+  const handleDeleteScan = async (scanId, e) => {
+    e.stopPropagation(); // Prevent navigation when clicking delete
+    if (window.confirm('Are you sure you want to permanently delete this scan? This action cannot be undone.')) {
+      try {
+        await scannerService.deleteScan(scanId);
+        // Refresh the scan list
+        loadRecentScans();
+      } catch (error) {
+        console.error('Failed to delete scan:', error);
+        setError('Failed to delete scan: ' + error.message);
+      }
+    }
   };
 
   const handleKeyPress = (e) => {
@@ -502,7 +526,21 @@ const Home = () => {
                         )}
                       </div>
                     </div>
-                    <div className="scan-arrow">→</div>
+                    <div className="scan-actions">
+                      <button
+                        className="delete-scan-btn"
+                        onClick={(e) => handleDeleteScan(scan.scan_id, e)}
+                        title="Delete scan permanently"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6"></polyline>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                          <line x1="10" y1="11" x2="10" y2="17"></line>
+                          <line x1="14" y1="11" x2="14" y2="17"></line>
+                        </svg>
+                      </button>
+                      <div className="scan-arrow">→</div>
+                    </div>
                   </div>
                 ))}
               </div>

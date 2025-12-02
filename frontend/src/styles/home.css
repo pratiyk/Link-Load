@@ -872,6 +872,54 @@
   color: var(--color-black);
 }
 
+.scan-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+.delete-scan-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: var(--color-white);
+  border: 2px solid var(--color-black);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--color-black);
+  transition: all 0.2s ease;
+  opacity: 0;
+  transform: scale(0.9);
+  box-shadow: 3px 3px 0 rgba(18, 20, 23, 0.15);
+}
+
+.recent-scan-item:hover .delete-scan-btn {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.delete-scan-btn:hover {
+  background: #f1563f;
+  color: white;
+  border-color: #f1563f;
+  transform: scale(1.05);
+  box-shadow: 4px 4px 0 rgba(241, 86, 63, 0.3);
+}
+
+.delete-scan-btn:active {
+  background: #d94a35;
+  color: white;
+  border-color: #d94a35;
+  transform: scale(0.95);
+  box-shadow: 2px 2px 0 rgba(241, 86, 63, 0.3);
+}
+
+.delete-scan-btn svg {
+  flex-shrink: 0;
+}
+
 .no-scans-message {
   max-width: 1100px;
   margin: var(--spacing-4) auto 0;
