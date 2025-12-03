@@ -88,9 +88,13 @@ class RiskAssessment(BaseModel):
 class AIAnalysisResult(BaseModel):
     """AI-powered analysis results"""
     title: str
-    description: str
-    recommendations: List[str]
-    remediation_priority: str
+    description: Optional[str] = None
+    recommendations: Optional[List[str]] = None
+    remediation_priority: Optional[str] = None
+    # Additional fields that may come from various sources
+    severity: Optional[str] = None
+    summary: Optional[str] = None
+    impact: Optional[str] = None
 
 
 class ScanResultsResponse(BaseModel):
@@ -244,6 +248,270 @@ def _normalize_vulnerability(v: Dict[str, Any]) -> VulnerabilityInfo:
     )
 
 
+def _normalize_ai_analysis(analysis_list: Optional[List[Dict[str, Any]]]) -> Optional[List[AIAnalysisResult]]:
+    """Normalize AI analysis data to ensure it matches the AIAnalysisResult schema."""
+    if not analysis_list:
+        return None
+    
+    normalized = []
+    for item in analysis_list:
+        if not isinstance(item, dict):
+            continue
+        
+        # Extract title - required field
+        title = item.get("title") or item.get("name") or "Analysis Result"
+        
+        # Extract description - may come from various fields
+        description = (
+            item.get("description") or 
+            item.get("summary") or 
+            item.get("analysis") or
+            item.get("details") or
+            None
+        )
+        
+        # Extract recommendations - may be a list or a string
+        recommendations = item.get("recommendations") or item.get("recommendation")
+        if isinstance(recommendations, str):
+            recommendations = [recommendations]
+        elif not isinstance(recommendations, list):
+            recommendations = None
+        
+        # Extract remediation priority - convert to string if it's an int
+        remediation_priority = (
+            item.get("remediation_priority") or 
+            item.get("priority") or
+            item.get("severity") or
+            None
+        )
+        # Convert to string if not None (could be int like 1, 2, 3)
+        if remediation_priority is not None:
+            remediation_priority = str(remediation_priority)
+        
+        # Convert severity to string if not None
+        severity = item.get("severity")
+        if severity is not None:
+            severity = str(severity)
+        
+        normalized.append(AIAnalysisResult(
+            title=str(title) if title else "Analysis Result",
+            description=str(description) if description else None,
+            recommendations=recommendations,
+            remediation_priority=remediation_priority,
+            severity=severity,
+            summary=str(item.get("summary")) if item.get("summary") else None,
+            impact=str(item.get("impact")) if item.get("impact") else None
+        ))
+    
+    return normalized if normalized else None
+
+
+def _transform_remediation_strategies(
+    strategies: Optional[Dict[str, Any]], 
+    vulnerabilities: List[Dict[str, Any]]
+) -> Optional[Dict[str, Any]]:
+    """Transform remediation strategies to match the frontend expected format.
+    
+    Frontend expects:
+    - priority_matrix: { critical: [...], high: [...], medium: [...], low: [...] }
+    - timeline: { immediate_action: {...}, short_term: {...}, medium_term: {...} }
+    - cost_benefit: { total_remediation_cost, potential_loss, net_benefit, roi_percentage, ... }
+    - resource_allocation: { team_composition: {...}, estimated_timeline, budget_range }
+    - recommendations: [{ title, description, priority, category, action_items, estimated_effort }, ...]
+    """
+    if not strategies:
+        # Generate default remediation strategies from vulnerabilities if none exist
+        if not vulnerabilities:
+            return None
+        
+        strategies = {}
+    
+    transformed = {}
+    
+    # Transform priority_matrix - group vulnerabilities by severity
+    priority_data = strategies.get('priority_matrix', {})
+    if isinstance(priority_data, dict) and ('priority' in priority_data or 'sla_deadline' in priority_data):
+        # Backend returned remediation_priority format, convert to priority matrix
+        priority_matrix = {'critical': [], 'high': [], 'medium': [], 'low': []}
+        for vuln in vulnerabilities:
+            severity = (vuln.get('severity') or 'medium').lower()
+            if severity in priority_matrix:
+                priority_matrix[severity].append({
+                    'title': vuln.get('title') or vuln.get('name') or 'Unknown Vulnerability',
+                    'id': vuln.get('vuln_id') or vuln.get('id'),
+                    'location': vuln.get('location') or vuln.get('url') or ''
+                })
+        transformed['priority_matrix'] = priority_matrix
+    elif isinstance(priority_data, dict):
+        transformed['priority_matrix'] = priority_data
+    else:
+        # Create default priority matrix from vulnerabilities
+        priority_matrix = {'critical': [], 'high': [], 'medium': [], 'low': []}
+        for vuln in vulnerabilities:
+            severity = (vuln.get('severity') or 'medium').lower()
+            if severity in priority_matrix:
+                priority_matrix[severity].append({
+                    'title': vuln.get('title') or vuln.get('name') or 'Unknown Vulnerability',
+                    'id': vuln.get('vuln_id') or vuln.get('id'),
+                    'location': vuln.get('location') or vuln.get('url') or ''
+                })
+        transformed['priority_matrix'] = priority_matrix
+    
+    # Transform timeline - convert SLA-based to phase-based
+    timeline_data = strategies.get('timeline', {})
+    if isinstance(timeline_data, dict) and ('sla_deadline' in timeline_data or 'recommended_fix_date' in timeline_data):
+        # Backend returned SLA format, convert to phase-based timeline
+        critical_vulns = [v for v in vulnerabilities if (v.get('severity') or '').lower() == 'critical']
+        high_vulns = [v for v in vulnerabilities if (v.get('severity') or '').lower() == 'high']
+        medium_vulns = [v for v in vulnerabilities if (v.get('severity') or '').lower() == 'medium']
+        
+        transformed['timeline'] = {
+            'immediate_action': {
+                'description': 'Address critical vulnerabilities immediately to prevent exploitation.',
+                'items': [
+                    {'title': v.get('title') or 'Critical Issue', 'estimated_hours': 4}
+                    for v in critical_vulns[:5]
+                ]
+            } if critical_vulns else None,
+            'short_term': {
+                'description': 'Fix high severity issues within the first week.',
+                'items': [
+                    {'title': v.get('title') or 'High Priority Issue', 'estimated_hours': 8}
+                    for v in high_vulns[:5]
+                ]
+            } if high_vulns else None,
+            'medium_term': {
+                'description': 'Address medium severity issues within 2-4 weeks.',
+                'items': [
+                    {'title': v.get('title') or 'Medium Priority Issue', 'estimated_hours': 4}
+                    for v in medium_vulns[:5]
+                ]
+            } if medium_vulns else None
+        }
+        # Remove None values
+        transformed['timeline'] = {k: v for k, v in transformed['timeline'].items() if v is not None}
+    elif isinstance(timeline_data, dict) and timeline_data:
+        transformed['timeline'] = timeline_data
+    else:
+        # Create default timeline from vulnerabilities
+        critical_vulns = [v for v in vulnerabilities if (v.get('severity') or '').lower() == 'critical']
+        high_vulns = [v for v in vulnerabilities if (v.get('severity') or '').lower() == 'high']
+        
+        timeline = {}
+        if critical_vulns:
+            timeline['immediate_action'] = {
+                'description': 'Address critical vulnerabilities immediately.',
+                'items': [{'title': v.get('title') or 'Critical Issue', 'estimated_hours': 4} for v in critical_vulns[:5]]
+            }
+        if high_vulns:
+            timeline['short_term'] = {
+                'description': 'Fix high severity issues within the first week.',
+                'items': [{'title': v.get('title') or 'High Priority Issue', 'estimated_hours': 8} for v in high_vulns[:5]]
+            }
+        transformed['timeline'] = timeline
+    
+    # Transform cost_benefit - normalize field names
+    cost_benefit_data = strategies.get('cost_benefit', {})
+    if isinstance(cost_benefit_data, dict) and cost_benefit_data:
+        transformed['cost_benefit'] = {
+            'total_remediation_cost': cost_benefit_data.get('total_remediation_cost') or cost_benefit_data.get('remediation_cost') or cost_benefit_data.get('total_cost', 0),
+            'potential_loss': cost_benefit_data.get('potential_loss') or cost_benefit_data.get('potential_breach_cost', 0),
+            'net_benefit': cost_benefit_data.get('net_benefit', 0),
+            'roi_percentage': cost_benefit_data.get('roi_percentage') or cost_benefit_data.get('roi', 0),
+            'effort_hours': cost_benefit_data.get('effort_hours') or cost_benefit_data.get('estimated_hours', 0),
+            'probability': cost_benefit_data.get('probability') or cost_benefit_data.get('breach_probability', 0),
+            'recommendation': cost_benefit_data.get('recommendation') or cost_benefit_data.get('analysis_summary', '')
+        }
+    else:
+        # Generate default cost-benefit from vulnerabilities
+        critical_count = len([v for v in vulnerabilities if (v.get('severity') or '').lower() == 'critical'])
+        high_count = len([v for v in vulnerabilities if (v.get('severity') or '').lower() == 'high'])
+        total_vulns = len(vulnerabilities)
+        
+        estimated_cost = (critical_count * 5000) + (high_count * 2000) + (total_vulns * 500)
+        potential_loss = (critical_count * 50000) + (high_count * 20000) + (total_vulns * 5000)
+        
+        transformed['cost_benefit'] = {
+            'total_remediation_cost': estimated_cost,
+            'potential_loss': potential_loss,
+            'net_benefit': potential_loss - estimated_cost,
+            'roi_percentage': ((potential_loss - estimated_cost) / max(estimated_cost, 1)) * 100 if estimated_cost > 0 else 0,
+            'effort_hours': (critical_count * 8) + (high_count * 4) + (total_vulns * 2),
+            'recommendation': f'Prioritize fixing {critical_count} critical and {high_count} high severity vulnerabilities to reduce breach risk.'
+        }
+    
+    # Transform resource_allocation - normalize structure
+    resource_data = strategies.get('resource_allocation', {})
+    if isinstance(resource_data, dict) and resource_data:
+        transformed['resource_allocation'] = {
+            'team_composition': resource_data.get('team_composition') or resource_data.get('team', {}),
+            'estimated_timeline': resource_data.get('estimated_timeline') or resource_data.get('timeline', ''),
+            'budget_range': resource_data.get('budget_range') or resource_data.get('budget', '')
+        }
+    else:
+        # Generate default resource allocation
+        total_vulns = len(vulnerabilities)
+        critical_count = len([v for v in vulnerabilities if (v.get('severity') or '').lower() == 'critical'])
+        
+        transformed['resource_allocation'] = {
+            'team_composition': {
+                'Security Engineers': 1 + (1 if critical_count > 3 else 0),
+                'Developers': 2 + (1 if total_vulns > 10 else 0),
+                'QA Engineers': 1
+            },
+            'estimated_timeline': f'{max(1, total_vulns // 5)} - {max(2, total_vulns // 3)} weeks',
+            'budget_range': f'${(total_vulns * 1000):,} - ${(total_vulns * 3000):,}'
+        }
+    
+    # Transform recommendations - ensure proper structure
+    recommendations_data = strategies.get('recommendations', [])
+    if isinstance(recommendations_data, list) and recommendations_data:
+        normalized_recs = []
+        for rec in recommendations_data:
+            if isinstance(rec, dict):
+                normalized_recs.append({
+                    'title': rec.get('title') or rec.get('name') or 'Recommendation',
+                    'description': rec.get('description') or rec.get('recommendation') or rec.get('summary') or '',
+                    'priority': rec.get('priority') or rec.get('severity') or 'medium',
+                    'category': rec.get('category') or rec.get('type') or 'General',
+                    'action_items': rec.get('action_items') or rec.get('steps') or [],
+                    'estimated_effort': rec.get('estimated_effort') or rec.get('effort') or ''
+                })
+            elif isinstance(rec, str):
+                normalized_recs.append({
+                    'title': rec[:50] + '...' if len(rec) > 50 else rec,
+                    'description': rec,
+                    'priority': 'medium',
+                    'category': 'General',
+                    'action_items': [],
+                    'estimated_effort': ''
+                })
+        transformed['recommendations'] = normalized_recs
+    else:
+        # Generate default recommendations from vulnerabilities
+        recommendations = []
+        severity_groups = {}
+        for vuln in vulnerabilities:
+            severity = (vuln.get('severity') or 'medium').lower()
+            if severity not in severity_groups:
+                severity_groups[severity] = []
+            severity_groups[severity].append(vuln)
+        
+        for severity, vulns_list in sorted(severity_groups.items(), key=lambda x: ['critical', 'high', 'medium', 'low', 'info'].index(x[0]) if x[0] in ['critical', 'high', 'medium', 'low', 'info'] else 99):
+            recommendations.append({
+                'title': f'Address {len(vulns_list)} {severity.title()} Severity Issues',
+                'description': f'Review and remediate all {severity} severity vulnerabilities to improve overall security posture.',
+                'priority': severity,
+                'category': 'Vulnerability Remediation',
+                'action_items': [v.get('recommendation') or f"Fix {v.get('title', 'vulnerability')}" for v in vulns_list[:3]],
+                'estimated_effort': f'{len(vulns_list) * 2} - {len(vulns_list) * 4} hours'
+            })
+        
+        transformed['recommendations'] = recommendations
+    
+    return transformed
+
+
 @router.get("/comprehensive/{scan_id}/result", response_model=ScanResultsResponse)
 async def get_scan_results(
     scan_id: str,
@@ -277,6 +545,12 @@ async def get_scan_results(
                 severity_counts[sev] = severity_counts.get(sev, 0) + 1
             logger.info(f"Vulnerability severity breakdown: {severity_counts}")
         
+        # Transform remediation strategies to match frontend expected format
+        transformed_strategies = _transform_remediation_strategies(
+            scan.get("remediation_strategies"),
+            vulns
+        )
+        
         # Build response
         return ScanResultsResponse(
             scan_id=scan_id,
@@ -299,8 +573,8 @@ async def get_scan_results(
                 risk_factors=scan.get("risk_factors")
             ),
             mitre_mapping=scan.get("mitre_mapping"),
-            ai_analysis=scan.get("ai_analysis"),
-            remediation_strategies=scan.get("remediation_strategies"),
+            ai_analysis=_normalize_ai_analysis(scan.get("ai_analysis")),
+            remediation_strategies=transformed_strategies,
             executive_summary=scan.get("executive_summary"),
             debug=scan.get("scanner_debug") if debug else None
         )
