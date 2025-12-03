@@ -1,0 +1,11 @@
+# Constraints file for dependency version overrides
+# Use with: pip install -c constraints.txt -r requirements.txt
+
+# typing-extensions 4.15+ is required by pydantic 2.12+, mcp, etc.
+# mitmproxy 12.2.1 declares <=4.14 but works fine with 4.15
+# This constraint documents the intentional override
+typing-extensions>=4.15.0
+
+# Note: The mitmproxy typing-extensions constraint is overly restrictive.
+# The library works correctly with typing-extensions 4.15.0.
+# This will be resolved when mitmproxy updates their dependency bounds.

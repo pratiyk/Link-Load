@@ -29,8 +29,15 @@ class Settings(BaseSettings):
     ZAP_BASE_URL: str = "http://localhost:8080"
     ZAP_API_KEY: str = Field(default="zap", description="OWASP ZAP API key")
     NUCLEI_BINARY_PATH: str = "nuclei"
+    NUCLEI_TEMPLATES_PATH: str = Field(default="/root/nuclei-templates", description="Nuclei templates path")
     WAPITI_BINARY_PATH: str = "wapiti"
     SCAN_TIMEOUT: int = 600  # 10 minutes
+    
+    # Docker Scanner Configuration (for sidecar containers)
+    NUCLEI_USE_DOCKER: bool = Field(default=False, description="Use Docker container for Nuclei scans")
+    NUCLEI_CONTAINER: str = Field(default="linkload-nuclei", description="Nuclei Docker container name")
+    WAPITI_USE_DOCKER: bool = Field(default=False, description="Use Docker container for Wapiti scans")
+    WAPITI_CONTAINER: str = Field(default="linkload-wapiti", description="Wapiti Docker container name")
     
     # Redis for task queue and caching
     REDIS_HOST: str = "localhost"
@@ -85,6 +92,13 @@ class Settings(BaseSettings):
     @field_validator("ENABLE_DOCS", mode="before")
     @classmethod
     def validate_enable_docs(cls, v) -> bool:
+        if isinstance(v, str):
+            return v.lower() in {"true", "1", "yes"}
+        return bool(v)
+    
+    @field_validator("NUCLEI_USE_DOCKER", "WAPITI_USE_DOCKER", mode="before")
+    @classmethod
+    def validate_docker_flags(cls, v) -> bool:
         if isinstance(v, str):
             return v.lower() in {"true", "1", "yes"}
         return bool(v)

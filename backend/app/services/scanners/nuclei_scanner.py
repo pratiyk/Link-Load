@@ -14,6 +14,15 @@ from app.utils.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
+# Check if running in Docker mode
+def _is_docker_mode() -> bool:
+    """Check if we should use Docker container for Nuclei scans."""
+    return os.getenv("NUCLEI_USE_DOCKER", "").lower() in ("true", "1", "yes")
+
+def _get_nuclei_container() -> str:
+    """Get the Nuclei Docker container name."""
+    return os.getenv("NUCLEI_CONTAINER", "linkload-nuclei")
+
 class NucleiScannerConfig(BaseModel):
     binary_path: str = "nuclei"
     templates_dir: str = ""
@@ -22,18 +31,43 @@ class NucleiScannerConfig(BaseModel):
     timeout: int = 10
     retries: int = 1
     debug: bool = False
+    use_docker: bool = False  # Use Docker sidecar container
+    docker_container: str = "linkload-nuclei"
 
 class NucleiScanner(BaseScanner):
     def __init__(self, config: Optional[NucleiScannerConfig] = None):
         self.config = config or NucleiScannerConfig()
+        # Check Docker mode from environment
+        self.use_docker = _is_docker_mode()
+        self.docker_container = _get_nuclei_container()
+        if self.use_docker:
+            logger.info(f"Nuclei running in Docker mode using container: {self.docker_container}")
         self.active_scans: Dict[str, Dict[str, Any]] = {}
         self.executor = ThreadPoolExecutor(max_workers=4)
-        self.is_windows = sys.platform == 'win32'
+        self.is_windows = sys.platform == 'win32' and not self.use_docker
         
     async def initialize(self) -> bool:
         """Initialize Nuclei scanner"""
         try:
-            # Test nuclei installation
+            # Docker mode: Test via docker exec
+            if self.use_docker:
+                result = await asyncio.get_event_loop().run_in_executor(
+                    self.executor,
+                    lambda: subprocess.run(
+                        ['docker', 'exec', self.docker_container, 'nuclei', '-version'],
+                        capture_output=True,
+                        text=True,
+                        timeout=30
+                    )
+                )
+                if result.returncode != 0:
+                    logger.error(f"Nuclei Docker container not available: {result.stderr}")
+                    return False
+                version = result.stdout.strip() or result.stderr.strip()
+                logger.info(f"Successfully initialized Nuclei (Docker) {version}")
+                return True
+            
+            # Test nuclei installation (local binary mode)
             if self.is_windows:
                 # Use subprocess.run for Windows
                 result = await asyncio.get_event_loop().run_in_executor(
@@ -76,26 +110,36 @@ class NucleiScanner(BaseScanner):
         try:
             scan_id = str(uuid.uuid4())
             
-            # Prepare output directory
-            # Use absolute paths to avoid cwd-related issues
-            output_dir = os.path.abspath(os.path.join(os.getcwd(), f"nuclei_results_{scan_id}"))
-            os.makedirs(output_dir, exist_ok=True)
-            results_file = os.path.abspath(os.path.join(output_dir, "results.jsonl"))
+            # Prepare output directory - use shared volume for Docker mode
+            if self.use_docker:
+                # Output to shared volume accessible by both containers
+                output_dir = f"/shared/nuclei_results_{scan_id}"
+                local_output_dir = f"/shared/nuclei_results_{scan_id}"
+                results_file = f"{output_dir}/results.jsonl"
+            else:
+                output_dir = os.path.abspath(os.path.join(os.getcwd(), f"nuclei_results_{scan_id}"))
+                local_output_dir = output_dir
+                results_file = os.path.abspath(os.path.join(output_dir, "results.jsonl"))
+            os.makedirs(local_output_dir, exist_ok=True)
             
-            # Build nuclei command
+            # Build nuclei command arguments
             # Prefer an explicit templates directory when available
             templates_arg: List[str] = []
-            templates_dir = (self.config.templates_dir or "").strip()
-            if not templates_dir:
-                # Fallback to user default nuclei-templates in home if present
-                home_default = os.path.join(os.path.expanduser("~"), "nuclei-templates")
-                if os.path.isdir(home_default):
-                    templates_dir = home_default
-            if templates_dir:
-                templates_arg = ['-templates', templates_dir]
+            if self.use_docker:
+                # Docker container has templates at /root/nuclei-templates
+                templates_dir = os.getenv("NUCLEI_TEMPLATES_PATH", "/root/nuclei-templates")
+                templates_arg = ['-t', templates_dir]
+            else:
+                templates_dir = (self.config.templates_dir or "").strip()
+                if not templates_dir:
+                    # Fallback to user default nuclei-templates in home if present
+                    home_default = os.path.join(os.path.expanduser("~"), "nuclei-templates")
+                    if os.path.isdir(home_default):
+                        templates_dir = home_default
+                if templates_dir:
+                    templates_arg = ['-templates', templates_dir]
 
-            cmd = [
-                self.config.binary_path,
+            nuclei_args = [
                 '-u', config.target_url,
                 '-jsonl',
                 '-o', results_file,
@@ -109,23 +153,32 @@ class NucleiScanner(BaseScanner):
             if getattr(config, 'deep_scan', False):
                 logger.info(f"[Nuclei] Deep scan mode enabled for {config.target_url}")
                 # Include all severity levels for deep scans
-                cmd.extend(['-severity', 'critical,high,medium,low,info'])
-                # Enable headless browser for JavaScript rendering
-                cmd.append('-headless')
+                nuclei_args.extend(['-severity', 'critical,high,medium,low,info'])
+                # Note: -headless flag removed because it requires Chromium download 
+                # which can timeout/fail on first run. Standard templates work well without it.
             else:
                 # Quick/Standard: Include info level to capture technology detection
                 # Many useful nuclei templates are info-level (tech detection, version disclosure)
                 if not getattr(config, 'include_low_risk', True):
-                    cmd.extend(['-severity', 'critical,high,medium'])
+                    nuclei_args.extend(['-severity', 'critical,high,medium'])
                 else:
                     # Include info so tech detection and version disclosure findings appear
-                    cmd.extend(['-severity', 'critical,high,medium,low,info'])
+                    nuclei_args.extend(['-severity', 'critical,high,medium,low,info'])
 
             # Optional debug output
             if self.config.debug:
-                cmd.append('-debug')
+                nuclei_args.append('-debug')
             # Reduce non-essential output just in case
-            cmd.append('-no-color')
+            nuclei_args.append('-no-color')
+            
+            # Build full command based on mode
+            if self.use_docker:
+                # Docker mode: Run via docker exec
+                cmd = ['docker', 'exec', self.docker_container, 'nuclei'] + nuclei_args
+                logger.info(f"Nuclei Docker command: {' '.join(cmd)}")
+            else:
+                cmd = [self.config.binary_path] + nuclei_args
+                logger.info(f"Nuclei command: {' '.join(cmd)}")
             
             # Prepare environment (ensure Google CSE vars available to templates/dorkers)
             env = os.environ.copy()
@@ -141,8 +194,8 @@ class NucleiScanner(BaseScanner):
                 # Fallback to existing env only
                 pass
 
-            # Start nuclei process - use different approach for Windows
-            if self.is_windows:
+            # Start nuclei process - use different approach for Windows (non-Docker)
+            if self.is_windows and not self.use_docker:
                 # Windows: Use Popen directly in thread pool to avoid asyncio subprocess issues
                 def run_nuclei_windows():
                     return subprocess.Popen(
@@ -150,7 +203,7 @@ class NucleiScanner(BaseScanner):
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         env=env,
-                        cwd=output_dir
+                        cwd=local_output_dir
                     )
                 
                 proc = await asyncio.get_event_loop().run_in_executor(
@@ -158,23 +211,25 @@ class NucleiScanner(BaseScanner):
                     run_nuclei_windows
                 )
             else:
-                # Linux/Mac: Use asyncio subprocess
+                # Linux/Mac or Docker: Use asyncio subprocess
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     env=env,
-                    cwd=output_dir
+                    cwd=local_output_dir if not self.use_docker else None
                 )
             
             self.active_scans[scan_id] = {
                 'process': proc,
-                'output_dir': output_dir,
+                'output_dir': local_output_dir,  # Local path for reading results
+                'docker_output_dir': output_dir if self.use_docker else None,
                 'start_time': utc_now(),
                 'config': config.dict(),
                 'cmd': cmd,
-                'results_file': results_file,
-                'is_windows': self.is_windows
+                'results_file': results_file if not self.use_docker else f"{local_output_dir}/results.jsonl",
+                'is_windows': self.is_windows,
+                'use_docker': self.use_docker
             }
             
             return scan_id

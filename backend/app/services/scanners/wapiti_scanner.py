@@ -19,6 +19,15 @@ logger = logging.getLogger(__name__)
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
+# Check if running in Docker mode
+def _is_docker_mode() -> bool:
+    """Check if we should use Docker container for Wapiti scans."""
+    return os.getenv("WAPITI_USE_DOCKER", "").lower() in ("true", "1", "yes")
+
+def _get_wapiti_container() -> str:
+    """Get the Wapiti Docker container name."""
+    return os.getenv("WAPITI_CONTAINER", "linkload-wapiti")
+
 class WapitiScannerConfig(BaseModel):
     binary_path: str = "wapiti"
     max_scan_time: int = 3600  # 1 hour
@@ -29,11 +38,18 @@ class WapitiScannerConfig(BaseModel):
     modules: List[str] = [
         "xss", "sql", "csrf", "ssrf", "redirect", "http_headers", "cookieflags"
     ]
+    use_docker: bool = False  # Use Docker sidecar container
+    docker_container: str = "linkload-wapiti"
 
 class WapitiScanner(BaseScanner):
     def __init__(self, config: Optional[WapitiScannerConfig] = None):
         import os as _os
         self.config = config or WapitiScannerConfig()
+        # Check Docker mode from environment
+        self.use_docker = _is_docker_mode()
+        self.docker_container = _get_wapiti_container()
+        if self.use_docker:
+            logger.info(f"Wapiti running in Docker mode using container: {self.docker_container}")
         # Optional: allow overriding modules via env var without code changes
         env_modules = _os.getenv("WAPITI_MODULES")
         if env_modules:
@@ -46,12 +62,30 @@ class WapitiScanner(BaseScanner):
                 logger.warning(f"Failed to parse WAPITI_MODULES env var: {e}")
         self.active_scans: Dict[str, Dict[str, Any]] = {}
         self.executor = ThreadPoolExecutor(max_workers=4)
-        self.is_windows = sys.platform == 'win32'
+        self.is_windows = sys.platform == 'win32' and not self.use_docker
         
     async def initialize(self) -> bool:
         """Initialize Wapiti scanner"""
         try:
-            # Test wapiti installation
+            # Docker mode: Test via docker exec
+            if self.use_docker:
+                result = await asyncio.get_event_loop().run_in_executor(
+                    self.executor,
+                    lambda: subprocess.run(
+                        ['docker', 'exec', self.docker_container, 'wapiti', '--version'],
+                        capture_output=True,
+                        text=True,
+                        timeout=30
+                    )
+                )
+                if result.returncode != 0:
+                    logger.error(f"Wapiti Docker container not available: {result.stderr}")
+                    return False
+                version = result.stdout.strip() or result.stderr.strip()
+                logger.info(f"Successfully initialized Wapiti (Docker) {version}")
+                return True
+            
+            # Test wapiti installation (local binary mode)
             if self.is_windows:
                 # Use subprocess.run for Windows
                 def _run_version_windows():
@@ -106,15 +140,20 @@ class WapitiScanner(BaseScanner):
         try:
             scan_id = str(uuid.uuid4())
             
-            # Create output directory
-            output_dir = f"wapiti_results_{scan_id}"
-            os.makedirs(output_dir, exist_ok=True)
+            # Create output directory - use shared volume for Docker mode
+            if self.use_docker:
+                # Output to shared volume accessible by both containers
+                output_dir = f"/shared/wapiti_results_{scan_id}"
+                local_output_dir = f"/shared/wapiti_results_{scan_id}"
+            else:
+                output_dir = f"wapiti_results_{scan_id}"
+                local_output_dir = output_dir
+            os.makedirs(local_output_dir, exist_ok=True)
             
             logger.info(f"Starting Wapiti scan {scan_id} for {config.target_url}")
             
-            # Build wapiti command
-            cmd = [
-                self.config.binary_path,
+            # Build wapiti command arguments (without binary path for Docker)
+            wapiti_args = [
                 '-u', config.target_url,
                 '--format', 'json',
                 '--output', f"{output_dir}/results.json",
@@ -130,19 +169,26 @@ class WapitiScanner(BaseScanner):
                     "cookieflags", "csp", "xxe", "exec", "file", "backup",
                     "htaccess", "methods", "ssl", "crlf", "permanentxss"
                 ]
-                cmd.extend(['-m', ','.join(deep_modules)])
+                wapiti_args.extend(['-m', ','.join(deep_modules)])
                 logger.info(f"[Wapiti] Deep scan mode enabled with {len(deep_modules)} modules")
             elif self.config.modules:
                 # Standard/Quick: Use configured modules
-                cmd.extend(['-m', ','.join(self.config.modules)])
+                wapiti_args.extend(['-m', ','.join(self.config.modules)])
             
             if not self.config.verify_ssl:
-                cmd.append('--no-check-certificate')
+                wapiti_args.append('--no-check-certificate')
             
-            logger.info(f"Wapiti command: {' '.join(cmd)}")
+            # Build full command based on mode
+            if self.use_docker:
+                # Docker mode: Run via docker exec
+                cmd = ['docker', 'exec', self.docker_container, 'wapiti'] + wapiti_args
+                logger.info(f"Wapiti Docker command: {' '.join(cmd)}")
+            else:
+                cmd = [self.config.binary_path] + wapiti_args
+                logger.info(f"Wapiti command: {' '.join(cmd)}")
                 
-            # Start wapiti process - use different approach for Windows
-            if self.is_windows:
+            # Start wapiti process - use different approach for Windows (non-Docker)
+            if self.is_windows and not self.use_docker:
                 # Windows: Use Popen directly in thread pool
                 def run_wapiti_windows():
                     try:

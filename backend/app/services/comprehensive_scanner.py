@@ -61,56 +61,80 @@ class ComprehensiveScanner:
         try:
             import os
             import sys
+            import subprocess
             
-            def _repo_root() -> str:
-                here = os.path.abspath(os.path.dirname(__file__))
-                return os.path.abspath(os.path.join(here, "..", "..", ".."))
-
-            def _resolve_binary(default_value: str, tool_folder: str, binary_name: str) -> str:
-                # 1) Absolute path that exists
-                if default_value and os.path.isabs(default_value) and os.path.exists(default_value):
-                    return default_value
-                # 2) Check repo tools folder
-                repo = _repo_root()
-                candidate = os.path.join(repo, tool_folder, binary_name)
-                if sys.platform.startswith("win") and not os.path.exists(candidate):
-                    candidate_exe = candidate + ".exe"
-                    if os.path.exists(candidate_exe):
-                        return candidate_exe
-                if os.path.exists(candidate):
-                    return candidate
-                # 3) Fallback to value (PATH)
-                return default_value
+            # Check if running in Docker mode
+            nuclei_use_docker = os.getenv("NUCLEI_USE_DOCKER", "").lower() in ("true", "1", "yes")
+            nuclei_container = os.getenv("NUCLEI_CONTAINER", "linkload-nuclei")
             
             from app.services.scanners.nuclei_scanner import NucleiScanner, NucleiScannerConfig
             
-            templates_dir = getattr(settings, "NUCLEI_TEMPLATES_PATH", "") or ""
-            if templates_dir and not os.path.exists(templates_dir):
-                templates_dir = ""
+            if nuclei_use_docker:
+                # Docker mode: Test via docker exec
+                try:
+                    result = subprocess.run(
+                        ['docker', 'exec', nuclei_container, 'nuclei', '-version'],
+                        capture_output=True,
+                        text=True,
+                        timeout=30
+                    )
+                    if result.returncode == 0:
+                        nuclei_config = NucleiScannerConfig()
+                        nuclei_scanner = NucleiScanner(nuclei_config)
+                        available_scanners["nuclei"] = nuclei_scanner
+                        logger.info(f"[OK] Nuclei scanner initialized (Docker container: {nuclei_container})")
+                    else:
+                        logger.warning(f"[WARN] Nuclei Docker container not available: {result.stderr}")
+                except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+                    logger.warning(f"[WARN] Nuclei Docker container not accessible: {e}")
+            else:
+                # Local binary mode
+                def _repo_root() -> str:
+                    here = os.path.abspath(os.path.dirname(__file__))
+                    return os.path.abspath(os.path.join(here, "..", "..", ".."))
 
-            nuclei_binary = _resolve_binary(settings.NUCLEI_BINARY_PATH or "nuclei", os.path.join("tools", "nuclei"), "nuclei")
-            nuclei_config = NucleiScannerConfig(
-                binary_path=nuclei_binary,
-                templates_dir=templates_dir
-            )
-            
-            nuclei_scanner = NucleiScanner(nuclei_config)
-            # Test if Nuclei binary is available
-            import subprocess
-            try:
-                result = subprocess.run(
-                    [nuclei_binary, "-version"],
-                    capture_output=True,
-                    text=True,
-                    timeout=5
+                def _resolve_binary(default_value: str, tool_folder: str, binary_name: str) -> str:
+                    # 1) Absolute path that exists
+                    if default_value and os.path.isabs(default_value) and os.path.exists(default_value):
+                        return default_value
+                    # 2) Check repo tools folder
+                    repo = _repo_root()
+                    candidate = os.path.join(repo, tool_folder, binary_name)
+                    if sys.platform.startswith("win") and not os.path.exists(candidate):
+                        candidate_exe = candidate + ".exe"
+                        if os.path.exists(candidate_exe):
+                            return candidate_exe
+                    if os.path.exists(candidate):
+                        return candidate
+                    # 3) Fallback to value (PATH)
+                    return default_value
+                
+                templates_dir = getattr(settings, "NUCLEI_TEMPLATES_PATH", "") or ""
+                if templates_dir and not os.path.exists(templates_dir):
+                    templates_dir = ""
+
+                nuclei_binary = _resolve_binary(settings.NUCLEI_BINARY_PATH or "nuclei", os.path.join("tools", "nuclei"), "nuclei")
+                nuclei_config = NucleiScannerConfig(
+                    binary_path=nuclei_binary,
+                    templates_dir=templates_dir
                 )
-                if result.returncode == 0:
-                    available_scanners["nuclei"] = nuclei_scanner
-                    logger.info("[OK] Nuclei scanner initialized")
-                else:
-                    logger.warning(f"[WARN] Nuclei binary found but not working: {result.stderr}")
-            except (FileNotFoundError, subprocess.TimeoutExpired) as e:
-                logger.warning(f"[WARN] Nuclei binary not found or not executable: {e}")
+                
+                nuclei_scanner = NucleiScanner(nuclei_config)
+                # Test if Nuclei binary is available
+                try:
+                    result = subprocess.run(
+                        [nuclei_binary, "-version"],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    if result.returncode == 0:
+                        available_scanners["nuclei"] = nuclei_scanner
+                        logger.info("[OK] Nuclei scanner initialized")
+                    else:
+                        logger.warning(f"[WARN] Nuclei binary found but not working: {result.stderr}")
+                except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+                    logger.warning(f"[WARN] Nuclei binary not found or not executable: {e}")
         except Exception as e:
             logger.warning(f"[WARN] Nuclei scanner not available: {e}")
         
@@ -118,45 +142,69 @@ class ComprehensiveScanner:
         try:
             import os
             import sys
+            import subprocess
             from app.services.scanners.wapiti_scanner import WapitiScanner, WapitiScannerConfig
             
-            wapiti_binary = settings.WAPITI_BINARY_PATH
-            if not wapiti_binary or not os.path.exists(wapiti_binary):
-                # Try virtual environment Scripts folder
-                venv_wapiti = os.path.join(sys.prefix, "Scripts", "wapiti.exe" if sys.platform.startswith("win") else "wapiti")
-                if os.path.exists(venv_wapiti):
-                    wapiti_binary = venv_wapiti
-                else:
-                    wapiti_binary = "wapiti"  # Try PATH
+            # Check if running in Docker mode
+            wapiti_use_docker = os.getenv("WAPITI_USE_DOCKER", "").lower() in ("true", "1", "yes")
+            wapiti_container = os.getenv("WAPITI_CONTAINER", "linkload-wapiti")
             
-            wapiti_config = WapitiScannerConfig(
-                binary_path=wapiti_binary
-            )
-            
-            wapiti_scanner = WapitiScanner(wapiti_config)
-            # Test if Wapiti is available
-            try:
-                # Check if wapitiCore module is importable (library-based)
-                import wapitiCore
-                available_scanners["wapiti"] = wapiti_scanner
-                logger.info("[OK] Wapiti scanner initialized")
-            except ImportError:
-                # Try binary approach
-                import subprocess
+            if wapiti_use_docker:
+                # Docker mode: Test via docker exec
                 try:
                     result = subprocess.run(
-                        [wapiti_binary, "--version"],
+                        ['docker', 'exec', wapiti_container, 'wapiti', '--version'],
                         capture_output=True,
                         text=True,
-                        timeout=5
+                        timeout=30
                     )
                     if result.returncode == 0:
+                        wapiti_config = WapitiScannerConfig()
+                        wapiti_scanner = WapitiScanner(wapiti_config)
                         available_scanners["wapiti"] = wapiti_scanner
-                        logger.info("[OK] Wapiti scanner initialized (binary)")
+                        logger.info(f"[OK] Wapiti scanner initialized (Docker container: {wapiti_container})")
                     else:
-                        logger.warning(f"[WARN] Wapiti binary found but not working")
-                except (FileNotFoundError, subprocess.TimeoutExpired):
-                    logger.warning("[WARN] Wapiti not available (neither library nor binary)")
+                        logger.warning(f"[WARN] Wapiti Docker container not available: {result.stderr}")
+                except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+                    logger.warning(f"[WARN] Wapiti Docker container not accessible: {e}")
+            else:
+                # Local binary mode
+                wapiti_binary = settings.WAPITI_BINARY_PATH
+                if not wapiti_binary or not os.path.exists(wapiti_binary):
+                    # Try virtual environment Scripts folder
+                    venv_wapiti = os.path.join(sys.prefix, "Scripts", "wapiti.exe" if sys.platform.startswith("win") else "wapiti")
+                    if os.path.exists(venv_wapiti):
+                        wapiti_binary = venv_wapiti
+                    else:
+                        wapiti_binary = "wapiti"  # Try PATH
+                
+                wapiti_config = WapitiScannerConfig(
+                    binary_path=wapiti_binary
+                )
+                
+                wapiti_scanner = WapitiScanner(wapiti_config)
+                # Test if Wapiti is available
+                try:
+                    # Check if wapitiCore module is importable (library-based)
+                    import wapitiCore
+                    available_scanners["wapiti"] = wapiti_scanner
+                    logger.info("[OK] Wapiti scanner initialized")
+                except ImportError:
+                    # Try binary approach
+                    try:
+                        result = subprocess.run(
+                            [wapiti_binary, "--version"],
+                            capture_output=True,
+                            text=True,
+                            timeout=5
+                        )
+                        if result.returncode == 0:
+                            available_scanners["wapiti"] = wapiti_scanner
+                            logger.info("[OK] Wapiti scanner initialized (binary)")
+                        else:
+                            logger.warning(f"[WARN] Wapiti binary found but not working")
+                    except (FileNotFoundError, subprocess.TimeoutExpired):
+                        logger.warning("[WARN] Wapiti not available (neither library nor binary)")
         except Exception as e:
             logger.warning(f"[WARN] Wapiti scanner not available: {e}")
         

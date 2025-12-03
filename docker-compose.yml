@@ -1,7 +1,9 @@
-version: '3.8'
+# SECURITY NOTE: All sensitive API keys are loaded from .env files at runtime.
+# Never commit actual API keys to this file or version control.
+# See .env.example for required environment variables.
 
 services:
-  # PostgreSQL Database (Supabase alternative)
+  # PostgreSQL Database (local fallback)
   postgres:
     image: postgres:15-alpine
     container_name: linkload-postgres
@@ -27,14 +29,18 @@ services:
   owasp-zap:
     image: ghcr.io/zaproxy/zaproxy:stable
     container_name: linkload-zap
-    command: zap.sh -config api.disablekey=true -daemon -host 0.0.0.0 -port 8090
+    command: >
+      zap.sh -daemon -host 0.0.0.0 -port 8080
+      -config api.disablekey=true
+      -config api.addrs.addr.name=.*
+      -config api.addrs.addr.regex=true
     ports:
-      - "8090:8090"
+      - "8080:8080"
     environment:
       ZAP_CONFIG_DAEMON: "true"
       ZAP_CONFIG_API_LISTEN: "0.0.0.0"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8090/JSON/core/view/version/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/JSON/core/view/version/"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -51,6 +57,67 @@ services:
           cpus: '1'
           memory: 2G
 
+  # Nuclei Scanner Sidecar
+  nuclei:
+    build:
+      context: ./docker/nuclei
+      dockerfile: Dockerfile
+    image: linkload-nuclei:latest
+    container_name: linkload-nuclei
+    volumes:
+      - nuclei_templates:/root/nuclei-templates
+      - nuclei_results:/results
+      - ./reports:/app/reports
+      - scanner_shared:/shared
+    networks:
+      - linkload-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nuclei", "-version"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Wapiti Scanner Sidecar
+  wapiti:
+    build:
+      context: ./docker/wapiti
+      dockerfile: Dockerfile
+    image: linkload-wapiti:latest
+    container_name: linkload-wapiti
+    volumes:
+      - wapiti_results:/results
+      - ./reports:/app/reports
+      - scanner_shared:/shared
+    networks:
+      - linkload-network
+    restart: unless-stopped
+    environment:
+      PYTHONUNBUFFERED: "1"
+    healthcheck:
+      test: ["CMD", "wapiti", "--version"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
   # Backend API
   backend:
     build:
@@ -58,55 +125,61 @@ services:
       dockerfile: Dockerfile
     container_name: linkload-backend
     env_file:
-      - ./backend/.env
+      - ./.env
     environment:
-      # ===== Supabase Configuration =====
-      SUPABASE_URL: ${SUPABASE_URL:-https://hpowvsuennnaqbqdbuet.supabase.co}
-      SUPABASE_KEY: ${SUPABASE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhwb3d2c3Vlbm5uYXFicWRidWV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM2ODg4NjcsImV4cCI6MjA2OTI2NDg2N30.XuuJ8ikCcpKTHpZrxAMHZ5ML5w5KBGVRFZnuoYsDkG4}
-      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhwb3d2c3Vlbm5uYXFicWRidWV0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MzY4ODg2NywiZXhwIjoyMDY5MjY0ODY3fQ.9bqMm3Q0HjaUdVmBopwCgzPGBnYVwlVgD-n_qRafRW4}
-      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres.hpowvsuennnaqbqdbuet:IHDxhSkHrUUGQeC0@aws-0-ap-south-1.pooler.supabase.com:6543/postgres}
+      # ===== Supabase Configuration (from .env) =====
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_KEY: ${SUPABASE_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      DATABASE_URL: ${DATABASE_URL}
       
-      # ===== External API Keys =====
-      VT_API_KEY: ${VT_API_KEY:-1fb4e88c1c6a3a7fbf2f9acb2539f37fee3a520cabb0b1b63de495a88abe55a7}
-      GSB_API_KEY: ${GSB_API_KEY:-AIzaSyBr9-a2Qwy-Gpqcz584ggPy_ivWS90zqc0}
-      ABUSEIPDB_API_KEY: ${ABUSEIPDB_API_KEY:-19fe8d26700da35cb4f3493aa4e6d5d4d6a11aef043f281870dc9fc753ecaa750a29a95a3f5e5725}
-      SHODAN_API_KEY: ${SHODAN_API_KEY:-Vc1S30g5PU9qmZk39mK7kjVW2cAzn6ot}
-      NVD_API_KEY: ${NVD_API_KEY:-3e1616e7-6d2b-4285-af30-cc3562caa4a8}
-      LEAK_LOOKUP_API_KEY: ${LEAK_LOOKUP_API_KEY:-1ae67950892ce8e9d23076bc8c4c08a0}
-      RAPIDAPI_KEY: ${RAPIDAPI_KEY:-17ffcb4bc5msh737735b4246fecep1c704fjsnd0ad7eede12b}
-      WHOIS_API_KEY: ${WHOIS_API_KEY:-32850693e79c4e1291e441e8f4d09707}
-      HF_API_KEY: ${HF_API_KEY:-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}
-      GROQ_API_KEY: ${GROQ_API_KEY:-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}
-      SECURITYTRAILS_API_KEY: ${SECURITYTRAILS_API_KEY:-LpAGNJk3FRaTpJ47EtLjA9kHmgtXI-cP}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-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}
-      VULNERS_API_KEY: ${VULNERS_API_KEY:-GR1RRG8G3WMKVLFCFKN2VRQ0MAJDW45TTPBUSVL42975WMCYQUGIKTDV3RKD1ROM}
-      GITHUB_TOKEN: ${GITHUB_TOKEN:-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}
-      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-AIzaSyA_ncVJkU1DYj1Ss9Zxe6mtX-6qq-WFH_0}
-      GOOGLE_API_CX: ${GOOGLE_API_CX:-62a713910324b4410}
+      # ===== External API Keys (from .env) =====
+      VT_API_KEY: ${VT_API_KEY}
+      GSB_API_KEY: ${GSB_API_KEY}
+      ABUSEIPDB_API_KEY: ${ABUSEIPDB_API_KEY}
+      SHODAN_API_KEY: ${SHODAN_API_KEY}
+      NVD_API_KEY: ${NVD_API_KEY}
+      LEAK_LOOKUP_API_KEY: ${LEAK_LOOKUP_API_KEY}
+      RAPIDAPI_KEY: ${RAPIDAPI_KEY}
+      WHOIS_API_KEY: ${WHOIS_API_KEY}
+      HF_API_KEY: ${HF_API_KEY}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      SECURITYTRAILS_API_KEY: ${SECURITYTRAILS_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      VULNERS_API_KEY: ${VULNERS_API_KEY}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      GOOGLE_API_CX: ${GOOGLE_API_CX}
       
       # ===== Scanner Configuration =====
-      ZAP_URL: http://owasp-zap:8090
-      ZAP_BASE_URL: http://owasp-zap:8090
-      ZAP_API_KEY: ${ZAP_API_KEY:-1cgbmrgk5k1rk3ijv26ojgnlou}
-      NUCLEI_PATH: /usr/bin/nuclei
-      NUCLEI_BINARY_PATH: /usr/bin/nuclei
-      NUCLEI_TEMPLATES_PATH: /app/backend/nuclei-templates
-      WAPITI_PATH: /usr/bin/wapiti
-      WAPITI_BINARY_PATH: /usr/bin/wapiti
+      ZAP_URL: http://owasp-zap:8080
+      ZAP_BASE_URL: http://owasp-zap:8080
+      ZAP_API_KEY: ${ZAP_API_KEY}
+      # Nuclei sidecar configuration
+      NUCLEI_CONTAINER: linkload-nuclei
+      NUCLEI_PATH: nuclei
+      NUCLEI_BINARY_PATH: nuclei
+      NUCLEI_TEMPLATES_PATH: /root/nuclei-templates
+      NUCLEI_USE_DOCKER: "true"
+      # Wapiti sidecar configuration  
+      WAPITI_CONTAINER: linkload-wapiti
+      WAPITI_PATH: wapiti
+      WAPITI_BINARY_PATH: wapiti
+      WAPITI_USE_DOCKER: "true"
       SCAN_TIMEOUT: ${SCAN_TIMEOUT:-600}
       
       # ===== FastAPI Settings =====
       API_PREFIX: /api/v1
       API_TITLE: Link&Load API
       API_VERSION: 1.0.0
-      ENVIRONMENT: development
+      ENVIRONMENT: ${ENVIRONMENT:-development}
       ENABLE_DOCS: "true"
       CORS_ORIGINS: http://localhost:3000,http://frontend:3000,http://localhost:8000
       BACKEND_CORS_ORIGINS: http://localhost:3000,http://localhost:8080,https://localhost:3000
       
-      # ===== Security Settings =====
-      SECRET_KEY: ${SECRET_KEY:-KdPHzmVPFDDTnVxn-zODQC2r_CDIdRmmCDKdx5SiiWE}
-      CSRF_SECRET: ${CSRF_SECRET:-VQNelgy0VjZgmHm49oN-obs7CzPsi-E6OPm_ry_zWxs}
+      # ===== Security Settings (from .env) =====
+      SECRET_KEY: ${SECRET_KEY}
+      CSRF_SECRET: ${CSRF_SECRET}
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-10080}
       REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-30}
@@ -143,9 +216,16 @@ services:
         condition: service_healthy
       owasp-zap:
         condition: service_healthy
+      nuclei:
+        condition: service_healthy
+      wapiti:
+        condition: service_healthy
     volumes:
       - ./backend:/app/backend
       - /app/backend/__pycache__
+      - scanner_shared:/shared
+      - ./reports:/app/reports
+      - /var/run/docker.sock:/var/run/docker.sock  # For executing scanner sidecar containers
     networks:
       - linkload-network
     restart: unless-stopped
@@ -162,35 +242,28 @@ services:
       dockerfile: Dockerfile
       args:
         # ===== Build-time React Environment Variables =====
-        # NOTE: React requires REACT_APP_* variables at BUILD time (they get baked into JS bundle)
+        # NOTE: React requires REACT_APP_* variables at BUILD time
+        # Supabase anon key is safe to expose (it's public by design)
         DISABLE_ESLINT_PLUGIN: "true"
         SKIP_PREFLIGHT_CHECK: "true"
-        REACT_APP_API_URL: http://localhost:8000
-        REACT_APP_WS_URL: ws://localhost:8000
-        REACT_APP_API_TIMEOUT: "30000"
-        REACT_APP_SUPABASE_URL: ${REACT_APP_SUPABASE_URL:-https://hpowvsuennnaqbqdbuet.supabase.co}
-        REACT_APP_SUPABASE_ANON_KEY: ${REACT_APP_SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhwb3d2c3Vlbm5uYXFicWRidWV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM2ODg4NjcsImV4cCI6MjA2OTI2NDg2N30.XuuJ8ikCcpKTHpZrxAMHZ5ML5w5KBGVRFZnuoYsDkG4}
+        REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:8000}
+        REACT_APP_WS_URL: ${REACT_APP_WS_URL:-ws://localhost:8000}
+        REACT_APP_API_TIMEOUT: ${REACT_APP_API_TIMEOUT:-30000}
+        REACT_APP_SUPABASE_URL: ${REACT_APP_SUPABASE_URL}
+        REACT_APP_SUPABASE_ANON_KEY: ${REACT_APP_SUPABASE_ANON_KEY}
     container_name: linkload-frontend
     env_file:
-      - ./frontend/.env
+      - ./.env
     environment:
       # ===== Runtime Environment Variables =====
-      # These are available at runtime (for SSR or server-side processes)
       NODE_ENV: production
       DISABLE_ESLINT_PLUGIN: "true"
       SKIP_PREFLIGHT_CHECK: "true"
-      
-      # ===== API Configuration =====
-      REACT_APP_API_URL: http://localhost:8000
-      REACT_APP_WS_URL: ws://localhost:8000
-      REACT_APP_API_TIMEOUT: "30000"
-      
-      # ===== Supabase Configuration =====
-      REACT_APP_SUPABASE_URL: ${REACT_APP_SUPABASE_URL:-https://hpowvsuennnaqbqdbuet.supabase.co}
-      REACT_APP_SUPABASE_ANON_KEY: ${REACT_APP_SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhwb3d2c3Vlbm5uYXFicWRidWV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM2ODg4NjcsImV4cCI6MjA2OTI2NDg2N30.XuuJ8ikCcpKTHpZrxAMHZ5ML5w5KBGVRFZnuoYsDkG4}
-      SUPABASE_URL: ${SUPABASE_URL:-https://hpowvsuennnaqbqdbuet.supabase.co}
-      SUPABASE_KEY: ${SUPABASE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhwb3d2c3Vlbm5uYXFicWRidWV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM2ODg4NjcsImV4cCI6MjA2OTI2NDg2N30.XuuJ8ikCcpKTHpZrxAMHZ5ML5w5KBGVRFZnuoYsDkG4}
-      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres.hpowvsuennnaqbqdbuet:IHDxhSkHrUUGQeC0@aws-0-ap-south-1.pooler.supabase.com:6543/postgres}
+      REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:8000}
+      REACT_APP_WS_URL: ${REACT_APP_WS_URL:-ws://localhost:8000}
+      REACT_APP_API_TIMEOUT: ${REACT_APP_API_TIMEOUT:-30000}
+      REACT_APP_SUPABASE_URL: ${REACT_APP_SUPABASE_URL}
+      REACT_APP_SUPABASE_ANON_KEY: ${REACT_APP_SUPABASE_ANON_KEY}
     ports:
       - "3000:3000"
     depends_on:
@@ -225,6 +298,14 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
+  nuclei_templates:
+    driver: local
+  nuclei_results:
+    driver: local
+  wapiti_results:
+    driver: local
+  scanner_shared:
     driver: local
 
 networks:
