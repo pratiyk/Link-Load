@@ -422,6 +422,15 @@
   color: rgba(18, 20, 23, 0.7);
 }
 
+.scan-mode-indicator {
+  font-size: var(--font-size-xs);
+  color: rgba(18, 20, 23, 0.6);
+  text-align: center;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-top: var(--spacing-1);
+}
+
 .scanning-view {
   width: 100%;
   display: flex;

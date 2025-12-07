@@ -295,6 +295,7 @@ class SupabaseClient:
                 "remediation_strategies",
                 "executive_summary",
                 "scanner_debug",
+                "threat_intel",  # Threat intelligence data from external APIs
                 "created_at",
                 "updated_at",
             }

@@ -82,6 +82,7 @@ class RiskAssessment(BaseModel):
     high_count: int = 0
     medium_count: int = 0
     low_count: int = 0
+    info_count: int = 0
     risk_factors: Optional[List[Dict[str, Any]]] = None
 
 
@@ -110,6 +111,12 @@ class ScanResultsResponse(BaseModel):
     ai_analysis: Optional[List[AIAnalysisResult]] = None
     remediation_strategies: Optional[Dict[str, Any]] = None
     executive_summary: Optional[str] = None
+    # Threat Intelligence data from external APIs
+    threat_intel: Optional[Dict[str, Any]] = None
+    # Scan configuration info
+    scan_mode: Optional[str] = None  # 'quick', 'standard', or 'deep'
+    scan_types: Optional[List[str]] = None  # List of scanners used
+    options: Optional[Dict[str, Any]] = None  # Scan options used
     # Optional diagnostics when debug=1 is requested
     debug: Optional[Dict[str, Any]] = None
 
@@ -145,6 +152,7 @@ async def start_comprehensive_scan(
     Orchestrates multiple scanners (OWASP ZAP, Nuclei, Wapiti) for comprehensive
     vulnerability assessment with AI-powered analysis.
     """
+    logger.info(f"[DEBUG] Received scan request: target_url={request.target_url}, scan_types={request.scan_types}")
     try:
         # Generate unique scan ID
         scan_id = f"scan_{uuid.uuid4().hex[:12]}"
@@ -165,15 +173,17 @@ async def start_comprehensive_scan(
         
         supabase.create_scan(scan_record)
         
-        # Start scan in background
+        # Start scan in background using sync wrapper for proper execution
+        logger.info(f"[DEBUG] Adding background task for scan {scan_id}")
         background_tasks.add_task(
-            _run_comprehensive_scan,
+            _run_comprehensive_scan_sync,
             scan_id,
             str(request.target_url),
             request.scan_types,
             request.options.dict(),
             user_id  # Use the user_id we already determined above
         )
+        logger.info(f"[DEBUG] Background task added for scan {scan_id}")
         
         logger.info(f"Scan {scan_id} initiated for {request.target_url}")
         
@@ -424,19 +434,25 @@ def _transform_remediation_strategies(
         }
     else:
         # Generate default cost-benefit from vulnerabilities
+        # Costs in INR based on industry standards (IBM Cost of Data Breach 2024)
         critical_count = len([v for v in vulnerabilities if (v.get('severity') or '').lower() == 'critical'])
         high_count = len([v for v in vulnerabilities if (v.get('severity') or '').lower() == 'high'])
-        total_vulns = len(vulnerabilities)
+        medium_count = len([v for v in vulnerabilities if (v.get('severity') or '').lower() == 'medium'])
+        low_count = len([v for v in vulnerabilities if (v.get('severity') or '').lower() == 'low'])
+        info_count = len([v for v in vulnerabilities if (v.get('severity') or '').lower() == 'info'])
         
-        estimated_cost = (critical_count * 5000) + (high_count * 2000) + (total_vulns * 500)
-        potential_loss = (critical_count * 50000) + (high_count * 20000) + (total_vulns * 5000)
+        # Remediation costs: Critical ₹50K, High ₹25K, Medium ₹12K, Low ₹5K, Info ₹2K
+        estimated_cost = (critical_count * 50000) + (high_count * 25000) + (medium_count * 12000) + (low_count * 5000) + (info_count * 2000)
+        
+        # Potential loss: Risk-adjusted breach impact multipliers
+        potential_loss = (critical_count * 750000) + (high_count * 250000) + (medium_count * 72000) + (low_count * 15000) + (info_count * 3000)
         
         transformed['cost_benefit'] = {
             'total_remediation_cost': estimated_cost,
             'potential_loss': potential_loss,
             'net_benefit': potential_loss - estimated_cost,
             'roi_percentage': ((potential_loss - estimated_cost) / max(estimated_cost, 1)) * 100 if estimated_cost > 0 else 0,
-            'effort_hours': (critical_count * 8) + (high_count * 4) + (total_vulns * 2),
+            'effort_hours': (critical_count * 16) + (high_count * 8) + (medium_count * 4) + (low_count * 2) + (info_count * 1),
             'recommendation': f'Prioritize fixing {critical_count} critical and {high_count} high severity vulnerabilities to reduce breach risk.'
         }
     
@@ -551,6 +567,23 @@ async def get_scan_results(
             vulns
         )
         
+        # Determine scan mode from options
+        scan_options = scan.get("options") or {}
+        scan_types = scan.get("scan_types") or []
+        
+        # Infer scan mode from scan_types if not explicitly stored
+        scan_mode = scan_options.get("scan_mode")
+        if not scan_mode:
+            # Infer from scan_types
+            if set(scan_types) == {"nuclei"}:
+                scan_mode = "quick"
+            elif set(scan_types) == {"nuclei", "wapiti"} or set(scan_types) == {"wapiti", "nuclei"}:
+                scan_mode = "standard"
+            elif "owasp" in scan_types:
+                scan_mode = "deep"
+            else:
+                scan_mode = "standard"  # Default
+        
         # Build response
         return ScanResultsResponse(
             scan_id=scan_id,
@@ -570,12 +603,17 @@ async def get_scan_results(
                 high_count=scan.get("high_count") or len([v for v in vulns if (v.get("severity") or "").lower() == "high"]),
                 medium_count=scan.get("medium_count") or len([v for v in vulns if (v.get("severity") or "").lower() == "medium"]),
                 low_count=scan.get("low_count") or len([v for v in vulns if (v.get("severity") or "").lower() == "low"]),
+                info_count=scan.get("info_count") or len([v for v in vulns if (v.get("severity") or "").lower() == "info"]),
                 risk_factors=scan.get("risk_factors")
             ),
             mitre_mapping=scan.get("mitre_mapping"),
             ai_analysis=_normalize_ai_analysis(scan.get("ai_analysis")),
             remediation_strategies=transformed_strategies,
             executive_summary=scan.get("executive_summary"),
+            threat_intel=scan.get("threat_intel"),  # Include threat intelligence data
+            scan_mode=scan_mode,
+            scan_types=scan_types if scan_types else None,
+            options=scan_options if scan_options else None,
             debug=scan.get("scanner_debug") if debug else None
         )
         
@@ -649,11 +687,15 @@ async def generate_scan_summary(
             risk_score_value = 0.0
 
         risk_level = scan.get("risk_level") or "Unknown"
+        
+        # Get threat intel data for comprehensive summary
+        threat_intel = scan.get("threat_intel") or {}
 
         summary_text = await llm_service.generate_executive_summary(
             vulnerabilities,
             risk_score_value,
-            risk_level
+            risk_level,
+            threat_intel
         )
 
         if summary_text:
@@ -696,6 +738,7 @@ async def websocket_scan_updates(websocket: WebSocket, scan_id: str):
     """
     await websocket.accept()
     active_connections[scan_id] = websocket
+    result_sent = False
     
     try:
         while True:
@@ -703,40 +746,52 @@ async def websocket_scan_updates(websocket: WebSocket, scan_id: str):
             scan = supabase.fetch_scan(scan_id)
             
             if scan:
-                await websocket.send_json({
-                    "type": "progress",
-                    "status": {
-                        "scan_id": scan_id,
-                        "progress": scan.get("progress", 0),
-                        "current_stage": scan.get("current_stage"),
-                        "status": scan.get("status")
-                    }
-                })
-                
-                # Send results if scan is complete
-                if scan.get("status") == "completed":
-                    vulns = supabase.fetch_vulnerabilities(scan_id)
+                # Send progress update
+                try:
                     await websocket.send_json({
-                        "type": "result",
-                        "results": {
+                        "type": "progress",
+                        "status": {
                             "scan_id": scan_id,
-                            "status": "completed",
-                            "vulnerabilities": vulns,
-                            "risk_score": scan.get("risk_score"),
-                            "risk_level": scan.get("risk_level")
+                            "progress": scan.get("progress", 0),
+                            "current_stage": scan.get("current_stage"),
+                            "status": scan.get("status")
                         }
                     })
+                except Exception as send_err:
+                    logger.debug(f"Failed to send progress update for scan {scan_id}: {send_err}")
                     break
+                
+                # Send results if scan is complete (only once)
+                if scan.get("status") == "completed" and not result_sent:
+                    try:
+                        vulns = supabase.fetch_vulnerabilities(scan_id)
+                        await websocket.send_json({
+                            "type": "result",
+                            "results": {
+                                "scan_id": scan_id,
+                                "status": "completed",
+                                "vulnerabilities": vulns,
+                                "risk_score": scan.get("risk_score"),
+                                "risk_level": scan.get("risk_level")
+                            }
+                        })
+                        result_sent = True
+                        break
+                    except Exception as send_err:
+                        logger.debug(f"Failed to send result for scan {scan_id}: {send_err}")
+                        break
             
             # Wait before next update
             import asyncio
             await asyncio.sleep(2)
             
     except WebSocketDisconnect:
-        del active_connections[scan_id]
+        logger.debug(f"WebSocket disconnected for scan {scan_id}")
     except Exception as e:
         logger.error(f"WebSocket error for scan {scan_id}: {str(e)}")
-        del active_connections[scan_id]
+    finally:
+        if scan_id in active_connections:
+            del active_connections[scan_id]
         try:
             await websocket.close(code=1000)
         except:
@@ -869,6 +924,61 @@ async def delete_multiple_scans(
 # ============================================================================
 # BACKGROUND TASKS
 # ============================================================================
+
+def _run_comprehensive_scan_sync(
+    scan_id: str,
+    target_url: str,
+    scan_types: List[str],
+    options: Dict[str, Any],
+    user_id: str
+):
+    """Synchronous wrapper for comprehensive scan background task"""
+    import asyncio
+    import sys
+    
+    print(f"[BACKGROUND TASK] Starting sync wrapper for scan {scan_id}", file=sys.stderr, flush=True)
+    
+    async def _run_scan():
+        try:
+            print(f"[BACKGROUND TASK] Inside async _run_scan for {scan_id}", file=sys.stderr, flush=True)
+            logger.info(f"[BACKGROUND] Starting comprehensive scan {scan_id} for {target_url}")
+            logger.info(f"[BACKGROUND] Scan types: {scan_types}, Options: {options}")
+            
+            # Initialize and run scan
+            print(f"[BACKGROUND TASK] Calling scanner.start_scan for {scan_id}", file=sys.stderr, flush=True)
+            await scanner.start_scan(scan_id, target_url, scan_types, options)
+            
+            print(f"[BACKGROUND TASK] Scan {scan_id} completed successfully", file=sys.stderr, flush=True)
+            logger.info(f"[BACKGROUND] Scan {scan_id} completed successfully")
+            
+        except Exception as e:
+            print(f"[BACKGROUND TASK] Scan {scan_id} failed with error: {str(e)}", file=sys.stderr, flush=True)
+            logger.error(f"[BACKGROUND] Scan {scan_id} failed: {str(e)}", exc_info=True)
+            try:
+                supabase.update_scan(scan_id, {
+                    "status": "failed",
+                    "error": str(e),
+                    "completed_at": datetime.now(timezone.utc).isoformat()
+                })
+            except Exception as update_error:
+                print(f"[BACKGROUND TASK] Failed to update scan status: {update_error}", file=sys.stderr, flush=True)
+                logger.error(f"[BACKGROUND] Failed to update scan status: {update_error}")
+    
+    # Run the async function
+    try:
+        print(f"[BACKGROUND TASK] Creating event loop for scan {scan_id}", file=sys.stderr, flush=True)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        print(f"[BACKGROUND TASK] Running event loop for scan {scan_id}", file=sys.stderr, flush=True)
+        loop.run_until_complete(_run_scan())
+        print(f"[BACKGROUND TASK] Event loop completed for scan {scan_id}", file=sys.stderr, flush=True)
+    except Exception as e:
+        print(f"[BACKGROUND TASK] Event loop error for scan {scan_id}: {e}", file=sys.stderr, flush=True)
+        logger.error(f"[BACKGROUND] Event loop error for scan {scan_id}: {e}", exc_info=True)
+    finally:
+        loop.close()
+        print(f"[BACKGROUND TASK] Event loop closed for scan {scan_id}", file=sys.stderr, flush=True)
+
 
 async def _run_comprehensive_scan(
     scan_id: str,

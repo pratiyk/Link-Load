@@ -2,7 +2,7 @@
 import asyncio
 import logging
 import uuid
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime, timezone
 
 from app.core.config import settings
@@ -231,14 +231,52 @@ class ComprehensiveScanner:
             scan_types: List of scanner types to use
             options: Additional scan options
         """
+        import sys
+        print(f"[COMPREHENSIVE] start_scan called: scan_id={scan_id}, target={target_url}", file=sys.stderr, flush=True)
+        print(f"[COMPREHENSIVE] scan_types={scan_types}, options={options}", file=sys.stderr, flush=True)
+        print(f"[COMPREHENSIVE] Available scanners: {list(self.scanners.keys())}", file=sys.stderr, flush=True)
+        
         try:
             # Update scan status to in_progress
+            print(f"[COMPREHENSIVE] Updating scan progress to in_progress", file=sys.stderr, flush=True)
             await self._update_scan_progress(
                 scan_id,
                 status="in_progress",
                 progress=5,
                 stage="Initializing scanners"
             )
+            print(f"[COMPREHENSIVE] Progress updated", file=sys.stderr, flush=True)
+
+            # ============================================
+            # GATHER THREAT INTELLIGENCE FIRST
+            # ============================================
+            threat_intel = None
+            try:
+                await self._update_scan_progress(
+                    scan_id,
+                    progress=8,
+                    stage="Gathering threat intelligence"
+                )
+                
+                from app.services.threat_intelligence.unified_intel_service import unified_threat_intel
+                threat_intel = await asyncio.wait_for(
+                    unified_threat_intel.gather_threat_intel(target_url),
+                    timeout=45.0  # 45 second timeout for all intel gathering
+                )
+                
+                # Store threat intel with scan
+                if threat_intel:
+                    supabase.update_scan(scan_id, {"threat_intel": threat_intel})
+                    logger.info(f"[INTEL] Gathered threat intelligence from {threat_intel.get('data_sources_queried', 0)} sources")
+                    
+                    # Check if target is already flagged as malicious
+                    reputation = threat_intel.get("reputation", {})
+                    if reputation.get("risk_level") == "Critical":
+                        logger.warning(f"[INTEL] Target {target_url} has CRITICAL reputation risk!")
+            except asyncio.TimeoutError:
+                logger.warning("[INTEL] Threat intelligence gathering timed out, continuing with scan")
+            except Exception as intel_err:
+                logger.warning(f"[INTEL] Threat intelligence gathering failed: {intel_err}, continuing with scan")
 
             # Run selected scanners
             all_vulnerabilities = []
@@ -247,8 +285,16 @@ class ComprehensiveScanner:
             task_scanners: List[str] = []
             scanner_counts: Dict[str, int] = {}
             result_types: Dict[str, str] = {}
+            
+            # Get overall scan timeout (in minutes) and calculate hard deadline
+            timeout_minutes = options.get("timeout_minutes", 30)
+            # Leave 2 minutes buffer for post-processing (AI analysis, enrichment, etc.)
+            scanner_timeout = max(60, (timeout_minutes * 60) - 120)
+            
             for scanner_type in scan_types:
+                print(f"[COMPREHENSIVE] Checking scanner type: {scanner_type.lower()}", file=sys.stderr, flush=True)
                 if scanner_type.lower() in self.scanners:
+                    print(f"[COMPREHENSIVE] Adding task for scanner: {scanner_type.lower()}", file=sys.stderr, flush=True)
                     tasks.append(
                         self._run_scanner(
                             scan_id,
@@ -258,10 +304,31 @@ class ComprehensiveScanner:
                         )
                     )
                     task_scanners.append(scanner_type.lower())
+                else:
+                    print(f"[COMPREHENSIVE] Scanner {scanner_type.lower()} NOT available!", file=sys.stderr, flush=True)
 
-            # Execute scanners concurrently
+            # Execute scanners concurrently with hard timeout to ensure completion
+            print(f"[COMPREHENSIVE] Running {len(tasks)} scanner tasks: {task_scanners} (timeout: {scanner_timeout}s)", file=sys.stderr, flush=True)
             if tasks:
-                results = await asyncio.gather(*tasks, return_exceptions=True)
+                try:
+                    # Wrap all scanners in a single timeout to ensure they complete within allotted time
+                    results = await asyncio.wait_for(
+                        asyncio.gather(*tasks, return_exceptions=True),
+                        timeout=scanner_timeout
+                    )
+                    print(f"[COMPREHENSIVE] Got {len(results)} results", file=sys.stderr, flush=True)
+                except asyncio.TimeoutError:
+                    logger.warning(f"Scanner tasks exceeded hard timeout of {scanner_timeout}s, proceeding with partial results")
+                    results = []
+                    # Try to stop any running scanners
+                    for scanner_type in task_scanners:
+                        if scanner_type in self.scanners:
+                            try:
+                                scanner = self.scanners[scanner_type]
+                                for scan_task_id in list(scanner.active_scans.keys()):
+                                    await scanner.stop_scan(scan_task_id)
+                            except Exception as e:
+                                logger.debug(f"Failed to stop {scanner_type} scanner: {e}")
 
                 for scanner_name, result in zip(task_scanners, results):
                     if isinstance(result, Exception):
@@ -384,14 +451,38 @@ class ComprehensiveScanner:
             except Exception:
                 logger.debug("Failed to persist scanner summary", exc_info=True)
 
+            # Enrich vulnerabilities with NVD data if CVEs are present
+            try:
+                from app.services.threat_intelligence.unified_intel_service import unified_threat_intel
+                normalized_vulns = await unified_threat_intel.enrich_vulnerabilities_with_nvd(normalized_vulns)
+                logger.info(f"[INTEL] Enriched vulnerabilities with NVD data")
+            except Exception as nvd_err:
+                logger.warning(f"[INTEL] NVD enrichment failed: {nvd_err}")
+
+            # Enrich vulnerabilities with Vulners exploit data
+            try:
+                from app.services.threat_intelligence.unified_intel_service import unified_threat_intel
+                normalized_vulns, vulners_summary = await self._enrich_with_vulners(
+                    unified_threat_intel, normalized_vulns
+                )
+                if vulners_summary:
+                    # Add vulners data to threat intel for frontend display
+                    if threat_intel is None:
+                        threat_intel = {}
+                    threat_intel["vulners"] = vulners_summary
+                    supabase.update_scan(scan_id, {"threat_intel": threat_intel})
+                    logger.info(f"[INTEL] Enriched with Vulners: {vulners_summary.get('total_exploits', 0)} exploits found")
+            except Exception as vulners_err:
+                logger.warning(f"[INTEL] Vulners enrichment failed: {vulners_err}")
+
             # Perform AI analysis
             await self._perform_ai_analysis(scan_id, normalized_vulns, options)
 
             # Perform MITRE mapping
             await self._perform_mitre_mapping(scan_id, normalized_vulns)
 
-            # Calculate risk score
-            await self._calculate_risk_assessment(scan_id, normalized_vulns)
+            # Calculate risk score with threat intel context
+            await self._calculate_risk_assessment(scan_id, normalized_vulns, threat_intel)
 
             # Update scan to completed
             await self._update_scan_progress(
@@ -462,6 +553,14 @@ class ComprehensiveScanner:
             elapsed = 0
             timed_out = True
             
+            # Calculate base progress for this scanner (distribute across scanner types)
+            scanner_list = list(self.scanners.keys())
+            scanner_index = scanner_list.index(scanner_type) if scanner_type in scanner_list else 0
+            total_scanners = max(1, len(scanner_list))
+            # Progress range: 20-80% is for scanning (each scanner gets an equal slice)
+            base_progress = 20 + (scanner_index * 60 // total_scanners)
+            max_scanner_progress = 20 + ((scanner_index + 1) * 60 // total_scanners)
+            
             while elapsed < max_wait:
                 status = await scanner.get_scan_status(scan_task_id)
                 scan_status = status.get('status')
@@ -472,6 +571,18 @@ class ComprehensiveScanner:
                 elif scan_status in ['failed', 'error', 'not_found']:
                     logger.error(f"{scanner_type} scan failed: {status}")
                     return []
+                
+                # Calculate and send incremental progress update
+                progress_ratio = min(elapsed / max_wait, 0.95)  # Cap at 95% until complete
+                current_progress = int(base_progress + (max_scanner_progress - base_progress) * progress_ratio)
+                elapsed_mins = elapsed // 60
+                remaining_mins = max(0, (max_wait - elapsed) // 60)
+                
+                await self._update_scan_progress(
+                    scan_id,
+                    progress=current_progress,
+                    stage=f"Running {scanner_type.upper()} scan ({elapsed_mins}m elapsed, ~{remaining_mins}m remaining)"
+                )
                 
                 await asyncio.sleep(wait_interval)
                 elapsed += wait_interval
@@ -709,36 +820,68 @@ class ComprehensiveScanner:
                 
             except ImportError as ie:
                 logger.warning(f"Advanced MITRE mapper not available: {ie}, falling back to basic mapping")
-                # Fallback to simple mapping
+                # Fallback to simple mapping with enhanced pattern matching
                 mitre_mapping = []
                 
                 for vuln in vulnerabilities:
-                    vuln_type = vuln.get("title", "").lower()
+                    vuln_type = (vuln.get("title", "") or "").lower()
+                    vuln_desc = (vuln.get("description", "") or "").lower()
+                    combined_text = f"{vuln_type} {vuln_desc}"
                     
-                    if "sql injection" in vuln_type:
-                        technique = {"id": "T1190", "name": "Exploit Public-Facing Application", "tactic": "Initial Access", "confidence": 0.8}
-                    elif "xss" in vuln_type or "cross-site scripting" in vuln_type:
-                        technique = {"id": "T1059", "name": "Command and Scripting Interpreter", "tactic": "Execution", "confidence": 0.7}
-                    elif "authentication" in vuln_type:
+                    technique = None
+                    
+                    # High-severity attack techniques
+                    if "sql injection" in combined_text or "sqli" in combined_text:
+                        technique = {"id": "T1190", "name": "Exploit Public-Facing Application", "tactic": "Initial Access", "confidence": 0.85}
+                    elif "xss" in combined_text or "cross-site scripting" in combined_text:
+                        technique = {"id": "T1059.007", "name": "JavaScript", "tactic": "Execution", "confidence": 0.8}
+                    elif "authentication" in combined_text or "login" in combined_text or "password" in combined_text:
                         technique = {"id": "T1110", "name": "Brute Force", "tactic": "Credential Access", "confidence": 0.75}
-                    elif "command injection" in vuln_type:
+                    elif "command injection" in combined_text or "rce" in combined_text or "remote code" in combined_text:
+                        technique = {"id": "T1059", "name": "Command and Scripting Interpreter", "tactic": "Execution", "confidence": 0.9}
+                    elif "file upload" in combined_text:
+                        technique = {"id": "T1105", "name": "Ingress Tool Transfer", "tactic": "Command and Control", "confidence": 0.75}
+                    elif "path traversal" in combined_text or "directory traversal" in combined_text or "lfi" in combined_text:
+                        technique = {"id": "T1083", "name": "File and Directory Discovery", "tactic": "Discovery", "confidence": 0.8}
+                    elif "ssrf" in combined_text or "server-side request" in combined_text:
+                        technique = {"id": "T1090", "name": "Proxy", "tactic": "Command and Control", "confidence": 0.75}
+                    elif "xxe" in combined_text or "xml external" in combined_text:
+                        technique = {"id": "T1203", "name": "Exploitation for Client Execution", "tactic": "Execution", "confidence": 0.8}
+                    elif "deserialization" in combined_text:
                         technique = {"id": "T1059", "name": "Command and Scripting Interpreter", "tactic": "Execution", "confidence": 0.85}
-                    elif "file upload" in vuln_type:
-                        technique = {"id": "T1105", "name": "Ingress Tool Transfer", "tactic": "Command and Control", "confidence": 0.7}
-                    elif "path traversal" in vuln_type or "directory traversal" in vuln_type:
-                        technique = {"id": "T1083", "name": "File and Directory Discovery", "tactic": "Discovery", "confidence": 0.75}
-                    elif "ssrf" in vuln_type:
-                        technique = {"id": "T1557", "name": "Adversary-in-the-Middle", "tactic": "Collection", "confidence": 0.7}
-                    elif "xxe" in vuln_type:
-                        technique = {"id": "T1203", "name": "Exploitation for Client Execution", "tactic": "Execution", "confidence": 0.75}
-                    elif "deserialization" in vuln_type:
-                        technique = {"id": "T1204", "name": "User Execution", "tactic": "Execution", "confidence": 0.8}
-                    elif "csrf" in vuln_type:
-                        technique = {"id": "T1539", "name": "Steal Web Session Cookie", "tactic": "Credential Access", "confidence": 0.7}
-                    else:
-                        continue
+                    elif "csrf" in combined_text or "cross-site request" in combined_text:
+                        technique = {"id": "T1185", "name": "Browser Session Hijacking", "tactic": "Collection", "confidence": 0.7}
                     
-                    mitre_mapping.append(technique)
+                    # Discovery / Reconnaissance techniques (info-level)
+                    elif "waf" in combined_text or "firewall" in combined_text:
+                        technique = {"id": "T1518.001", "name": "Security Software Discovery", "tactic": "Discovery", "confidence": 0.7}
+                    elif "technology" in combined_text or "framework" in combined_text or "wappalyzer" in combined_text:
+                        technique = {"id": "T1592.002", "name": "Gather Victim Host Information: Software", "tactic": "Reconnaissance", "confidence": 0.65}
+                    elif ".git" in combined_text or ".svn" in combined_text or "version control" in combined_text:
+                        technique = {"id": "T1213.003", "name": "Code Repositories", "tactic": "Collection", "confidence": 0.75}
+                    elif ".idea" in combined_text or "debug" in combined_text or "config" in combined_text:
+                        technique = {"id": "T1083", "name": "File and Directory Discovery", "tactic": "Discovery", "confidence": 0.65}
+                    elif "exposed" in combined_text or "sensitive" in combined_text or "leaked" in combined_text:
+                        technique = {"id": "T1552", "name": "Unsecured Credentials", "tactic": "Credential Access", "confidence": 0.7}
+                    elif "header" in combined_text or "cors" in combined_text or "csp" in combined_text:
+                        technique = {"id": "T1189", "name": "Drive-by Compromise", "tactic": "Initial Access", "confidence": 0.5}
+                    elif "certificate" in combined_text or "ssl" in combined_text or "tls" in combined_text:
+                        technique = {"id": "T1557", "name": "Adversary-in-the-Middle", "tactic": "Credential Access", "confidence": 0.6}
+                    elif "endpoint" in combined_text or "api" in combined_text or "swagger" in combined_text:
+                        technique = {"id": "T1595.002", "name": "Active Scanning: Vulnerability Scanning", "tactic": "Reconnaissance", "confidence": 0.6}
+                    elif "cookie" in combined_text or "session" in combined_text:
+                        technique = {"id": "T1539", "name": "Steal Web Session Cookie", "tactic": "Credential Access", "confidence": 0.65}
+                    elif "backup" in combined_text or "archive" in combined_text:
+                        technique = {"id": "T1005", "name": "Data from Local System", "tactic": "Collection", "confidence": 0.6}
+                    elif "admin" in combined_text or "management" in combined_text or "console" in combined_text:
+                        technique = {"id": "T1078", "name": "Valid Accounts", "tactic": "Persistence", "confidence": 0.6}
+                    elif "outdated" in combined_text or "vulnerable version" in combined_text or "cve" in combined_text:
+                        technique = {"id": "T1190", "name": "Exploit Public-Facing Application", "tactic": "Initial Access", "confidence": 0.7}
+                    elif "information disclosure" in combined_text or "error" in combined_text:
+                        technique = {"id": "T1592", "name": "Gather Victim Host Information", "tactic": "Reconnaissance", "confidence": 0.55}
+                    
+                    if technique:
+                        mitre_mapping.append(technique)
 
                 # Remove duplicates
                 seen = set()
@@ -759,9 +902,10 @@ class ComprehensiveScanner:
     async def _calculate_risk_assessment(
         self,
         scan_id: str,
-        vulnerabilities: List[Dict[str, Any]]
+        vulnerabilities: List[Dict[str, Any]],
+        threat_intel: Optional[Dict[str, Any]] = None
     ) -> None:
-        """Calculate comprehensive risk score and assessment with business context."""
+        """Calculate comprehensive risk score and assessment with business context and threat intel."""
         try:
             logger.info(f"Calculating risk assessment for scan {scan_id} with {len(vulnerabilities)} vulnerabilities")
             
@@ -781,6 +925,48 @@ class ComprehensiveScanner:
             total_vulns = len(vulnerabilities)
             
             # ============================================
+            # THREAT INTELLIGENCE RISK MODIFIERS
+            # ============================================
+            intel_risk_modifier = 0.0
+            intel_indicators = []
+            
+            if threat_intel:
+                reputation = threat_intel.get("reputation", {})
+                rep_score = reputation.get("score", 100)
+                rep_level = reputation.get("risk_level", "Low")
+                
+                # Add risk based on reputation
+                if rep_level == "Critical":
+                    intel_risk_modifier += 3.0
+                    intel_indicators.append("Critical reputation from threat intel")
+                elif rep_level == "High":
+                    intel_risk_modifier += 2.0
+                    intel_indicators.append("High-risk reputation from threat intel")
+                elif rep_level == "Medium":
+                    intel_risk_modifier += 1.0
+                    intel_indicators.append("Medium-risk reputation from threat intel")
+                
+                # Shodan exposed vulnerabilities
+                shodan = threat_intel.get("shodan", {})
+                if shodan and shodan.get("vuln_count", 0) > 0:
+                    intel_risk_modifier += min(2.0, shodan.get("vuln_count", 0) * 0.2)
+                    intel_indicators.append(f"Shodan: {shodan.get('vuln_count')} known vulnerabilities exposed")
+                
+                # Data breach history
+                leak_data = threat_intel.get("leak_lookup", {})
+                if leak_data and leak_data.get("has_breaches"):
+                    intel_risk_modifier += 1.0
+                    intel_indicators.append(f"Found in {leak_data.get('breaches_found', 0)} data breaches")
+                
+                # Google Safe Browsing flags
+                gsb = threat_intel.get("google_safe_browsing", {})
+                if gsb and gsb.get("is_flagged"):
+                    intel_risk_modifier += 2.5
+                    intel_indicators.append(f"Google Safe Browsing: {', '.join(gsb.get('threat_types', []))}")
+                
+                logger.info(f"[INTEL] Threat intel risk modifier: +{intel_risk_modifier} (indicators: {len(intel_indicators)})")
+            
+            # ============================================
             # ROBUST RISK SCORE CALCULATION (0-10 scale)
             # ============================================
             # Formula considers:
@@ -788,6 +974,7 @@ class ComprehensiveScanner:
             # 2. Severity distribution with weighted multipliers
             # 3. Vulnerability count impact (diminishing returns)
             # 4. Diversity of vulnerability types
+            # 5. Threat intelligence modifiers
             
             risk_score = 0.0
             risk_level = "Minimal"
@@ -815,13 +1002,14 @@ class ComprehensiveScanner:
                     cvss_risk = 0.0
                 
                 # Method 2: Severity-weighted calculation
-                # Weights represent risk contribution (Critical=10, High=7.5, Medium=5, Low=2, Info=0.5)
+                # Weights represent risk contribution (Critical=10, High=7.5, Medium=5, Low=2, Info=1.0)
+                # Info weight increased from 0.5 to 1.0 because tech detection helps attackers
                 severity_weights = {
                     'critical': 10.0,
                     'high': 7.5,
                     'medium': 5.0,
                     'low': 2.0,
-                    'info': 0.5
+                    'info': 1.0  # Increased: tech detection provides valuable recon info
                 }
                 
                 weighted_sum = (
@@ -860,16 +1048,53 @@ class ComprehensiveScanner:
                     presence_floor = 3.0 + min(1.5, medium_count * 0.2)  # 3.0 to 4.5
                 elif low_count > 0:
                     presence_floor = 1.0 + min(1.5, low_count * 0.1)  # 1.0 to 2.5
+                elif info_count > 0:
+                    # Info-level findings indicate attack surface exposure
+                    # Tech detection, version disclosure, etc. increase reconnaissance risk
+                    presence_floor = 0.5 + min(1.5, info_count * 0.15)  # 0.5 to 2.0
+                
+                # Method 4: Attack surface analysis for info-level findings
+                # Certain info-level findings indicate higher risk potential
+                attack_surface_score = 0.0
+                risky_indicators = [
+                    'sql', 'database', 'mysql', 'postgres', 'oracle',  # Database indicators
+                    'php', 'asp', 'jsp', 'cgi',  # Dynamic server-side tech
+                    'admin', 'login', 'auth', 'password',  # Auth surfaces
+                    'api', 'swagger', 'graphql', 'rest',  # API exposure
+                    '.git', '.svn', '.env', 'config', 'backup',  # Sensitive files
+                    'debug', 'trace', 'error', 'stack',  # Debug/error info
+                    'version', 'outdated', 'eol', 'deprecated',  # Version issues
+                    'upload', 'file', 'download',  # File handling
+                    'cookie', 'session', 'token',  # Session handling
+                    'cors', 'csp', 'header',  # Security headers
+                ]
+                
+                risky_finding_count = 0
+                for v in vulnerabilities:
+                    title = (v.get('title') or '').lower()
+                    desc = (v.get('description') or '').lower()
+                    combined = f"{title} {desc}"
+                    
+                    for indicator in risky_indicators:
+                        if indicator in combined:
+                            risky_finding_count += 1
+                            break  # Count each finding once
+                
+                if risky_finding_count > 0:
+                    # Add 0.3-2.0 based on risky findings (logarithmic)
+                    import math
+                    attack_surface_score = min(2.0, 0.3 + math.log2(risky_finding_count + 1) * 0.5)
+                    logger.info(f"Attack surface indicators found: {risky_finding_count}, adding {attack_surface_score} to score")
                 
                 # Combine all methods
                 # Use max of CVSS and severity for accuracy, but ensure presence floor is met
                 calculated_risk = max(cvss_risk, severity_risk)
-                risk_score = max(calculated_risk, presence_floor)
+                risk_score = max(calculated_risk, presence_floor) + attack_surface_score + intel_risk_modifier
                 
                 # Cap at 10.0
                 risk_score = min(10.0, round(risk_score, 2))
                 
-                logger.info(f"Final risk calculation: cvss_risk={cvss_risk}, severity_risk={severity_risk}, presence_floor={presence_floor}, final={risk_score}")
+                logger.info(f"Final risk calculation: cvss_risk={cvss_risk}, severity_risk={severity_risk}, presence_floor={presence_floor}, intel_modifier={intel_risk_modifier}, final={risk_score}")
                 
                 # Determine risk level based on score
                 if risk_score >= 9.0:
@@ -919,7 +1144,7 @@ class ComprehensiveScanner:
                         vulnerability=highest_risk_vuln,
                         business_context=business_context,
                         mitre_techniques=mitre_techniques if isinstance(mitre_techniques, list) else [],
-                        threat_intel=None
+                        threat_intel=threat_intel  # Pass threat intel to analyzer
                     )
                     
                     # Only use enhanced score if it's higher than our calculated score
@@ -935,7 +1160,13 @@ class ComprehensiveScanner:
                         'cost_benefit': comprehensive_risk.get('cost_benefit_analysis'),
                         'recommendations': comprehensive_risk.get('recommendations'),
                         'resource_allocation': comprehensive_risk.get('resource_allocation'),
-                        'timeline': comprehensive_risk.get('timeline')
+                        'timeline': comprehensive_risk.get('timeline'),
+                        'threat_intel_summary': {
+                            'reputation_score': threat_intel.get('reputation', {}).get('score') if threat_intel else None,
+                            'reputation_level': threat_intel.get('reputation', {}).get('risk_level') if threat_intel else None,
+                            'risk_indicators': intel_indicators,
+                            'data_sources': threat_intel.get('data_sources_queried', 0) if threat_intel else 0
+                        } if threat_intel else None
                     }
                     
                     supabase.update_scan(scan_id, {
@@ -957,16 +1188,107 @@ class ComprehensiveScanner:
                     "critical_count": critical_count,
                     "high_count": high_count,
                     "medium_count": medium_count,
-                    "low_count": low_count
+                    "low_count": low_count,
+                    "info_count": info_count
                 }
             )
 
-            logger.info(f"Risk assessment saved: Score={risk_score}, Level={risk_level}, Vulns={total_vulns}")
+            logger.info(f"Risk assessment saved: Score={risk_score}, Level={risk_level}, Vulns={total_vulns} (C:{critical_count}/H:{high_count}/M:{medium_count}/L:{low_count}/I:{info_count})")
 
         except Exception as e:
             logger.error(f"Risk assessment calculation failed: {e}")
             import traceback
             traceback.print_exc()
+
+    async def _enrich_with_vulners(
+        self,
+        unified_threat_intel,
+        vulnerabilities: List[Dict[str, Any]]
+    ) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
+        """Enrich vulnerabilities with Vulners exploit data.
+        
+        Searches Vulners for:
+        1. CVE IDs found in vulnerabilities
+        2. Common vulnerability types (SQL injection, XSS, etc.)
+        
+        Returns enriched vulnerabilities and a summary of Vulners findings.
+        """
+        if not vulnerabilities:
+            return vulnerabilities, None
+        
+        # Collect unique CVEs from vulnerabilities
+        cve_ids = set()
+        vuln_types = set()
+        
+        for vuln in vulnerabilities:
+            # Extract CVE IDs from various fields
+            cve_id = vuln.get("cve_id") or vuln.get("cve")
+            if cve_id and cve_id.startswith("CVE-"):
+                cve_ids.add(cve_id)
+            
+            # Extract from references
+            for ref in vuln.get("references", []):
+                if isinstance(ref, str) and "CVE-" in ref.upper():
+                    import re
+                    matches = re.findall(r'CVE-\d{4}-\d+', ref.upper())
+                    cve_ids.update(matches)
+            
+            # Track vulnerability types for broader searches
+            title = (vuln.get("title") or vuln.get("name") or "").lower()
+            desc = (vuln.get("description") or "").lower()
+            text = f"{title} {desc}"
+            
+            if "sql injection" in text or "sqli" in text:
+                vuln_types.add("SQL Injection")
+            if "xss" in text or "cross-site scripting" in text:
+                vuln_types.add("XSS")
+            if "command injection" in text or "rce" in text:
+                vuln_types.add("Command Injection")
+            if "path traversal" in text or "lfi" in text or "rfi" in text:
+                vuln_types.add("Path Traversal")
+        
+        all_exploits = []
+        all_vulners_vulns = []
+        cve_exploit_mapping = {}
+        
+        # Search Vulners for each unique CVE
+        for cve_id in list(cve_ids)[:10]:  # Limit to 10 CVEs to avoid rate limits
+            try:
+                result = await unified_threat_intel.search_vulners(cve_id)
+                if result:
+                    exploits = result.get("exploits", [])
+                    if exploits:
+                        cve_exploit_mapping[cve_id] = exploits
+                        all_exploits.extend(exploits)
+                    all_vulners_vulns.extend(result.get("vulnerabilities", []))
+            except Exception as e:
+                logger.debug(f"[VULNERS] Failed to query {cve_id}: {e}")
+        
+        # Enrich vulnerabilities with exploit info
+        enriched_vulns = []
+        for vuln in vulnerabilities:
+            cve_id = vuln.get("cve_id") or vuln.get("cve")
+            if cve_id and cve_id in cve_exploit_mapping:
+                vuln["vulners_exploits"] = cve_exploit_mapping[cve_id]
+                vuln["has_known_exploit"] = True
+            enriched_vulns.append(vuln)
+        
+        # Build summary
+        summary = None
+        if all_exploits or all_vulners_vulns:
+            summary = {
+                "total_exploits": len(all_exploits),
+                "exploits_by_cve": {
+                    cve: len(exps) for cve, exps in cve_exploit_mapping.items()
+                },
+                "top_exploits": all_exploits[:5],
+                "vulnerabilities_found": len(all_vulners_vulns),
+                "cves_searched": list(cve_ids)[:10],
+                "vuln_types_detected": list(vuln_types)
+            }
+            logger.info(f"[VULNERS] Found {len(all_exploits)} exploits for {len(cve_exploit_mapping)} CVEs")
+        
+        return enriched_vulns, summary
 
     async def _update_scan_progress(
         self,

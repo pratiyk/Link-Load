@@ -152,12 +152,22 @@ class WapitiScanner(BaseScanner):
             
             logger.info(f"Starting Wapiti scan {scan_id} for {config.target_url}")
             
+            # Use scan config's max_scan_duration if provided, otherwise fall back to default
+            scan_timeout = getattr(config, 'max_scan_duration', None)
+            if scan_timeout is None or scan_timeout <= 0:
+                scan_timeout = self.config.max_scan_time
+            else:
+                # max_scan_duration is in seconds, ensure it's reasonable (at least 60s, max 3600s)
+                scan_timeout = max(60, min(scan_timeout, 3600))
+            
+            logger.info(f"[Wapiti] Using scan timeout: {scan_timeout}s")
+            
             # Build wapiti command arguments (without binary path for Docker)
             wapiti_args = [
                 '-u', config.target_url,
                 '--format', 'json',
                 '--output', f"{output_dir}/results.json",
-                '--max-scan-time', str(self.config.max_scan_time),
+                '--max-scan-time', str(scan_timeout),
                 '--max-parameters', str(self.config.max_parameters)
             ]
             

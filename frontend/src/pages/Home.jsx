@@ -24,44 +24,44 @@ const Home = () => {
   const scanModes = {
     quick: {
       label: 'Quick',
-      duration: '5-10 min',
-      description: 'Full Nuclei scan with all templates and severity levels',
+      duration: '5-15 min',
+      description: 'Fast Nuclei scan with focused high-impact templates',
       scanners: ['nuclei'],
       timeout: 15,
-      deep_scan: true,  // Enable deep scan for comprehensive Nuclei coverage
-      include_low_risk: true,  // Include all severity levels including info
-      features: [
-        { name: 'CVE Detection', enabled: true, description: 'Known vulnerability scanning' },
-        { name: 'Misconfigurations', enabled: true, description: 'Common security misconfigurations' },
-        { name: 'Exposed Panels', enabled: true, description: 'Admin panels & dashboards' },
-        { name: 'Tech Detection', enabled: true, description: 'Technology fingerprinting' },
-        { name: 'SSL/TLS Analysis', enabled: true, description: 'Certificate and protocol checks' },
-        { name: 'Headless Browser', enabled: true, description: 'JavaScript rendering for dynamic content' },
-        { name: 'All Severity Levels', enabled: true, description: 'Critical, High, Medium, Low, Info' },
-        { name: 'AI Analysis', enabled: true, description: 'AI-powered insights' },
-        { name: 'MITRE Mapping', enabled: true, description: 'ATT&CK technique mapping' }
-      ],
-      bestFor: 'Fast comprehensive checks, CI/CD pipelines, quick assessments'
-    },
-    standard: {
-      label: 'Standard',
-      duration: '10-20 min',
-      description: 'In-depth scan with Nuclei and Wapiti combined',
-      scanners: ['nuclei', 'wapiti'],
-      timeout: 30,
-      deep_scan: true,  // Enable deep scan for both scanners
+      deep_scan: false,  // Quick mode uses focused template tags
       include_low_risk: true,
       features: [
         { name: 'CVE Detection', enabled: true, description: 'Known vulnerability scanning' },
         { name: 'Misconfigurations', enabled: true, description: 'Common security misconfigurations' },
         { name: 'Exposed Panels', enabled: true, description: 'Admin panels & dashboards' },
         { name: 'Tech Detection', enabled: true, description: 'Technology fingerprinting' },
-        { name: 'SSL/TLS Analysis', enabled: true, description: 'Certificate and protocol checks' },
+        { name: 'SQL Injection', enabled: true, description: 'Database injection attacks' },
+        { name: 'XSS Detection', enabled: true, description: 'Cross-site scripting' },
+        { name: 'SSRF Detection', enabled: true, description: 'Server-side request forgery' },
+        { name: 'RCE Detection', enabled: true, description: 'Remote code execution' },
+        { name: 'AI Analysis', enabled: true, description: 'AI-powered insights' },
+        { name: 'MITRE Mapping', enabled: true, description: 'ATT&CK technique mapping' }
+      ],
+      bestFor: 'Fast security checks, CI/CD pipelines, quick assessments'
+    },
+    standard: {
+      label: 'Standard',
+      duration: '15-30 min',
+      description: 'Comprehensive scan with Nuclei DAST and Wapiti',
+      scanners: ['nuclei', 'wapiti'],
+      timeout: 30,
+      deep_scan: true,  // Enable deep scan for DAST mode
+      include_low_risk: true,
+      features: [
+        { name: 'CVE Detection', enabled: true, description: 'Known vulnerability scanning' },
+        { name: 'DAST Mode', enabled: true, description: 'Active vulnerability testing' },
+        { name: 'Misconfigurations', enabled: true, description: 'Common security misconfigurations' },
+        { name: 'Exposed Panels', enabled: true, description: 'Admin panels & dashboards' },
+        { name: 'Tech Detection', enabled: true, description: 'Technology fingerprinting' },
         { name: 'SQL Injection', enabled: true, description: 'Database injection attacks' },
         { name: 'XSS Detection', enabled: true, description: 'Cross-site scripting' },
         { name: 'CSRF Detection', enabled: true, description: 'Cross-site request forgery' },
         { name: 'SSRF Detection', enabled: true, description: 'Server-side request forgery' },
-        { name: 'Headless Browser', enabled: true, description: 'JavaScript rendering' },
         { name: 'AI Analysis', enabled: true, description: 'AI-powered insights' },
         { name: 'MITRE Mapping', enabled: true, description: 'ATT&CK technique mapping' }
       ],
@@ -69,18 +69,18 @@ const Home = () => {
     },
     deep: {
       label: 'Deep',
-      duration: '20-45 min',
-      description: 'Maximum coverage with all three scanners in-depth',
+      duration: '30-60 min',
+      description: 'Maximum coverage with ZAP, Nuclei DAST, and Wapiti',
       scanners: ['owasp', 'nuclei', 'wapiti'],
       timeout: 60,
       deep_scan: true,
       include_low_risk: true,
       features: [
         { name: 'CVE Detection', enabled: true, description: 'Known vulnerability scanning' },
+        { name: 'DAST Mode', enabled: true, description: 'Active vulnerability testing' },
         { name: 'Misconfigurations', enabled: true, description: 'Common security misconfigurations' },
         { name: 'Exposed Panels', enabled: true, description: 'Admin panels & dashboards' },
         { name: 'Tech Detection', enabled: true, description: 'Technology fingerprinting' },
-        { name: 'SSL/TLS Analysis', enabled: true, description: 'Certificate and protocol checks' },
         { name: 'SQL Injection', enabled: true, description: 'Database injection attacks' },
         { name: 'XSS Detection', enabled: true, description: 'Cross-site scripting' },
         { name: 'OWASP ZAP Active', enabled: true, description: 'Dynamic application testing' },
@@ -116,11 +116,26 @@ const Home = () => {
     }
   };
 
+  // Normalize URL to ensure it has a proper schema
+  const normalizeUrl = (url) => {
+    let normalizedUrl = url.trim();
+    if (!normalizedUrl) return '';
+
+    // Add https:// if no schema is present
+    if (!normalizedUrl.match(/^https?:\/\//i)) {
+      normalizedUrl = 'https://' + normalizedUrl;
+    }
+    return normalizedUrl;
+  };
+
   const handleScan = async () => {
     if (!scanUrl.trim()) {
       setError('Please enter a valid URL');
       return;
     }
+
+    // Normalize URL before sending
+    const targetUrl = normalizeUrl(scanUrl);
 
     setIsScanActive(true);
     setError(null);
@@ -128,13 +143,13 @@ const Home = () => {
     setCurrentStage('Initializing...');
 
     try {
-      console.log('Starting scan for URL:', scanUrl);
+      console.log('Starting scan for URL:', targetUrl);
 
       // Get scan configuration based on selected mode
       const modeConfig = scanModes[scanMode];
 
       // Start the scan with mode-specific settings
-      const result = await scannerService.startScan(scanUrl, modeConfig.scanners, {
+      const result = await scannerService.startScan(targetUrl, modeConfig.scanners, {
         enable_ai_analysis: true,
         enable_mitre_mapping: true,
         include_low_risk: modeConfig.include_low_risk,
@@ -381,6 +396,9 @@ const Home = () => {
                     <div className="progress-text">
                       <span className="progress-value">{scanProgress}%</span>
                       <span className="progress-stage">{currentStage}</span>
+                    </div>
+                    <div className="scan-mode-indicator">
+                      Mode: {scanModes[scanMode]?.label || 'Standard'} | Max: {scanModes[scanMode]?.timeout || 30} min
                     </div>
                   </div>
                 ) : !isAuthenticated ? (

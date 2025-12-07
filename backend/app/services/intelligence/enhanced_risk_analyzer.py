@@ -620,37 +620,39 @@ class EnhancedRiskAnalyzer:
         risk_score: float
     ) -> Dict[str, Any]:
         """Perform cost-benefit analysis for remediation."""
-        # Estimate potential loss
-        base_loss = business_context.get('estimated_breach_cost', 50000)  # Default $50k
+        # Estimate potential loss based on industry data (IBM Cost of Data Breach 2024)
+        # Average breach cost in India: ~₹17.9 crore, scaled by risk score and industry
+        base_loss = business_context.get('estimated_breach_cost', 500000)  # Default ₹5L base
         
-        # Scale by risk score
+        # Scale by risk score (0-10 maps to 0.1x - 1x of base loss)
         potential_loss = base_loss * (risk_score / 10.0)
         
-        # Industry multiplier
+        # Industry multiplier - based on average breach costs by sector
         industry = business_context.get('industry', IndustryType.GENERAL)
         industry_loss_multipliers = {
-            IndustryType.FINANCIAL: 3.0,
-            IndustryType.HEALTHCARE: 2.5,
-            IndustryType.ECOMMERCE: 2.0,
-            IndustryType.GOVERNMENT: 2.2,
-            IndustryType.TECHNOLOGY: 1.8,
-            IndustryType.EDUCATION: 1.5,
+            IndustryType.FINANCIAL: 2.5,      # High regulatory fines, customer trust impact
+            IndustryType.HEALTHCARE: 2.2,     # HIPAA penalties, patient data sensitivity
+            IndustryType.ECOMMERCE: 1.8,      # Payment card data, customer churn
+            IndustryType.GOVERNMENT: 2.0,     # National security, public trust
+            IndustryType.TECHNOLOGY: 1.5,     # IP theft, competitive advantage loss
+            IndustryType.EDUCATION: 1.3,      # Student data, moderate regulatory
             IndustryType.GENERAL: 1.0
         }
         
         industry_enum = IndustryType(industry) if industry in [i.value for i in IndustryType] else IndustryType.GENERAL
         potential_loss *= industry_loss_multipliers.get(industry_enum, 1.0)
         
-        # Estimate remediation cost
+        # Estimate remediation cost based on actual developer/security expert rates
+        # Rates: Senior Security Expert ~₹5K/hr, Developer ~₹2.5K/hr
         severity = vulnerability.get('severity', 'medium').lower()
         base_fix_costs = {
-            'critical': 15000,
-            'high': 10000,
-            'medium': 5000,
-            'low': 2000,
-            'info': 500
+            'critical': 50000,   # ~10-16 hours senior security expert
+            'high': 25000,       # ~6-8 hours mixed team
+            'medium': 12000,     # ~3-4 hours developer
+            'low': 5000,         # ~1-2 hours developer
+            'info': 2000         # ~0.5-1 hour documentation
         }
-        remediation_cost = base_fix_costs.get(severity, 5000)
+        remediation_cost = base_fix_costs.get(severity, 12000)
         
         # ROI calculation
         roi = ((potential_loss - remediation_cost) / remediation_cost) * 100 if remediation_cost > 0 else 0

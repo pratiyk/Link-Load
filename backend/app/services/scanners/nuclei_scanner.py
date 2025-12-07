@@ -139,14 +139,36 @@ class NucleiScanner(BaseScanner):
                 if templates_dir:
                     templates_arg = ['-templates', templates_dir]
 
+            # Get the max scan duration from config (in seconds)
+            max_scan_duration = getattr(config, 'max_scan_duration', 1800)  # Default 30 min
+            if max_scan_duration <= 0:
+                max_scan_duration = 1800
+            
+            # Determine timeout per request - scale based on scan duration
+            # For shorter scans, use shorter per-request timeouts
+            if max_scan_duration <= 900:  # 15 min or less (Quick scan)
+                dast_timeout = 15
+                rate_limit = 200  # Higher rate for faster completion
+            elif max_scan_duration <= 1800:  # 30 min or less (Standard scan)
+                dast_timeout = 20
+                rate_limit = 150
+            else:  # Deep scan
+                dast_timeout = 30
+                rate_limit = 100  # Lower rate but more thorough
+            
+            logger.info(f"[Nuclei] Scan duration: {max_scan_duration}s, per-request timeout: {dast_timeout}s, rate: {rate_limit}/s")
+            
             nuclei_args = [
                 '-u', config.target_url,
                 '-jsonl',
                 '-o', results_file,
-                '-rate-limit', str(self.config.rate_limit),
+                '-rate-limit', str(rate_limit),
                 '-bulk-size', str(self.config.bulk_size),
-                '-timeout', str(self.config.timeout),
-                '-retries', str(self.config.retries)
+                '-timeout', str(dast_timeout),  # Per-request timeout
+                '-retries', '0',  # No retries to save time
+                '-nc',  # No color
+                '-stats',  # Show stats
+                '-stats-interval', '30',  # Stats every 30 seconds
             ] + templates_arg
 
             # Deep scan mode: use more thorough scanning options
@@ -154,22 +176,35 @@ class NucleiScanner(BaseScanner):
                 logger.info(f"[Nuclei] Deep scan mode enabled for {config.target_url}")
                 # Include all severity levels for deep scans
                 nuclei_args.extend(['-severity', 'critical,high,medium,low,info'])
-                # Note: -headless flag removed because it requires Chromium download 
-                # which can timeout/fail on first run. Standard templates work well without it.
+                # Enable DAST (Dynamic Application Security Testing) mode for active vulnerability testing
+                nuclei_args.append('-dast')
+                logger.info(f"[Nuclei] DAST mode enabled for active vulnerability testing")
             else:
-                # Quick/Standard: Include info level to capture technology detection
-                # Many useful nuclei templates are info-level (tech detection, version disclosure)
-                if not getattr(config, 'include_low_risk', True):
-                    nuclei_args.extend(['-severity', 'critical,high,medium'])
+                # Standard/Quick scan: Focus on high-impact templates for faster completion
+                nuclei_args.extend(['-severity', 'critical,high,medium,low,info'])
+                
+                # For quick scans (15 min or less), use focused template directories
+                if max_scan_duration <= 900:
+                    # Use misconfiguration templates (security headers, common issues) + exposures
+                    # These are fast and reliable for finding real issues
+                    nuclei_args.extend([
+                        '-t', '/root/nuclei-templates/http/misconfiguration/',
+                        '-t', '/root/nuclei-templates/http/exposures/',
+                        '-t', '/root/nuclei-templates/http/vulnerabilities/',
+                    ])
+                    logger.info(f"[Nuclei] Quick scan mode - using focused template directories (misconfiguration, exposures, vulnerabilities)")
+                elif max_scan_duration <= 1800:
+                    # Standard scan: broader coverage with tags
+                    nuclei_args.extend(['-tags', 'cve,sqli,xss,rce,lfi,ssrf,exposure,misconfig,tech'])
+                    logger.info(f"[Nuclei] Standard scan mode - using broad template tags")
                 else:
-                    # Include info so tech detection and version disclosure findings appear
-                    nuclei_args.extend(['-severity', 'critical,high,medium,low,info'])
+                    # Deep scan without deep_scan flag (longer duration)
+                    nuclei_args.append('-dast')
+                    logger.info(f"[Nuclei] Extended scan mode - DAST enabled")
 
             # Optional debug output
             if self.config.debug:
                 nuclei_args.append('-debug')
-            # Reduce non-essential output just in case
-            nuclei_args.append('-no-color')
             
             # Build full command based on mode
             if self.use_docker:

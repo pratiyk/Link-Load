@@ -7,10 +7,11 @@ import './ScanResults.css';
 const severityOrder = ['critical', 'high', 'medium', 'low'];
 const severityWeights = {
   critical: 10,
-  high: 7,
-  medium: 4,
+  high: 7.5,
+  medium: 5,
   low: 2,
-  unknown: 1
+  info: 1,
+  unknown: 0.5
 };
 
 const deriveRiskLevel = (score) => {
@@ -22,7 +23,27 @@ const deriveRiskLevel = (score) => {
   return 'Minimal';
 };
 
-const computeTimelineDuration = (timelineInfo, fallback) => {
+// Dynamic duration calculation based on vulnerability count and CVSS
+const computeDynamicDuration = (itemCount, avgCvss, baseMultiplier = 1) => {
+  if (itemCount === 0) return 0;
+
+  // Base hours per vulnerability by complexity
+  const hoursPerVuln = avgCvss >= 7 ? 8 : avgCvss >= 4 ? 4 : 2;
+  const totalHours = itemCount * hoursPerVuln * baseMultiplier;
+
+  // Convert to days (6 productive hours per day)
+  const days = Math.ceil(totalHours / 6);
+
+  // Add buffer for testing/validation (20%)
+  return Math.max(1, Math.ceil(days * 1.2));
+};
+
+const computeTimelineDuration = (timelineInfo, fallback, itemCount = 0, avgCvss = 0) => {
+  // If we have actual items, calculate dynamically
+  if (itemCount > 0) {
+    return computeDynamicDuration(itemCount, avgCvss);
+  }
+
   if (!timelineInfo) {
     return fallback;
   }
@@ -51,6 +72,17 @@ const computeTimelineDuration = (timelineInfo, fallback) => {
   return fallback;
 };
 
+// Dynamic label generation based on actual week numbers
+const getDynamicLabel = (weekStart, weekEnd, priority) => {
+  const weekStartNum = Math.ceil(weekStart / 7);
+  const weekEndNum = Math.ceil(weekEnd / 7);
+
+  if (weekStartNum === weekEndNum || weekEndNum === 0) {
+    return `Week ${Math.max(1, weekStartNum)}`;
+  }
+  return `Week ${Math.max(1, weekStartNum)}-${weekEndNum}`;
+};
+
 const pluralize = (count, singular, plural) => {
   if (count === 1) {
     return singular;
@@ -67,7 +99,7 @@ const ScanResults = () => {
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('summary'); // Default to Mission Brief
   const [summaryText, setSummaryText] = useState('');
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState(null);
@@ -201,8 +233,139 @@ const ScanResults = () => {
     };
   }, [results, vulnerabilityStats]);
 
+  // Centralized shared metrics - used across all tabs for consistency
+  const sharedMetrics = useMemo(() => {
+    const criticalCount = vulnerabilityStats.counts?.critical || 0;
+    const highCount = vulnerabilityStats.counts?.high || 0;
+    const mediumCount = vulnerabilityStats.counts?.medium || 0;
+    const lowCount = vulnerabilityStats.counts?.low || 0;
+    const infoCount = vulnerabilityStats.counts?.info || 0;
+    const totalIssues = vulnerabilityStats.total || 0;
+
+    // Cost calculations - Based on industry standards (IBM Cost of Data Breach 2024)
+    const baseCriticalCost = 50000;
+    const baseHighCost = 25000;
+    const baseMediumCost = 12000;
+    const baseLowCost = 5000;
+    const baseInfoCost = 2000;
+
+    const calculateCost = (vulns, baseCost) => {
+      if (!vulns || vulns.length === 0) return 0;
+      return vulns.reduce((sum, v) => {
+        const cvssMultiplier = v.cvss_score ? Math.max(0.5, v.cvss_score / 5) : 1;
+        return sum + (baseCost * cvssMultiplier);
+      }, 0);
+    };
+
+    const estimatedCost = Math.round(
+      calculateCost(vulnerabilityStats.grouped?.critical, baseCriticalCost) +
+      calculateCost(vulnerabilityStats.grouped?.high, baseHighCost) +
+      calculateCost(vulnerabilityStats.grouped?.medium, baseMediumCost) +
+      calculateCost(vulnerabilityStats.grouped?.low, baseLowCost) +
+      calculateCost(vulnerabilityStats.grouped?.info, baseInfoCost)
+    );
+
+    const potentialLoss = Math.round(
+      (calculateCost(vulnerabilityStats.grouped?.critical, baseCriticalCost) * 15) +
+      (calculateCost(vulnerabilityStats.grouped?.high, baseHighCost) * 10) +
+      (calculateCost(vulnerabilityStats.grouped?.medium, baseMediumCost) * 6) +
+      (calculateCost(vulnerabilityStats.grouped?.low, baseLowCost) * 3) +
+      (calculateCost(vulnerabilityStats.grouped?.info, baseInfoCost) * 1.5)
+    );
+
+    // Effort hours calculation
+    const effortHours = Math.round(
+      (vulnerabilityStats.grouped?.critical || []).reduce((sum, v) => sum + Math.max(4, (v.cvss_score || 9) * 0.8), 0) +
+      (vulnerabilityStats.grouped?.high || []).reduce((sum, v) => sum + Math.max(3, (v.cvss_score || 7) * 0.6), 0) +
+      (vulnerabilityStats.grouped?.medium || []).reduce((sum, v) => sum + Math.max(2, (v.cvss_score || 5) * 0.4), 0) +
+      (vulnerabilityStats.grouped?.low || []).reduce((sum, v) => sum + Math.max(1, (v.cvss_score || 3) * 0.3), 0) +
+      (infoCount * 0.5)
+    );
+
+    const netBenefit = potentialLoss - estimatedCost;
+    const roiPercentage = estimatedCost > 0 ? Math.round((netBenefit / estimatedCost) * 100) : 0;
+
+    // Risk score calculation - NOTE: This is a different metric from normalizedRisk.overall_risk_score
+    // normalizedRisk uses 0-10 CVSS-like scale, while this is a weighted count-based score (0-100)
+    // For consistency, we'll use a 0-10 scale to match normalizedRisk
+    const weightedScore = (criticalCount * 10 + highCount * 7.5 + mediumCount * 5 + lowCount * 2 + infoCount * 0.5);
+    const maxPossibleScore = Math.max(1, totalIssues * 10); // Normalize by max possible
+    const riskScore = totalIssues > 0 ? Math.min(10, Number((weightedScore / totalIssues).toFixed(1))) : 0;
+    const riskLevel = riskScore >= 8 ? 'Critical' : riskScore >= 6 ? 'High' : riskScore >= 4 ? 'Medium' : riskScore >= 2 ? 'Low' : 'Minimal';
+
+    // Timeline calculations
+    const weeksNeeded = Math.max(1, Math.ceil(effortHours / 40));
+    const maxWeeks = Math.max(weeksNeeded + 1, Math.ceil(effortHours / 20));
+    const estimatedTimeline = totalIssues > 0 ? `${weeksNeeded} - ${maxWeeks} weeks` : 'No remediation needed';
+
+    // Team composition
+    const teamComposition = {
+      'Security Engineers': criticalCount > 0 ? Math.max(2, Math.ceil(criticalCount / 2)) : Math.max(1, Math.ceil(highCount / 3)),
+      'Senior Developers': Math.max(1, Math.ceil((criticalCount + highCount) / 3)),
+      'Developers': Math.max(1, Math.ceil((mediumCount + lowCount) / 4)),
+      'QA Engineers': Math.max(1, Math.ceil(totalIssues / 10))
+    };
+
+    return {
+      criticalCount,
+      highCount,
+      mediumCount,
+      lowCount,
+      infoCount,
+      totalIssues,
+      estimatedCost,
+      potentialLoss,
+      netBenefit,
+      roiPercentage,
+      effortHours,
+      riskScore,
+      riskLevel,
+      weeksNeeded,
+      maxWeeks,
+      estimatedTimeline,
+      teamComposition,
+      budgetRange: totalIssues > 0
+        ? `₹${Math.round(estimatedCost * 0.8).toLocaleString('en-IN')} - ₹${Math.round(estimatedCost * 1.2).toLocaleString('en-IN')}`
+        : 'N/A'
+    };
+  }, [vulnerabilityStats]);
+
   const aiInsightsCount = results?.ai_analysis?.length || 0;
-  const mitreCount = results?.mitre_mapping?.length || 0;
+
+  // Calculate MITRE count - use backend data if available, otherwise estimate from vulnerabilities
+  const mitreCount = useMemo(() => {
+    // First check if backend provided MITRE mappings
+    if (results?.mitre_mapping?.length > 0) {
+      return results.mitre_mapping.length;
+    }
+
+    // If no backend mappings but we have vulnerabilities, estimate potential mappings
+    // This ensures the Attack Matrix tab shows up when there are vulnerabilities to map
+    if (results?.vulnerabilities?.length > 0) {
+      // Count unique potential MITRE mappings based on vulnerability patterns
+      const patterns = [
+        /sql injection|sqli/i, /xss|cross-site scripting/i, /command injection|rce/i,
+        /authentication|login|password/i, /file upload/i, /path traversal|lfi/i,
+        /ssrf/i, /xxe/i, /csrf/i, /\.git|\.svn/i, /exposed|sensitive|leaked/i,
+        /header|cors|csp/i, /certificate|ssl|tls/i, /cookie|session/i,
+        /admin|management/i, /outdated|cve/i, /information disclosure/i
+      ];
+
+      const seenPatterns = new Set();
+      for (const vuln of results.vulnerabilities) {
+        const text = `${vuln.title || ''} ${vuln.description || ''}`;
+        for (let i = 0; i < patterns.length; i++) {
+          if (patterns[i].test(text)) {
+            seenPatterns.add(i);
+          }
+        }
+      }
+      return seenPatterns.size;
+    }
+
+    return 0;
+  }, [results]);
+
   const remediationRecommendationsCount = results?.remediation_strategies?.recommendations?.length || 0;
   const summaryTabVisible = Boolean(
     summaryLoading ||
@@ -222,11 +385,64 @@ const ScanResults = () => {
     const high = normalizedRisk.high_count || 0;
     const medium = normalizedRisk.medium_count || 0;
     const low = normalizedRisk.low_count || 0;
+    const info = vulnerabilityStats.counts?.info || 0;
     const mediumLowTotal = medium + low;
     const avgCvss = vulnerabilityStats.avgCvss;
     const topCritical = vulnerabilityStats.grouped?.critical?.[0]?.title;
     const topHigh = vulnerabilityStats.grouped?.high?.[0]?.title;
+    const topInfo = vulnerabilityStats.grouped?.info?.[0]?.title;
     const topFinding = vulnerabilityStats.highest?.title || vulnerabilityStats.highest?.name;
+
+    // Threat Intelligence data
+    const threatIntel = results.threat_intel || {};
+    const reputation = threatIntel.reputation || {};
+    const vt = threatIntel.virustotal || {};
+    const gsb = threatIntel.google_safe_browsing || {};
+    const abuse = threatIntel.abuseipdb || {};
+    const shodan = threatIntel.shodan || {};
+    const vulners = threatIntel.vulners || {};
+    const riskIndicators = threatIntel.risk_indicators || [];
+
+    // Build threat intel description
+    const buildThreatIntelDesc = () => {
+      const parts = [];
+
+      if (reputation.score !== undefined) {
+        const scoreLabel = reputation.score >= 70 ? 'Good' : reputation.score >= 40 ? 'Moderate' : 'Poor';
+        parts.push(`Reputation: ${reputation.score}/100 (${scoreLabel})`);
+      }
+
+      if (vt.malicious > 0 || vt.suspicious > 0) {
+        parts.push(`VirusTotal: ${vt.malicious || 0} malicious, ${vt.suspicious || 0} suspicious`);
+      } else if (vt.harmless > 0) {
+        parts.push(`VirusTotal: Clean (${vt.harmless} vendors)`);
+      }
+
+      if (gsb.is_flagged) {
+        parts.push(`Google Safe Browsing: FLAGGED`);
+      }
+
+      if (abuse.abuse_confidence_score > 0) {
+        parts.push(`AbuseIPDB: ${abuse.abuse_confidence_score}% confidence`);
+      }
+
+      if (shodan.vuln_count > 0) {
+        parts.push(`Shodan: ${shodan.vuln_count} known vulns`);
+      }
+
+      // Add Vulners exploit info
+      if (vulners.total_exploits > 0) {
+        parts.push(`Vulners: ${vulners.total_exploits} exploits found`);
+      }
+
+      if (parts.length === 0) {
+        return threatIntel.data_sources_queried
+          ? `${threatIntel.data_sources_queried} intel sources queried — no active threats detected.`
+          : 'Threat intelligence not yet collected.';
+      }
+
+      return parts.slice(0, 2).join(' • ') + (parts.length > 2 ? ` (+${parts.length - 2} more)` : '');
+    };
 
     return [
       {
@@ -257,8 +473,15 @@ const ScanResults = () => {
           : 'Medium and low risk surfaces are currently clear.'
       },
       {
-        key: 'coverage',
+        key: 'threat_intel',
         number: '04',
+        title: 'Threat Intelligence',
+        color: 'purple',
+        description: buildThreatIntelDesc()
+      },
+      {
+        key: 'coverage',
+        number: '05',
         title: 'Coverage & Mapping',
         color: 'pink',
         description: mitreCount
@@ -267,7 +490,7 @@ const ScanResults = () => {
       },
       {
         key: 'insights',
-        number: '05',
+        number: '06',
         title: 'AI Insights',
         color: 'yellow',
         description: aiInsightsCount
@@ -325,7 +548,7 @@ const ScanResults = () => {
         id: 'summary',
         label: 'Mission Brief',
         display: 'Mission Brief',
-        visible: summaryTabVisible
+        visible: true  // Always show - will display loading/error/empty state as needed
       },
       {
         id: 'overview',
@@ -341,7 +564,7 @@ const ScanResults = () => {
         id: 'mitre',
         label: 'Attack Matrix',
         display: mitreCount ? `Attack Matrix (${mitreCount})` : 'Attack Matrix',
-        visible: mitreCount > 0
+        visible: true  // Always show - will generate client-side mappings or show empty state
       },
       {
         id: 'remediation',
@@ -349,13 +572,13 @@ const ScanResults = () => {
         display: hasRemediationData
           ? `Defense Playbook (${vulnerabilityStats.total || remediationRecommendationsCount || 0})`
           : 'Defense Playbook',
-        visible: hasRemediationData
+        visible: true  // Always show - will display empty state if no data
       },
       {
         id: 'ai',
         label: 'Intel Analysis',
         display: aiInsightsCount ? `Intel Analysis (${aiInsightsCount})` : 'Intel Analysis',
-        visible: aiInsightsCount > 0 || vulnerabilityStats.total > 0
+        visible: true  // Always show - will display empty state or generate from vulns
       }
     ].filter((tab) => tab.visible === undefined ? true : tab.visible);
   }, [results, vulnerabilityStats.total, mitreCount, hasRemediationData, aiInsightsCount, summaryTabVisible]);
@@ -563,6 +786,15 @@ const ScanResults = () => {
                     </div>
                     <h3 className="timeline-title">{vuln.title || vuln.name || 'Security Finding'}</h3>
                     <p className="timeline-desc">{vuln.description || 'No description available'}</p>
+                    {vuln.has_known_exploit && (
+                      <div className="exploit-warning">
+                        <span className="exploit-icon">!</span>
+                        <span className="exploit-text">Known exploit available</span>
+                        {vuln.vulners_exploits?.length > 0 && (
+                          <span className="exploit-count">({vuln.vulners_exploits.length} found)</span>
+                        )}
+                      </div>
+                    )}
                     {vuln.cvss_score > 0 && (
                       <div className="timeline-meta">
                         <strong>CVSS:</strong> {vuln.cvss_score}
@@ -610,8 +842,62 @@ const ScanResults = () => {
   };
 
   const renderMITRESection = () => {
-    const techniques = results.mitre_mapping || [];
-    console.log('[RENDER] Rendering MITRE section with', techniques.length, 'techniques');
+    let techniques = results.mitre_mapping || [];
+    console.log('[RENDER] Rendering MITRE section with', techniques.length, 'techniques from backend');
+
+    // Client-side fallback: Generate MITRE mappings from vulnerabilities if backend didn't provide them
+    if (techniques.length === 0 && results.vulnerabilities?.length > 0) {
+      const vulnMappings = [];
+      const seenTechniques = new Set();
+
+      // MITRE ATT&CK mapping rules based on vulnerability patterns
+      const mitrePatterns = [
+        { pattern: /sql injection|sqli/i, id: 'T1190', name: 'Exploit Public-Facing Application', tactic: 'Initial Access' },
+        { pattern: /xss|cross-site scripting/i, id: 'T1059.007', name: 'JavaScript', tactic: 'Execution' },
+        { pattern: /command injection|rce|remote code/i, id: 'T1059', name: 'Command and Scripting Interpreter', tactic: 'Execution' },
+        { pattern: /authentication|login|password|brute/i, id: 'T1110', name: 'Brute Force', tactic: 'Credential Access' },
+        { pattern: /file upload/i, id: 'T1105', name: 'Ingress Tool Transfer', tactic: 'Command and Control' },
+        { pattern: /path traversal|directory traversal|lfi/i, id: 'T1083', name: 'File and Directory Discovery', tactic: 'Discovery' },
+        { pattern: /ssrf|server-side request/i, id: 'T1090', name: 'Proxy', tactic: 'Command and Control' },
+        { pattern: /xxe|xml external/i, id: 'T1203', name: 'Exploitation for Client Execution', tactic: 'Execution' },
+        { pattern: /csrf|cross-site request/i, id: 'T1185', name: 'Browser Session Hijacking', tactic: 'Collection' },
+        { pattern: /deserialization/i, id: 'T1059', name: 'Command and Scripting Interpreter', tactic: 'Execution' },
+        { pattern: /\.git|\.svn|version control/i, id: 'T1213.003', name: 'Code Repositories', tactic: 'Collection' },
+        { pattern: /exposed|sensitive|leaked/i, id: 'T1552', name: 'Unsecured Credentials', tactic: 'Credential Access' },
+        { pattern: /header|cors|csp|hsts/i, id: 'T1189', name: 'Drive-by Compromise', tactic: 'Initial Access' },
+        { pattern: /certificate|ssl|tls/i, id: 'T1557', name: 'Adversary-in-the-Middle', tactic: 'Credential Access' },
+        { pattern: /cookie|session/i, id: 'T1539', name: 'Steal Web Session Cookie', tactic: 'Credential Access' },
+        { pattern: /admin|management|console/i, id: 'T1078', name: 'Valid Accounts', tactic: 'Persistence' },
+        { pattern: /outdated|vulnerable version|cve/i, id: 'T1190', name: 'Exploit Public-Facing Application', tactic: 'Initial Access' },
+        { pattern: /information disclosure|error/i, id: 'T1592', name: 'Gather Victim Host Information', tactic: 'Reconnaissance' },
+        { pattern: /waf|firewall/i, id: 'T1518.001', name: 'Security Software Discovery', tactic: 'Discovery' },
+        { pattern: /technology|framework|wappalyzer/i, id: 'T1592.002', name: 'Gather Victim Host Information: Software', tactic: 'Reconnaissance' },
+        { pattern: /endpoint|api|swagger/i, id: 'T1595.002', name: 'Active Scanning: Vulnerability Scanning', tactic: 'Reconnaissance' },
+      ];
+
+      for (const vuln of results.vulnerabilities) {
+        const combinedText = `${vuln.title || ''} ${vuln.description || ''}`.toLowerCase();
+
+        for (const rule of mitrePatterns) {
+          if (rule.pattern.test(combinedText) && !seenTechniques.has(rule.id)) {
+            seenTechniques.add(rule.id);
+            vulnMappings.push({
+              id: rule.id,
+              name: rule.name,
+              tactic: rule.tactic,
+              description: `Mapped from vulnerability: ${vuln.title || 'Security Finding'}`,
+              confidence: 0.7,
+              source: 'client-side'
+            });
+          }
+        }
+      }
+
+      if (vulnMappings.length > 0) {
+        techniques = vulnMappings;
+        console.log('[RENDER] Generated', techniques.length, 'client-side MITRE mappings from vulnerabilities');
+      }
+    }
 
     return (
       <section className="results-section mitre-section">
@@ -634,13 +920,16 @@ const ScanResults = () => {
                   {technique.description && (
                     <p className="technique-desc">{technique.description}</p>
                   )}
+                  {technique.confidence && (
+                    <p className="confidence-label">Confidence: <span>{Math.round(technique.confidence * 100)}%</span></p>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         ) : (
           <div className="no-results">
-            <p>No MITRE ATT&CK techniques mapped for this scan.</p>
+            <p>No MITRE ATT&CK techniques mapped for this scan. Run a new scan with vulnerability detection to see attack technique mappings.</p>
           </div>
         )}
       </section>
@@ -652,6 +941,26 @@ const ScanResults = () => {
     const totalFindings = vulnerabilityStats.total;
     const riskLevelDisplay = (risk.risk_level || 'Unknown').toString();
     console.log('[RENDER] Rendering risk section. Risk:', risk, 'Vulnerabilities:', totalFindings);
+
+    // Threat intel data for detailed display
+    const threatIntel = results.threat_intel || {};
+    const reputation = threatIntel.reputation || {};
+    const vt = threatIntel.virustotal || {};
+    const gsb = threatIntel.google_safe_browsing || {};
+    const abuse = threatIntel.abuseipdb || {};
+    const shodan = threatIntel.shodan || {};
+    const sectrails = threatIntel.securitytrails || {};
+    const leakLookup = threatIntel.leak_lookup || {};
+    const vulners = threatIntel.vulners || {};
+    const target = threatIntel.target || {};
+    const riskIndicators = threatIntel.risk_indicators || [];
+    const hasThreatIntel = threatIntel.data_sources_queried > 0;
+
+    const getReputationColorClass = (score) => {
+      if (score >= 70) return 'green-bg';
+      if (score >= 40) return 'yellow-bg';
+      return 'coral-bg';
+    };
 
     return (
       <section className="results-section overview">
@@ -680,6 +989,157 @@ const ScanResults = () => {
             </div>
           </div>
         </div>
+
+        {/* Threat Intelligence Details Section */}
+        {hasThreatIntel && (
+          <div className="threat-intel-details">
+            <h3 className="intel-section-title">External Intelligence Sources</h3>
+
+            <div className="intel-source-grid">
+              {/* Reputation Score */}
+              {reputation.score !== undefined && (
+                <div
+                  className={`intel-source-card ${getReputationColorClass(reputation.score)}`}
+                  title="Aggregated reputation score from multiple threat intelligence sources. Scores below 40 indicate high risk, 40-70 moderate risk, and above 70 low risk."
+                >
+                  <div className="intel-source-header">
+                    <span className="intel-source-icon">REP</span>
+                    <span className="intel-source-name">Reputation Score</span>
+                  </div>
+                  <div className="intel-source-value">{reputation.score}/100</div>
+                  <div className="intel-source-detail">{reputation.risk_level || 'Unknown'} • {reputation.sources_checked || 0} sources</div>
+                </div>
+              )}
+
+              {/* VirusTotal */}
+              {(vt.malicious !== undefined || vt.harmless !== undefined) && (
+                <div
+                  className={`intel-source-card ${vt.malicious > 0 ? 'coral-bg' : vt.suspicious > 0 ? 'yellow-bg' : 'green-bg'}`}
+                  title="VirusTotal aggregates results from 70+ antivirus engines and URL/domain scanners. Malicious detections indicate the target was flagged as harmful by security vendors."
+                >
+                  <div className="intel-source-header">
+                    <span className="intel-source-icon">VT</span>
+                    <span className="intel-source-name">VirusTotal</span>
+                  </div>
+                  <div className="intel-source-value">
+                    {vt.malicious > 0 ? `${vt.malicious} Malicious` : vt.suspicious > 0 ? `${vt.suspicious} Suspicious` : 'Clean'}
+                  </div>
+                  <div className="intel-source-detail">{vt.total_engines || 0} engines scanned</div>
+                </div>
+              )}
+
+              {/* Google Safe Browsing */}
+              {gsb.status && (
+                <div
+                  className={`intel-source-card ${gsb.is_flagged ? 'coral-bg' : 'green-bg'}`}
+                  title="Google Safe Browsing checks URLs against Google's constantly updated lists of unsafe web resources including malware, phishing, and unwanted software sites."
+                >
+                  <div className="intel-source-header">
+                    <span className="intel-source-icon">GSB</span>
+                    <span className="intel-source-name">Safe Browsing</span>
+                  </div>
+                  <div className="intel-source-value">{gsb.is_flagged ? 'FLAGGED' : 'Safe'}</div>
+                  <div className="intel-source-detail">{gsb.is_flagged ? gsb.threat_types?.join(', ') || 'Threat detected' : 'No threats found'}</div>
+                </div>
+              )}
+
+              {/* AbuseIPDB */}
+              {abuse.ip_address && (
+                <div
+                  className={`intel-source-card ${abuse.abuse_confidence_score > 50 ? 'coral-bg' : abuse.abuse_confidence_score > 25 ? 'yellow-bg' : 'green-bg'}`}
+                  title="AbuseIPDB is a crowd-sourced IP address abuse database. The confidence score indicates the likelihood that the IP is involved in malicious activity based on user reports."
+                >
+                  <div className="intel-source-header">
+                    <span className="intel-source-icon">ADB</span>
+                    <span className="intel-source-name">AbuseIPDB</span>
+                  </div>
+                  <div className="intel-source-value">{abuse.abuse_confidence_score || 0}%</div>
+                  <div className="intel-source-detail">{abuse.total_reports || 0} reports • {abuse.isp || 'Unknown ISP'}</div>
+                </div>
+              )}
+
+              {/* Shodan */}
+              {shodan.ip && (
+                <div
+                  className={`intel-source-card ${shodan.vuln_count > 0 ? 'coral-bg' : 'cyan-bg'}`}
+                  title="Shodan is a search engine for Internet-connected devices. It reveals open ports, running services, and known vulnerabilities on the target's IP address."
+                >
+                  <div className="intel-source-header">
+                    <span className="intel-source-icon">SHD</span>
+                    <span className="intel-source-name">Shodan</span>
+                  </div>
+                  <div className="intel-source-value">{shodan.open_ports_count || 0} Ports</div>
+                  <div className="intel-source-detail">{shodan.vuln_count || 0} vulns • {shodan.services?.length || 0} services</div>
+                </div>
+              )}
+
+              {/* SecurityTrails */}
+              {sectrails.subdomains_count !== undefined && (
+                <div
+                  className="intel-source-card blue-bg"
+                  title="SecurityTrails provides DNS intelligence including historical records, subdomains, and domain ownership data to map the target's infrastructure."
+                >
+                  <div className="intel-source-header">
+                    <span className="intel-source-icon">STR</span>
+                    <span className="intel-source-name">SecurityTrails</span>
+                  </div>
+                  <div className="intel-source-value">{sectrails.subdomains_count || 0} Subdomains</div>
+                  <div className="intel-source-detail">{sectrails.alexa_rank ? `Alexa: ${sectrails.alexa_rank}` : 'DNS records available'}</div>
+                </div>
+              )}
+
+              {/* Leak Lookup */}
+              {leakLookup.status && (
+                <div
+                  className={`intel-source-card ${leakLookup.breaches_found ? 'coral-bg' : 'green-bg'}`}
+                  title="Leak Lookup searches known data breach databases to check if the domain or associated accounts have been compromised in past security incidents."
+                >
+                  <div className="intel-source-header">
+                    <span className="intel-source-icon">BRC</span>
+                    <span className="intel-source-name">Breach Check</span>
+                  </div>
+                  <div className="intel-source-value">{leakLookup.breaches_found ? 'Breached' : 'No Breaches'}</div>
+                  <div className="intel-source-detail">{leakLookup.breach_sources?.length || 0} sources checked</div>
+                </div>
+              )}
+
+              {/* Vulners Exploit Database */}
+              {vulners.total_exploits !== undefined && (
+                <div
+                  className={`intel-source-card ${vulners.total_exploits > 0 ? 'coral-bg' : 'green-bg'}`}
+                  title="Vulners is a vulnerability database that aggregates exploits, security advisories, and CVE data. Finding exploits means attackers have ready-to-use attack code."
+                >
+                  <div className="intel-source-header">
+                    <span className="intel-source-icon">VLN</span>
+                    <span className="intel-source-name">Vulners Exploits</span>
+                  </div>
+                  <div className="intel-source-value">{vulners.total_exploits || 0} Exploits</div>
+                  <div className="intel-source-detail">
+                    {vulners.cves_searched?.length || 0} CVEs searched • {vulners.vulnerabilities_found || 0} vulns
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Risk Indicators */}
+            {riskIndicators.length > 0 && (
+              <div className="risk-indicators-section">
+                <h4 className="risk-indicators-title">Active Risk Indicators</h4>
+                <div className="risk-indicators-compact">
+                  {riskIndicators.slice(0, 5).map((indicator, idx) => (
+                    <div key={idx} className={`risk-indicator-chip ${indicator.severity}`}>
+                      <span className="indicator-source-tag">{indicator.source}</span>
+                      <span className="indicator-detail">{indicator.type}: {indicator.details}</span>
+                    </div>
+                  ))}
+                  {riskIndicators.length > 5 && (
+                    <div className="risk-indicator-chip info">+{riskIndicators.length - 5} more indicators</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </section>
     );
   };
@@ -735,11 +1195,21 @@ const ScanResults = () => {
     const severityBuckets = vulnerabilityStats.grouped;
     const strategiesTimeline = results.remediation_strategies?.timeline || {};
 
+    // Calculate average CVSS for each severity bucket for dynamic effort estimation
+    const calculateBucketAvgCvss = (items) => {
+      if (!items || items.length === 0) return 0;
+      const validScores = items.filter(v => typeof v.cvss_score === 'number' && !Number.isNaN(v.cvss_score));
+      if (validScores.length === 0) return 0;
+      return validScores.reduce((sum, v) => sum + v.cvss_score, 0) / validScores.length;
+    };
+
+    // Dynamic priority configuration - labels will be generated based on actual data
     const priorityConfig = {
-      critical: { label: 'Immediate Action', className: 'cyan', accentColor: '#6DD4D9', symbol: '!' },
-      high: { label: 'Next Sprint', className: 'coral', accentColor: '#FF6B6B', symbol: 'H' },
-      medium: { label: 'This Quarter', className: 'pink', accentColor: '#E39FCE', symbol: 'M' },
-      low: { label: 'Maintenance', className: 'yellow', accentColor: '#FFD93D', symbol: 'L' }
+      critical: { baseLabel: 'Critical', className: 'cyan', accentColor: '#6DD4D9', symbol: '!', urgency: 'Immediate' },
+      high: { baseLabel: 'High', className: 'coral', accentColor: '#FF6B6B', symbol: 'H', urgency: 'Urgent' },
+      medium: { baseLabel: 'Medium', className: 'pink', accentColor: '#E39FCE', symbol: 'M', urgency: 'Planned' },
+      low: { baseLabel: 'Low', className: 'yellow', accentColor: '#FFD93D', symbol: 'L', urgency: 'Scheduled' },
+      info: { baseLabel: 'Info', className: 'blue', accentColor: '#64B5F6', symbol: 'i', urgency: 'Monitor' }
     };
 
     const mapInsightToPriority = (insight) => {
@@ -747,6 +1217,7 @@ const ScanResults = () => {
       if (prioritySource.includes('critical') || prioritySource.includes('immediate') || prioritySource.includes('now')) return 'critical';
       if (prioritySource.includes('high') || prioritySource.includes('urgent') || prioritySource.includes('week')) return 'high';
       if (prioritySource.includes('medium') || prioritySource.includes('month') || prioritySource.includes('quarter') || prioritySource.includes('sprint')) return 'medium';
+      if (prioritySource.includes('info') || prioritySource.includes('informational') || prioritySource.includes('monitor')) return 'info';
       return 'low';
     };
 
@@ -754,7 +1225,8 @@ const ScanResults = () => {
       critical: [],
       high: [],
       medium: [],
-      low: []
+      low: [],
+      info: []
     };
 
     aiInsights.forEach((insight) => {
@@ -762,17 +1234,19 @@ const ScanResults = () => {
       insightsByPriority[priority].push(insight);
     });
 
+    // Dynamic bucket configuration - no more static defaultDuration values
     const bucketsConfig = [
-      { key: 'critical', timelineKey: 'immediate_action', defaultDuration: 7 },
-      { key: 'high', timelineKey: 'short_term', defaultDuration: 14 },
-      { key: 'medium', timelineKey: 'medium_term', defaultDuration: 30 },
-      { key: 'low', timelineKey: 'long_term', defaultDuration: 45 }
+      { key: 'critical', timelineKey: 'immediate_action', effortMultiplier: 1.5 },
+      { key: 'high', timelineKey: 'short_term', effortMultiplier: 1.2 },
+      { key: 'medium', timelineKey: 'medium_term', effortMultiplier: 1.0 },
+      { key: 'low', timelineKey: 'long_term', effortMultiplier: 0.8 },
+      { key: 'info', timelineKey: 'monitoring', effortMultiplier: 0.3 }
     ];
 
     let currentStart = 0;
     const timelineData = [];
 
-    bucketsConfig.forEach(({ key, timelineKey, defaultDuration }) => {
+    bucketsConfig.forEach(({ key, timelineKey, effortMultiplier }) => {
       const severityItems = severityBuckets[key] || [];
       const bucketInsights = insightsByPriority[key] || [];
       const timelineInfo = strategiesTimeline[timelineKey];
@@ -782,15 +1256,26 @@ const ScanResults = () => {
         return;
       }
 
-      const duration = computeTimelineDuration(timelineInfo, defaultDuration);
+      // Calculate dynamic duration based on actual item count and CVSS
+      const bucketAvgCvss = calculateBucketAvgCvss(severityItems);
+      const itemCount = severityItems.length + Math.ceil(bucketInsights.length * 0.5); // Insights count as partial items
+      const duration = computeTimelineDuration(timelineInfo, 7, itemCount, bucketAvgCvss);
       const bucketStart = currentStart;
       currentStart += duration;
 
       const priorityToken = priorityConfig[key];
 
+      // Generate dynamic label based on actual week numbers
+      const weekLabel = getDynamicLabel(bucketStart, bucketStart + duration, key);
+      const dynamicLabel = `${priorityToken.urgency} (${weekLabel})`;
+
+      // Calculate estimated hours for display
+      const estimatedHours = itemCount * (bucketAvgCvss >= 7 ? 8 : bucketAvgCvss >= 4 ? 4 : 2) * effortMultiplier;
+
       timelineData.push({
         key,
-        label: priorityToken.label,
+        label: dynamicLabel,
+        baseLabel: priorityToken.baseLabel,
         barClass: priorityToken.className,
         accentColor: priorityToken.accentColor,
         symbol: priorityToken.symbol,
@@ -798,25 +1283,30 @@ const ScanResults = () => {
         insights: bucketInsights,
         duration,
         start: bucketStart,
-        milestoneTarget: timelineInfo?.target_days || timelineInfo?.deadline_days || Math.round(bucketStart + duration),
-        milestoneLabel: timelineInfo?.target_label || timelineInfo?.deadline_label || `Target: Day ${Math.round(bucketStart + duration)}`
+        estimatedHours: Math.round(estimatedHours),
+        avgCvss: bucketAvgCvss,
+        milestoneTarget: Math.round(bucketStart + duration),
+        milestoneLabel: `Day ${Math.round(bucketStart + duration)} (~${Math.round(estimatedHours)}h effort)`
       });
     });
 
+    // Calculate total effort for summary
+    const totalEstimatedHours = timelineData.reduce((sum, bucket) => sum + (bucket.estimatedHours || 0), 0);
     const totalDuration = timelineData.reduce((max, entry) => Math.max(max, entry.start + entry.duration), 0) || 1;
-    const headerSegments = Math.max(4, Math.min(12, Math.ceil(totalDuration / 7)));
-    const headerLabels = Array.from({ length: headerSegments + 1 }, (_, index) => {
-      const dayIncrement = totalDuration / headerSegments;
-      const rawDay = dayIncrement * index;
-      const day = index === headerSegments ? Math.round(totalDuration) : Math.floor(rawDay);
-      return {
-        id: index,
-        day,
-        week: Math.round(day / 7)
-      };
-    });
+    const totalWeeks = Math.ceil(totalDuration / 7);
 
-    const timelineFindingCount = timelineData.reduce((sum, bucket) => sum + bucket.items.length, 0);
+    // Create clean week-based header labels (1-indexed for display)
+    const totalWeeksForHeader = Math.max(1, Math.ceil(totalDuration / 7));
+    const headerLabels = Array.from({ length: totalWeeksForHeader }, (_, index) => ({
+      id: index + 1,
+      week: index + 1,
+      dayStart: (index * 7) + 1,
+      dayEnd: Math.min((index + 1) * 7, Math.ceil(totalDuration))
+    }));
+
+    // Filter out empty priority levels (0 findings)
+    const filteredTimelineData = timelineData.filter(t => t.items.length > 0);
+    const timelineFindingCount = filteredTimelineData.reduce((sum, bucket) => sum + bucket.items.length, 0);
 
     return (
       <section className="results-section ai-timeframes">
@@ -825,91 +1315,159 @@ const ScanResults = () => {
           <div className="count-badge">{timelineFindingCount || aiInsights.length || vulnerabilityStats.total}</div>
         </div>
 
-        {timelineData.length > 0 ? (
-          <div className="gantt-container">
-            <div className="gantt-header">
-              <div className="gantt-row-label">Priority Level</div>
-              {headerLabels.map((label) => (
-                <div key={label.id} className="gantt-time-label">
-                  <span className="month-label">Week</span>
-                  <span className="day-label">{label.day}</span>
-                </div>
-              ))}
+        {/* Dynamic Summary Stats */}
+        <div className="intel-summary-stats">
+          <div className="stat-card">
+            <span className="stat-value">{timelineFindingCount}</span>
+            <span className="stat-label">Total Findings</span>
+          </div>
+          <div className="stat-card">
+            <span className="stat-value">{totalWeeks}</span>
+            <span className="stat-label">Est. Weeks</span>
+          </div>
+          <div className="stat-card">
+            <span className="stat-value">{totalEstimatedHours}h</span>
+            <span className="stat-label">Est. Effort</span>
+          </div>
+          <div className="stat-card">
+            <span className="stat-value">{timelineData.length}</span>
+            <span className="stat-label">Priority Levels</span>
+          </div>
+        </div>
+
+        {filteredTimelineData.length > 0 ? (
+          <div className="gantt-wrapper">
+            {/* Gantt Chart Legend */}
+            <div className="gantt-legend">
+              <div className="legend-item">
+                <div className="legend-bar cyan-bg"></div>
+                <span>Critical</span>
+              </div>
+              <div className="legend-item">
+                <div className="legend-bar coral-bg"></div>
+                <span>High</span>
+              </div>
+              <div className="legend-item">
+                <div className="legend-bar pink-bg"></div>
+                <span>Medium</span>
+              </div>
+              <div className="legend-item">
+                <div className="legend-bar yellow-bg"></div>
+                <span>Low</span>
+              </div>
+              <div className="legend-item">
+                <div className="legend-bar blue-bg"></div>
+                <span>Info</span>
+              </div>
+              <div className="legend-item">
+                <div className="legend-milestone"></div>
+                <span>Milestone</span>
+              </div>
             </div>
 
-            <div className="gantt-body">
-              {timelineData.map((timeline) => {
-                const itemCount = timeline.items.length;
-                return (
-                  <div key={timeline.key} className="gantt-row">
-                    <div className="gantt-row-label">
-                      <strong>{timeline.label}</strong>
-                      {itemCount > 0 && (
-                        <span className="item-count">({`${itemCount} ${pluralize(itemCount, 'item')}`})</span>
-                      )}
-                      {timeline.insights.length > 0 && (
-                        <span className="insights-count" style={{ background: timeline.accentColor }}>
-                          {timeline.symbol} {timeline.insights.length} insights
-                        </span>
-                      )}
+            <div className="gantt-container">
+              {/* Timeline Header */}
+              <div className="gantt-header">
+                <div className="gantt-row-label">
+                  <span className="label-title">Priority</span>
+                  <span className="label-subtitle">Findings / Effort</span>
+                </div>
+                <div className="gantt-timeline-header">
+                  {headerLabels.map((label) => (
+                    <div key={label.id} className="gantt-time-label">
+                      <span className="week-label">Week {label.week}</span>
+                      <span className="day-range">Days {label.dayStart}-{label.dayEnd}</span>
                     </div>
-                    <div className="gantt-bars">
-                      <div
-                        className={`gantt-bar ${timeline.barClass}-bg`}
-                        style={{
-                          marginLeft: `${(timeline.start / totalDuration) * 100}%`,
-                          width: `${(timeline.duration / totalDuration) * 100}%`
-                        }}
-                      >
-                        <div className="gantt-bar-content">
-                          {timeline.items.length > 0 ? (
-                            <span>{timeline.items.length} {pluralize(timeline.items.length, 'issue')}</span>
-                          ) : (
-                            <span>No findings yet</span>
-                          )}
+                  ))}
+                </div>
+              </div>
+
+              {/* Timeline Body */}
+              <div className="gantt-body">
+                {filteredTimelineData.map((timeline, index) => {
+                  const itemCount = timeline.items.length;
+                  const barStartPercent = (timeline.start / totalDuration) * 100;
+                  const barWidthPercent = Math.max((timeline.duration / totalDuration) * 100, 8);
+                  const endDay = Math.round(timeline.start + timeline.duration);
+
+                  return (
+                    <div key={timeline.key} className={`gantt-row ${index % 2 === 0 ? 'even' : 'odd'}`}>
+                      {/* Row Label */}
+                      <div className="gantt-row-label">
+                        <div className="priority-header">
+                          <span className="priority-badge" style={{ background: timeline.accentColor }}>
+                            {timeline.symbol}
+                          </span>
+                          <div className="priority-text">
+                            <strong>{timeline.baseLabel || timeline.key}</strong>
+                            <span className="priority-subtitle">
+                              {itemCount} {pluralize(itemCount, 'finding')}
+                            </span>
+                            <span className="priority-effort">
+                              ~{timeline.estimatedHours || 0}h effort
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bar Area */}
+                      <div className="gantt-bars">
+                        {/* Main Bar */}
+                        <div
+                          className={`gantt-bar ${timeline.barClass}-bg`}
+                          style={{
+                            left: `${barStartPercent}%`,
+                            width: `${barWidthPercent}%`
+                          }}
+                          title={`${timeline.baseLabel}: Days ${Math.round(timeline.start + 1)}-${endDay}, ${itemCount} findings, ${timeline.estimatedHours}h effort`}
+                        >
+                          <span className="bar-text">
+                            {timeline.duration}d / {timeline.estimatedHours}h
+                          </span>
                         </div>
 
-                        {timeline.insights.length > 0 && (
-                          <div className="gantt-insights-overlay">
-                            {timeline.insights.slice(0, 2).map((insight, i) => (
-                              <div
-                                key={i}
-                                className="insight-marker"
-                                title={insight.title || insight.description}
-                                style={{ borderColor: timeline.accentColor }}
-                              >
-                                <div className="insight-marker-icon">{timeline.symbol}</div>
-                                <div className="insight-marker-label">
-                                  {insight.title || `Insight ${i + 1}`}
-                                </div>
-                              </div>
-                            ))}
-                            {timeline.insights.length > 2 && (
-                              <div className="insight-marker-more" style={{ background: timeline.accentColor }}>
-                                +{timeline.insights.length - 2} more
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      {(timeline.items.length > 0 || timeline.insights.length > 0) && (
+                        {/* End Milestone */}
                         <div
                           className="gantt-milestone"
-                          style={{ marginLeft: `${((timeline.start + timeline.duration) / totalDuration) * 100}%` }}
+                          style={{ left: `${Math.min((endDay / totalDuration) * 100, 98)}%` }}
+                          title={`Complete by Day ${endDay}`}
                         >
-                          <div className="milestone-dot"></div>
-                          <div className="milestone-label">{timeline.milestoneLabel}</div>
+                          <span className="milestone-text">D{endDay}</span>
                         </div>
-                      )}
+                      </div>
                     </div>
+                  );
+                })}
+              </div>
+
+              {/* Summary Footer */}
+              <div className="gantt-footer">
+                <div className="gantt-footer-label">
+                  <strong>Summary</strong>
+                </div>
+                <div className="gantt-footer-content">
+                  <div className="footer-stats">
+                    <span className="footer-stat">
+                      <strong>{totalDuration}</strong> days
+                    </span>
+                    <span className="footer-stat">
+                      <strong>{totalEstimatedHours}</strong> hours
+                    </span>
+                    <span className="footer-stat">
+                      <strong>{timelineFindingCount}</strong> findings
+                    </span>
+                    <span className="footer-stat">
+                      <strong>{filteredTimelineData.length}</strong> priorities
+                    </span>
                   </div>
-                );
-              })}
+                </div>
+              </div>
             </div>
           </div>
         ) : (
-          <div className="no-results">
-            <p>Remediation timeline will populate once the scan identifies actionable findings or AI insights.</p>
+          <div className="no-results-box">
+            <div className="no-results-icon">--</div>
+            <p>Remediation timeline will populate once the scan identifies actionable findings.</p>
           </div>
         )}
 
@@ -926,24 +1484,18 @@ const ScanResults = () => {
 
                 return (
                   <div key={index} className="insight-card-modern">
-                    <div
-                      className="insight-priority-tag"
-                      style={{ background: priorityToken.accentColor }}
-                    >
-                      {priorityToken.symbol} {priorityToken.label}
-                    </div>
+                    <span className="insight-priority-tag" style={{ background: priorityToken.accentColor }}>
+                      {priorityToken.symbol}
+                    </span>
                     <h4>{insight.title || `Insight ${index + 1}`}</h4>
                     <p>{insight.description}</p>
                     {insight.recommendations && insight.recommendations.length > 0 && (
                       <ul className="insight-list">
-                        {insight.recommendations.slice(0, 3).map((rec, i) => (
-                          <li key={i}>→ {rec}</li>
+                        {insight.recommendations.slice(0, 2).map((rec, i) => (
+                          <li key={i}>{rec}</li>
                         ))}
                       </ul>
                     )}
-                    <div className="priority-badge">
-                      {insight.remediation_priority || priorityToken.label}
-                    </div>
                   </div>
                 );
               })}
@@ -1042,49 +1594,12 @@ const ScanResults = () => {
       } : null
     };
 
-    // Build cost-benefit from vulnerabilities if not provided
-    // Costs in Indian Rupees (₹) - dynamically calculated based on actual findings
-    // Base rates: Critical ₹4L, High ₹1.5L, Medium ₹75K, Low ₹35K, Info ₹15K per issue
-    const baseCriticalCost = 400000;
-    const baseHighCost = 150000;
-    const baseMediumCost = 75000;
-    const baseLowCost = 35000;
-    const baseInfoCost = 15000;
-
-    // Calculate cost based on actual CVSS scores when available
-    const calculateCost = (vulns, baseCost) => {
-      if (!vulns || vulns.length === 0) return 0;
-      return vulns.reduce((sum, v) => {
-        const cvssMultiplier = v.cvss_score ? (v.cvss_score / 5) : 1;
-        return sum + (baseCost * cvssMultiplier);
-      }, 0);
-    };
-
-    const estimatedCost = Math.round(
-      calculateCost(vulnerabilityStats.grouped.critical, baseCriticalCost) +
-      calculateCost(vulnerabilityStats.grouped.high, baseHighCost) +
-      calculateCost(vulnerabilityStats.grouped.medium, baseMediumCost) +
-      calculateCost(vulnerabilityStats.grouped.low, baseLowCost) +
-      calculateCost(vulnerabilityStats.grouped.info, baseInfoCost)
-    );
-
-    // Potential loss calculation - 10x-50x remediation cost based on severity
-    const potentialLoss = Math.round(
-      (calculateCost(vulnerabilityStats.grouped.critical, baseCriticalCost) * 20) +
-      (calculateCost(vulnerabilityStats.grouped.high, baseHighCost) * 15) +
-      (calculateCost(vulnerabilityStats.grouped.medium, baseMediumCost) * 10) +
-      (calculateCost(vulnerabilityStats.grouped.low, baseLowCost) * 5) +
-      (calculateCost(vulnerabilityStats.grouped.info, baseInfoCost) * 2)
-    );
-
-    // Dynamic effort hours based on vulnerability complexity
-    const effortHours = Math.round(
-      (vulnerabilityStats.grouped.critical || []).reduce((sum, v) => sum + Math.max(4, (v.cvss_score || 9) * 0.8), 0) +
-      (vulnerabilityStats.grouped.high || []).reduce((sum, v) => sum + Math.max(3, (v.cvss_score || 7) * 0.6), 0) +
-      (vulnerabilityStats.grouped.medium || []).reduce((sum, v) => sum + Math.max(2, (v.cvss_score || 5) * 0.4), 0) +
-      (vulnerabilityStats.grouped.low || []).reduce((sum, v) => sum + Math.max(1, (v.cvss_score || 3) * 0.3), 0) +
-      (infoCount * 0.5)
-    );
+    // Use centralized sharedMetrics for consistent data across all tabs
+    const {
+      estimatedCost, potentialLoss, effortHours, roiPercentage,
+      weeksNeeded, maxWeeks, estimatedTimeline, budgetRange, teamComposition,
+      riskScore, riskLevel
+    } = sharedMetrics;
 
     // Build dynamic recommendation based on actual scan findings
     const buildDynamicRecommendation = () => {
@@ -1117,28 +1632,15 @@ const ScanResults = () => {
       total_remediation_cost: estimatedCost,
       potential_loss: potentialLoss,
       net_benefit: potentialLoss - estimatedCost,
-      roi_percentage: estimatedCost > 0 ? Math.round((potentialLoss - estimatedCost) / estimatedCost * 100) : 0,
+      roi_percentage: roiPercentage,
       effort_hours: effortHours,
       recommendation: buildDynamicRecommendation()
     };
 
-    // Build resource allocation if not provided - dynamically calculated
-    const weeksNeeded = Math.max(1, Math.ceil(effortHours / 40));
-    const maxWeeks = Math.max(weeksNeeded + 1, Math.ceil(effortHours / 20));
-
     const effectiveResourceAllocation = Object.keys(resourceAllocation).length > 0 ? resourceAllocation : {
-      team_composition: {
-        'Security Engineers': criticalCount > 0 ? Math.max(2, Math.ceil(criticalCount / 2)) : Math.max(1, Math.ceil(highCount / 3)),
-        'Senior Developers': Math.max(1, Math.ceil((criticalCount + highCount) / 3)),
-        'Developers': Math.max(1, Math.ceil((mediumCount + lowCount) / 4)),
-        'QA Engineers': Math.max(1, Math.ceil(totalFromCounts / 10))
-      },
-      estimated_timeline: totalFromCounts > 0
-        ? `${weeksNeeded} - ${maxWeeks} weeks`
-        : 'No remediation needed',
-      budget_range: totalFromCounts > 0
-        ? `₹${Math.round(estimatedCost * 0.8).toLocaleString('en-IN')} - ₹${Math.round(estimatedCost * 1.2).toLocaleString('en-IN')}`
-        : 'N/A'
+      team_composition: teamComposition,
+      estimated_timeline: estimatedTimeline,
+      budget_range: budgetRange
     };
 
     // Build recommendations from vulnerabilities if not provided - using tactical terminology
@@ -1187,6 +1689,20 @@ const ScanResults = () => {
 
     console.log('Rendering remediation strategies:', strategies);
 
+    // Use centralized metrics for display
+    const totalEffort = effortHours;
+    const severityBreakdown = [
+      { name: 'Critical', count: criticalCount, color: '#FF6B6B', bgClass: 'coral-bg' },
+      { name: 'High', count: highCount, color: '#FFD93D', bgClass: 'yellow-bg' },
+      { name: 'Medium', count: mediumCount, color: '#E39FCE', bgClass: 'pink-bg' },
+      { name: 'Low', count: lowCount, color: '#4CAF91', bgClass: 'green-bg' },
+      { name: 'Info', count: infoCount, color: '#6DD4D9', bgClass: 'cyan-bg' }
+    ].filter(s => s.count > 0);
+
+    const maxSeverityCount = Math.max(...severityBreakdown.map(s => s.count), 1);
+    // riskScore is now on a 0-10 scale to match normalizedRisk
+    const riskColor = riskScore >= 8 ? '#FF6B6B' : riskScore >= 6 ? '#FFD93D' : riskScore >= 4 ? '#E39FCE' : '#4CAF91';
+
     return (
       <section className="results-section remediation-section">
         <div className="section-header-box cyan">
@@ -1194,64 +1710,58 @@ const ScanResults = () => {
           <div className="count-badge">{totalIssues}</div>
         </div>
 
-        {/* Vulnerability Overview Summary */}
+        {/* Stats Overview Cards - Similar to Recon Report */}
         {hasVulnerabilities && (
-          <div className="playbook-summary">
-            <div className="severity-stats-row">
-              <div className="severity-stat-block critical-block">
-                <span className="severity-count">{criticalCount}</span>
-                <span className="severity-name">Critical</span>
-              </div>
-              <div className="severity-stat-block high-block">
-                <span className="severity-count">{highCount}</span>
-                <span className="severity-name">High</span>
-              </div>
-              <div className="severity-stat-block medium-block">
-                <span className="severity-count">{mediumCount}</span>
-                <span className="severity-name">Medium</span>
-              </div>
-              <div className="severity-stat-block low-block">
-                <span className="severity-count">{lowCount}</span>
-                <span className="severity-name">Low</span>
-              </div>
-              <div className="severity-stat-block info-block">
-                <span className="severity-count">{infoCount}</span>
-                <span className="severity-name">Info</span>
-              </div>
+          <div className="playbook-overview-grid">
+            <div className="playbook-stat-card coral-bg">
+              <div className="stat-card-number">{riskScore.toFixed(1)}</div>
+              <h3 className="stat-card-title">Risk Score</h3>
+              <p className="stat-card-desc">{riskLevel} risk level based on vulnerability severity analysis</p>
+            </div>
+            <div className="playbook-stat-card yellow-bg">
+              <div className="stat-card-number">{criticalCount + highCount}</div>
+              <h3 className="stat-card-title">Urgent Issues</h3>
+              <p className="stat-card-desc">Critical and high severity findings requiring immediate attention</p>
+            </div>
+            <div className="playbook-stat-card green-bg">
+              <div className="stat-card-number">{totalEffort}h</div>
+              <h3 className="stat-card-title">Est. Effort</h3>
+              <p className="stat-card-desc">Total estimated hours to remediate all identified vulnerabilities</p>
+            </div>
+            <div className="playbook-stat-card cyan-bg">
+              <div className="stat-card-number">{Math.round(effectiveCostBenefit.roi_percentage || 0)}%</div>
+              <h3 className="stat-card-title">ROI</h3>
+              <p className="stat-card-desc">Return on investment from implementing security fixes</p>
             </div>
           </div>
         )}
 
-        {/* Priority Matrix */}
-        {totalIssues > 0 && (
+        {/* Severity Distribution */}
+        {hasVulnerabilities && (
           <div className="playbook-section">
-            <div className="playbook-section-header yellow-bg">
-              <h3>Threat Assessment Matrix</h3>
+            <div className="playbook-section-header pink-bg">
+              <h3>Threat Distribution</h3>
             </div>
-            <div className="priority-grid">
-              {Object.entries(effectivePriorityMatrix)
-                .filter(([_, items]) => Array.isArray(items) && items.length > 0)
-                .map(([priority, items]) => (
-                  <div key={priority} className={`priority-block ${priority}-block`}>
-                    <div className="priority-block-header">
-                      <span className={`severity-tag ${priority}`}>{priority.toUpperCase()}</span>
-                      <span className="issue-count">{items.length} {pluralize(items.length, 'target')}</span>
+            <div className="playbook-section-content">
+              <div className="severity-distribution">
+                {severityBreakdown.map((sev) => (
+                  <div key={sev.name} className="distribution-row">
+                    <div className="distribution-label">
+                      <span className={`distribution-badge ${sev.bgClass}`}>{sev.name}</span>
                     </div>
-                    <ul className="issue-list">
-                      {items.slice(0, 5).map((item, idx) => (
-                        <li key={idx}>
-                          <span className="issue-title">{item.title || item.name || item}</span>
-                          {(item.location || item.url) && (
-                            <code className="issue-location">{item.location || item.url}</code>
-                          )}
-                        </li>
-                      ))}
-                      {items.length > 5 && (
-                        <li className="more-link">+ {items.length - 5} more</li>
-                      )}
-                    </ul>
+                    <div className="distribution-bar-container">
+                      <div
+                        className="distribution-bar-fill"
+                        style={{
+                          width: `${(sev.count / maxSeverityCount) * 100}%`,
+                          background: sev.color
+                        }}
+                      />
+                    </div>
+                    <div className="distribution-count">{sev.count}</div>
                   </div>
                 ))}
+              </div>
             </div>
           </div>
         )}
@@ -1259,212 +1769,382 @@ const ScanResults = () => {
         {/* Remediation Timeline */}
         {hasVulnerabilities && (
           <div className="playbook-section">
-            <div className="playbook-section-header pink-bg">
-              <h3>Operation Timeline</h3>
+            <div className="playbook-section-header yellow-bg">
+              <h3>Remediation Timeline</h3>
             </div>
-            <div className="timeline-grid">
-              {effectiveTimeline.immediate_action && (
-                <div className="timeline-block critical-border">
-                  <div className="timeline-block-header">
-                    <span className="timeline-badge coral-bg">CODE RED</span>
-                    <span className="timeline-window">0-48 hours</span>
-                  </div>
-                  <p className="timeline-desc">{effectiveTimeline.immediate_action.description}</p>
-                  <div className="timeline-task-list">
-                    {effectiveTimeline.immediate_action.items?.map((item, idx) => (
-                      <div key={idx} className="timeline-task">
-                        <span className="task-name">{item.title || item}</span>
-                        {item.estimated_hours && (
-                          <span className="task-hours">{item.estimated_hours}h</span>
-                        )}
+            <div className="playbook-section-content">
+              <div className="timeline-phases">
+                {effectiveTimeline.immediate_action && (
+                  <div className="phase-card">
+                    <div className="phase-card-header coral-bg">
+                      <span className="phase-number">1</span>
+                      <div className="phase-info">
+                        <h4>Immediate Action</h4>
+                        <span className="phase-time">0-48 hours</span>
                       </div>
-                    ))}
+                    </div>
+                    <div className="phase-card-body">
+                      <ul className="phase-items-list">
+                        {effectiveTimeline.immediate_action.items?.slice(0, 4).map((item, idx) => (
+                          <li key={idx}>{item.title || item}</li>
+                        ))}
+                      </ul>
+                      {effectiveTimeline.immediate_action.items?.length > 4 && (
+                        <span className="phase-more">+{effectiveTimeline.immediate_action.items.length - 4} more items</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-              {effectiveTimeline.short_term && (
-                <div className="timeline-block high-border">
-                  <div className="timeline-block-header">
-                    <span className="timeline-badge yellow-bg">PHASE BRAVO</span>
-                    <span className="timeline-window">1-7 days</span>
-                  </div>
-                  <p className="timeline-desc">{effectiveTimeline.short_term.description}</p>
-                  <div className="timeline-task-list">
-                    {effectiveTimeline.short_term.items?.map((item, idx) => (
-                      <div key={idx} className="timeline-task">
-                        <span className="task-name">{item.title || item}</span>
-                        {item.estimated_hours && (
-                          <span className="task-hours">{item.estimated_hours}h</span>
-                        )}
+                )}
+                {effectiveTimeline.short_term && (
+                  <div className="phase-card">
+                    <div className="phase-card-header yellow-bg">
+                      <span className="phase-number">2</span>
+                      <div className="phase-info">
+                        <h4>Short Term</h4>
+                        <span className="phase-time">1-7 days</span>
                       </div>
-                    ))}
+                    </div>
+                    <div className="phase-card-body">
+                      <ul className="phase-items-list">
+                        {effectiveTimeline.short_term.items?.slice(0, 4).map((item, idx) => (
+                          <li key={idx}>{item.title || item}</li>
+                        ))}
+                      </ul>
+                      {effectiveTimeline.short_term.items?.length > 4 && (
+                        <span className="phase-more">+{effectiveTimeline.short_term.items.length - 4} more items</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-              {effectiveTimeline.medium_term && (
-                <div className="timeline-block medium-border">
-                  <div className="timeline-block-header">
-                    <span className="timeline-badge pink-bg">PHASE CHARLIE</span>
-                    <span className="timeline-window">1-4 weeks</span>
-                  </div>
-                  <p className="timeline-desc">{effectiveTimeline.medium_term.description}</p>
-                  <div className="timeline-task-list">
-                    {effectiveTimeline.medium_term.items?.map((item, idx) => (
-                      <div key={idx} className="timeline-task">
-                        <span className="task-name">{item.title || item}</span>
-                        {item.estimated_hours && (
-                          <span className="task-hours">{item.estimated_hours}h</span>
-                        )}
+                )}
+                {effectiveTimeline.medium_term && (
+                  <div className="phase-card">
+                    <div className="phase-card-header pink-bg">
+                      <span className="phase-number">3</span>
+                      <div className="phase-info">
+                        <h4>Medium Term</h4>
+                        <span className="phase-time">1-4 weeks</span>
                       </div>
-                    ))}
+                    </div>
+                    <div className="phase-card-body">
+                      <ul className="phase-items-list">
+                        {effectiveTimeline.medium_term.items?.slice(0, 4).map((item, idx) => (
+                          <li key={idx}>{item.title || item}</li>
+                        ))}
+                      </ul>
+                      {effectiveTimeline.medium_term.items?.length > 4 && (
+                        <span className="phase-more">+{effectiveTimeline.medium_term.items.length - 4} more items</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-              {effectiveTimeline.long_term && (
-                <div className="timeline-block low-border">
-                  <div className="timeline-block-header">
-                    <span className="timeline-badge green-bg">PHASE DELTA</span>
-                    <span className="timeline-window">1-3 months</span>
-                  </div>
-                  <p className="timeline-desc">{effectiveTimeline.long_term.description}</p>
-                  <div className="timeline-task-list">
-                    {effectiveTimeline.long_term.items?.map((item, idx) => (
-                      <div key={idx} className="timeline-task">
-                        <span className="task-name">{item.title || item}</span>
-                        {item.estimated_hours && (
-                          <span className="task-hours">{item.estimated_hours}h</span>
-                        )}
+                )}
+                {effectiveTimeline.long_term && (
+                  <div className="phase-card">
+                    <div className="phase-card-header green-bg">
+                      <span className="phase-number">4</span>
+                      <div className="phase-info">
+                        <h4>Long Term</h4>
+                        <span className="phase-time">1-3 months</span>
                       </div>
-                    ))}
+                    </div>
+                    <div className="phase-card-body">
+                      <ul className="phase-items-list">
+                        {effectiveTimeline.long_term.items?.slice(0, 4).map((item, idx) => (
+                          <li key={idx}>{item.title || item}</li>
+                        ))}
+                      </ul>
+                      {effectiveTimeline.long_term.items?.length > 4 && (
+                        <span className="phase-more">+{effectiveTimeline.long_term.items.length - 4} more items</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-              {effectiveTimeline.hardening && (
-                <div className="timeline-block info-border">
-                  <div className="timeline-block-header">
-                    <span className="timeline-badge cyan-bg">FORTIFY</span>
-                    <span className="timeline-window">Ongoing Ops</span>
-                  </div>
-                  <p className="timeline-desc">{effectiveTimeline.hardening.description}</p>
-                  <div className="timeline-task-list">
-                    {effectiveTimeline.hardening.items?.map((item, idx) => (
-                      <div key={idx} className="timeline-task">
-                        <span className="task-name">{item.title || item}</span>
-                        {item.estimated_hours && (
-                          <span className="task-hours">{item.estimated_hours}h</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         )}
 
-        {/* Cost-Benefit Analysis */}
-        {hasVulnerabilities && (
-          <div className="playbook-section">
-            <div className="playbook-section-header green-bg">
-              <h3>Mission Cost Analysis</h3>
-            </div>
-            <div className="cost-analysis-grid">
-              <div className="cost-block investment-block">
-                <div className="cost-block-label">Operation Budget</div>
-                <div className="cost-block-value">₹{(effectiveCostBenefit.total_remediation_cost || 0).toLocaleString('en-IN')}</div>
-                {effectiveCostBenefit.effort_hours && (
-                  <div className="cost-block-detail">{effectiveCostBenefit.effort_hours} hours effort</div>
-                )}
-              </div>
-              <div className="cost-block risk-block">
-                <div className="cost-block-label">Breach Risk Cost</div>
-                <div className="cost-block-value danger">₹{(effectiveCostBenefit.potential_loss || 0).toLocaleString('en-IN')}</div>
-                <div className="cost-block-detail">If defenses fail</div>
-              </div>
-              <div className="cost-block benefit-block">
-                <div className="cost-block-label">Strategic Advantage</div>
-                <div className="cost-block-value success">₹{(effectiveCostBenefit.net_benefit || 0).toLocaleString('en-IN')}</div>
-                {effectiveCostBenefit.roi_percentage && (
-                  <div className="cost-block-detail">Mission ROI: {Math.round(effectiveCostBenefit.roi_percentage)}%</div>
-                )}
-              </div>
-            </div>
-            {effectiveCostBenefit.recommendation && (
-              <div className="recommendation-banner">
-                <strong>Mission Brief:</strong> {effectiveCostBenefit.recommendation}
-              </div>
-            )}
-          </div>
-        )}
+        {/* Cost-Benefit Analysis - Full Width */}
+        {hasVulnerabilities && (() => {
+          const remediationCost = effectiveCostBenefit.total_remediation_cost || 0;
+          const breachCost = effectiveCostBenefit.potential_loss || 0;
+          const netSavings = effectiveCostBenefit.net_benefit || 0;
+          const roiPercent = Math.round(effectiveCostBenefit.roi_percentage || 0);
+          const maxCost = Math.max(remediationCost, breachCost);
+          const remediationWidth = maxCost > 0 ? (remediationCost / maxCost) * 100 : 0;
+          const breachWidth = maxCost > 0 ? (breachCost / maxCost) * 100 : 0;
 
-        {/* Resource Allocation */}
-        {hasVulnerabilities && (
+          // Calculate risk level based on breach vs remediation ratio
+          const riskRatio = remediationCost > 0 ? breachCost / remediationCost : 0;
+          let riskLevel, riskColor, riskAction;
+          if (riskRatio >= 10) {
+            riskLevel = 'CRITICAL';
+            riskColor = '#FF6B6B';
+            riskAction = 'IMMEDIATE ACTION REQUIRED';
+          } else if (riskRatio >= 5) {
+            riskLevel = 'HIGH';
+            riskColor = '#FFD93D';
+            riskAction = 'PRIORITIZE REMEDIATION';
+          } else if (riskRatio >= 2) {
+            riskLevel = 'MODERATE';
+            riskColor = '#E39FCE';
+            riskAction = 'SCHEDULE REMEDIATION';
+          } else {
+            riskLevel = 'LOW';
+            riskColor = '#4CAF91';
+            riskAction = 'MONITOR AND MAINTAIN';
+          }
+
+          // Breakdown costs by category
+          const breakdownItems = [
+            { label: 'Critical Fixes', percent: criticalCount > 0 ? 40 : 0, color: '#FF6B6B' },
+            { label: 'High Priority', percent: highCount > 0 ? 30 : 0, color: '#FFD93D' },
+            { label: 'Medium Issues', percent: mediumCount > 0 ? 20 : 0, color: '#E39FCE' },
+            { label: 'Low/Info Items', percent: (lowCount > 0 || infoCount > 0) ? 10 : 0, color: '#4CAF91' },
+          ].filter(item => item.percent > 0);
+
+          // Normalize percentages
+          const totalPercent = breakdownItems.reduce((acc, item) => acc + item.percent, 0);
+          breakdownItems.forEach(item => {
+            item.percent = totalPercent > 0 ? Math.round((item.percent / totalPercent) * 100) : 0;
+          });
+
+          return (
+            <div className="playbook-section cost-analysis-full">
+              <div className="playbook-section-header green-bg">
+                <h3>Cost-Benefit Analysis</h3>
+                <span className="section-subtitle">Financial Impact Assessment</span>
+              </div>
+              <div className="playbook-section-content">
+                {/* Top Stats Row */}
+                <div className="cost-stats-row">
+                  <div className="cost-stat-card">
+                    <span className="cost-stat-label">Remediation Investment</span>
+                    <span className="cost-stat-value">{`\u20B9`}{remediationCost.toLocaleString('en-IN')}</span>
+                    <span className="cost-stat-hint">One-time security spend</span>
+                  </div>
+                  <div className="cost-stat-card danger">
+                    <span className="cost-stat-label">Potential Breach Cost</span>
+                    <span className="cost-stat-value">{`\u20B9`}{breachCost.toLocaleString('en-IN')}</span>
+                    <span className="cost-stat-hint">If left unaddressed</span>
+                  </div>
+                  <div className="cost-stat-card success">
+                    <span className="cost-stat-label">Net Savings</span>
+                    <span className="cost-stat-value">{`\u20B9`}{netSavings.toLocaleString('en-IN')}</span>
+                    <span className="cost-stat-hint">Risk avoided</span>
+                  </div>
+                  <div className="cost-stat-card roi">
+                    <span className="cost-stat-label">Return on Investment</span>
+                    <span className="cost-stat-value roi-value">{roiPercent}%</span>
+                    <span className="cost-stat-hint">Value returned per rupee</span>
+                  </div>
+                </div>
+
+                {/* Cost Comparison Visual */}
+                <div className="cost-comparison-section">
+                  <h4 className="cost-section-title">Cost Comparison</h4>
+                  <div className="cost-bars-container">
+                    <div className="cost-bar-row">
+                      <div className="cost-bar-label">
+                        <span className="bar-name">Fix Now</span>
+                        <span className="bar-value">{`\u20B9`}{remediationCost.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div className="cost-bar-track">
+                        <div
+                          className="cost-bar-fill remediation"
+                          style={{ width: `${remediationWidth}%` }}
+                        >
+                          <span className="bar-percent">{remediationWidth > 10 ? `${Math.round(remediationWidth)}%` : ''}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="cost-bar-row">
+                      <div className="cost-bar-label">
+                        <span className="bar-name">Risk Exposure</span>
+                        <span className="bar-value">{`\u20B9`}{breachCost.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div className="cost-bar-track">
+                        <div
+                          className="cost-bar-fill breach"
+                          style={{ width: `${breachWidth}%` }}
+                        >
+                          <span className="bar-percent">{breachWidth > 10 ? `${Math.round(breachWidth)}%` : ''}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="cost-multiplier">
+                    <span className="multiplier-label">Risk Multiplier:</span>
+                    <span className="multiplier-value">{riskRatio.toFixed(1)}x</span>
+                    <span className="multiplier-desc">potential loss vs investment</span>
+                  </div>
+                </div>
+
+                {/* Two Column: Breakdown + ROI Gauge */}
+                <div className="cost-details-grid">
+                  {/* Cost Breakdown by Category */}
+                  <div className="cost-breakdown-card">
+                    <h4 className="cost-section-title">Investment Breakdown</h4>
+                    <div className="breakdown-chart">
+                      <div className="breakdown-bars">
+                        {breakdownItems.map((item, idx) => (
+                          <div key={idx} className="breakdown-segment" style={{ flex: item.percent }}>
+                            <div className="segment-fill" style={{ background: item.color }}></div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="breakdown-legend">
+                        {breakdownItems.map((item, idx) => (
+                          <div key={idx} className="legend-item">
+                            <span className="legend-color" style={{ background: item.color }}></span>
+                            <span className="legend-label">{item.label}</span>
+                            <span className="legend-percent">{item.percent}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ROI Gauge */}
+                  <div className="roi-gauge-card">
+                    <h4 className="cost-section-title">ROI Assessment</h4>
+                    <div className="roi-gauge">
+                      <div className="gauge-visual">
+                        <div className="gauge-track">
+                          <div
+                            className="gauge-fill"
+                            style={{
+                              width: `${Math.min(roiPercent / 10, 100)}%`,
+                              background: roiPercent >= 500 ? '#4CAF91' : roiPercent >= 200 ? '#FFD93D' : '#E39FCE'
+                            }}
+                          ></div>
+                        </div>
+                        <div className="gauge-markers">
+                          <span>0%</span>
+                          <span>250%</span>
+                          <span>500%</span>
+                          <span>750%</span>
+                          <span>1000%+</span>
+                        </div>
+                      </div>
+                      <div className="gauge-result">
+                        <span className="gauge-value">
+                          {roiPercent}%
+                        </span>
+                        <span className="gauge-label">Return on Investment</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Risk Assessment Banner */}
+                <div className="risk-assessment-banner" style={{ borderColor: riskColor }}>
+                  <div className="risk-badge" style={{ background: riskColor }}>
+                    <span className="risk-level">{riskLevel}</span>
+                    <span className="risk-label">RISK</span>
+                  </div>
+                  <div className="risk-content">
+                    <span className="risk-action">{riskAction}</span>
+                    <span className="risk-desc">
+                      {riskRatio >= 10
+                        ? `Potential breach cost is ${riskRatio.toFixed(0)}x your remediation investment. Every day of delay increases exposure.`
+                        : riskRatio >= 5
+                          ? `Breach costs ${riskRatio.toFixed(1)}x more than fixing. Strong case for immediate remediation.`
+                          : riskRatio >= 2
+                            ? `Moderate risk ratio of ${riskRatio.toFixed(1)}x. Plan remediation within your next sprint cycle.`
+                            : `Risk ratio of ${riskRatio.toFixed(1)}x is manageable. Continue monitoring and maintain security posture.`
+                      }
+                    </span>
+                  </div>
+                  {effectiveCostBenefit.recommendation && (
+                    <div className="risk-recommendation">
+                      <strong>Recommendation:</strong> {effectiveCostBenefit.recommendation}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Resource Allocation - Separate Section */}
+        {hasVulnerabilities && effectiveResourceAllocation.team_composition && (
           <div className="playbook-section">
             <div className="playbook-section-header purple-bg">
-              <h3>Unit Deployment</h3>
+              <h3>Resource Allocation</h3>
+              <span className="section-subtitle">Team and Budget Planning</span>
             </div>
-            <div className="resource-allocation-grid">
-              {effectiveResourceAllocation.team_composition && (
-                <div className="resource-block team-block">
-                  <div className="resource-block-header">Strike Team</div>
-                  <ul className="team-roster">
+            <div className="playbook-section-content">
+              <div className="resource-allocation-grid">
+                <div className="resource-card">
+                  <h4>Team Composition</h4>
+                  <div className="team-members">
                     {Object.entries(effectiveResourceAllocation.team_composition).map(([role, count]) => (
-                      <li key={role}>
-                        <span className="role-title">{role}</span>
-                        <span className="role-badge">{count}</span>
-                      </li>
+                      <div key={role} className="team-member">
+                        <span className="member-count">{count}</span>
+                        <span className="member-role">{role}</span>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </div>
-              )}
-              {effectiveResourceAllocation.estimated_timeline && (
-                <div className="resource-block duration-block">
-                  <div className="resource-block-header">Mission Duration</div>
-                  <div className="resource-block-value">{effectiveResourceAllocation.estimated_timeline}</div>
-                </div>
-              )}
-              {effectiveResourceAllocation.budget_range && (
-                <div className="resource-block budget-block">
-                  <div className="resource-block-header">Resource Allocation</div>
-                  <div className="resource-block-value">{effectiveResourceAllocation.budget_range}</div>
-                </div>
-              )}
+                {effectiveResourceAllocation.estimated_timeline && (
+                  <div className="resource-card">
+                    <h4>Estimated Timeline</h4>
+                    <span className="resource-highlight">{effectiveResourceAllocation.estimated_timeline}</span>
+                  </div>
+                )}
+                {effectiveResourceAllocation.budget_range && (
+                  <div className="resource-card">
+                    <h4>Budget Range</h4>
+                    <span className="resource-highlight">{effectiveResourceAllocation.budget_range}</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
 
-        {/* Mission Directives */}
+        {/* Action Items */}
         {effectiveRecommendations.length > 0 && (
           <div className="playbook-section">
             <div className="playbook-section-header coral-bg">
-              <h3>Mission Directives</h3>
+              <h3>Action Items</h3>
+              <span className="section-count">{effectiveRecommendations.length}</span>
             </div>
-            <div className="recommendations-grid">
-              {effectiveRecommendations.map((rec, index) => (
-                <div key={index} className={`rec-block ${rec.priority?.toLowerCase() || 'medium'}-rec`}>
-                  <div className="rec-block-header">
-                    <span className={`severity-tag ${rec.priority?.toLowerCase() || 'medium'}`}>
-                      {rec.priority?.toUpperCase() || 'MEDIUM'}
-                    </span>
-                    {rec.category && <span className="rec-tag">{rec.category}</span>}
-                  </div>
-                  <h4 className="rec-title">{rec.title || `Directive ${index + 1}`}</h4>
-                  <p className="rec-desc">{rec.description || rec.recommendation}</p>
-                  {rec.action_items && rec.action_items.length > 0 && (
-                    <div className="rec-actions">
-                      <strong>Tactical Actions:</strong>
-                      <ul>
-                        {rec.action_items.filter(a => a).map((action, idx) => (
-                          <li key={idx}>{action}</li>
-                        ))}
-                      </ul>
+            <div className="playbook-section-content no-padding">
+              <div className="action-items-list">
+                {effectiveRecommendations.map((rec, index) => (
+                  <div key={index} className={`action-item ${rec.priority?.toLowerCase() || 'medium'}-priority`}>
+                    <div className="action-item-marker">
+                      <span className="marker-number">{index + 1}</span>
                     </div>
-                  )}
-                  {rec.estimated_effort && (
-                    <div className="rec-effort">{rec.estimated_effort}</div>
-                  )}
-                </div>
-              ))}
+                    <div className="action-item-content">
+                      <div className="action-item-header">
+                        <span className={`priority-tag ${rec.priority?.toLowerCase() || 'medium'}`}>
+                          {rec.priority?.toUpperCase() || 'MEDIUM'}
+                        </span>
+                        <h4>{rec.title || `Recommendation ${index + 1}`}</h4>
+                        {rec.category && <span className="category-tag">{rec.category}</span>}
+                      </div>
+                      <p className="action-item-desc">{rec.description || rec.recommendation}</p>
+                      {rec.action_items && rec.action_items.length > 0 && (
+                        <div className="action-steps">
+                          <strong>Steps:</strong>
+                          <ol>
+                            {rec.action_items.filter(a => a).map((action, idx) => (
+                              <li key={idx}>{action}</li>
+                            ))}
+                          </ol>
+                        </div>
+                      )}
+                      {rec.estimated_effort && (
+                        <div className="action-effort">
+                          <strong>Effort:</strong> {rec.estimated_effort}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -1494,6 +2174,53 @@ const ScanResults = () => {
   console.log('  - Results loaded:', !!results);
   console.log('  - Results data:', results);
 
+  // Helper to get scan mode display info
+  const getScanModeInfo = () => {
+    const mode = results?.scan_mode || 'standard';
+    const scanTypes = results?.scan_types || [];
+
+    const modeConfig = {
+      quick: { label: 'QUICK', color: '#6DD4D9', scanners: 'Nuclei' },
+      standard: { label: 'STANDARD', color: '#FFD93D', scanners: 'Nuclei + Wapiti' },
+      deep: { label: 'DEEP', color: '#FF6B6B', scanners: 'OWASP ZAP + Nuclei + Wapiti' }
+    };
+
+    const config = modeConfig[mode] || modeConfig.standard;
+
+    // If we have actual scan types, use them
+    if (scanTypes.length > 0) {
+      config.scanners = scanTypes.map(s => {
+        if (s === 'owasp') return 'OWASP ZAP';
+        return s.charAt(0).toUpperCase() + s.slice(1);
+      }).join(' + ');
+    }
+
+    return config;
+  };
+
+  // Calculate scan duration
+  const getScanDuration = () => {
+    if (!results?.started_at) return null;
+
+    const start = new Date(results.started_at);
+    const end = results?.completed_at ? new Date(results.completed_at) : new Date();
+    const durationMs = end - start;
+
+    const minutes = Math.floor(durationMs / 60000);
+    const seconds = Math.floor((durationMs % 60000) / 1000);
+
+    if (minutes >= 60) {
+      const hours = Math.floor(minutes / 60);
+      const remainingMins = minutes % 60;
+      return `${hours}h ${remainingMins}m`;
+    }
+
+    return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+  };
+
+  const scanModeInfo = getScanModeInfo();
+  const scanDuration = getScanDuration();
+
   return (
     <Layout>
       <div className="scan-results-container">
@@ -1512,6 +2239,32 @@ const ScanResults = () => {
                 {results.target_url || 'Not available'}
               </span>
             </div>
+            <div className="scan-info-item">
+              <span className="scan-info-label">Scan Mode</span>
+              <span className="scan-info-value">
+                <span
+                  className="scan-mode-badge"
+                  style={{ backgroundColor: scanModeInfo.color }}
+                  title={`Scanners: ${scanModeInfo.scanners}`}
+                >
+                  {scanModeInfo.label}
+                </span>
+              </span>
+            </div>
+            <div className="scan-info-item">
+              <span className="scan-info-label">Scanners</span>
+              <span className="scan-info-value scan-info-scanners">
+                {scanModeInfo.scanners}
+              </span>
+            </div>
+            {scanDuration && (
+              <div className="scan-info-item">
+                <span className="scan-info-label">Duration</span>
+                <span className="scan-info-value">
+                  <span className="duration-badge">{scanDuration}</span>
+                </span>
+              </div>
+            )}
             <div className="scan-info-item">
               <span className="scan-info-label">Scan ID</span>
               <span className="scan-info-value">
@@ -1569,10 +2322,10 @@ const ScanResults = () => {
 
         <div className="tabs-content">
           {activeTab === 'overview' && renderRiskSection()}
-          {activeTab === 'summary' && summaryTabVisible && renderExecutiveSummary()}
+          {activeTab === 'summary' && renderExecutiveSummary()}
           {activeTab === 'vulnerabilities' && renderVulnerabilitySection()}
           {activeTab === 'mitre' && renderMITRESection()}
-          {activeTab === 'remediation' && hasRemediationData && renderRemediationStrategies()}
+          {activeTab === 'remediation' && renderRemediationStrategies()}
           {activeTab === 'ai' && renderAIAnalysis()}
         </div>
       </div>

@@ -245,7 +245,8 @@ class OWASPOrchestrator:
                 "status": ScanStatus.COMPLETED,
                 "completed_at": end_time,
                 "duration": (end_time - start_time).total_seconds(),
-                "progress": progress.dict(),
+                "progress": 100,
+                "current_stage": "Completed",
                 "summary": summary.dict()
             }
             
@@ -302,13 +303,27 @@ class OWASPOrchestrator:
         # Update database asynchronously
         asyncio.create_task(self._async_update_progress(scan_id, progress))
         
-        # Notify subscribers
-        self.notify_subscribers(scan_id, progress.dict())
+        # Notify subscribers with properly formatted WebSocket message
+        # Frontend expects: {type: "progress", status: {scan_id, status, progress, current_stage}}
+        ws_message = {
+            "type": "progress",
+            "status": {
+                "scan_id": scan_id,
+                "status": "in_progress",
+                "progress": int(progress.progress_percentage),
+                "current_stage": progress.current_step
+            }
+        }
+        self.notify_subscribers(scan_id, ws_message)
 
     async def _async_update_progress(self, scan_id: str, progress: ScanProgress):
         """Asynchronously update progress in database"""
         try:
-            supabase.update_scan(scan_id, {"progress": progress.dict()})
+            # Update both progress object and current_stage for WebSocket polling
+            supabase.update_scan(scan_id, {
+                "progress": int(progress.progress_percentage),
+                "current_stage": progress.current_step
+            })
         except Exception as e:
             logger.error(f"Progress update failed: {str(e)}", exc_info=True)
 

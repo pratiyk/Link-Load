@@ -39,7 +39,8 @@ class LLMProvider(ABC):
         self,
         vulnerabilities: List[Dict[str, Any]],
         risk_score: float,
-        risk_level: str
+        risk_level: str,
+        threat_intel: Optional[Dict[str, Any]] = None
     ) -> str:
         """Generate executive summary of scan results"""
         pass
@@ -66,86 +67,102 @@ class OpenAIProvider(LLMProvider):
         business_context: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Analyze vulnerabilities using GPT-4
-        
-        Args:
-            vulnerabilities: List of vulnerability objects
-            target_url: Target URL being scanned
-            business_context: Optional business context for analysis
-        
-        Returns:
-            Dict with recommendations and analysis
+        Analyze vulnerabilities using GPT-4 with detailed remediation and MITRE mapping
         """
         if not vulnerabilities:
             return {"recommendations": [], "summary": "No vulnerabilities found"}
         
-        # Prepare vulnerability summary for LLM
-        vuln_summary = self._prepare_vulnerability_summary(vulnerabilities[:10])  # Top 10
+        vuln_summary = self._prepare_vulnerability_summary(vulnerabilities[:10])
         
-        prompt = f"""
-        You are a senior security researcher analyzing vulnerability scan results.
-        
-        Target: {target_url}
-        {f'Business Context: {business_context}' if business_context else ''}
-        
-        Found Vulnerabilities:
-        {vuln_summary}
-        
-        For each vulnerability, provide:
-        1. Severity assessment (1-10 scale)
-        2. Specific remediation steps (2-3 actionable items)
-        3. Business impact if exploited
-        4. Estimated fix complexity (low/medium/high)
-        
-        Format as JSON with structure:
+        prompt = f"""You are a senior penetration tester and security architect analyzing vulnerability scan results.
+
+Target: {target_url}
+{f'Business Context: {business_context}' if business_context else ''}
+
+Found Vulnerabilities:
+{vuln_summary}
+
+For EACH vulnerability, provide comprehensive analysis:
+
+1. SEVERITY ASSESSMENT (1-10 scale with justification)
+2. MITRE ATT&CK MAPPING:
+   - Primary Technique ID and Name (e.g., T1190 - Exploit Public-Facing Application)
+   - Associated Tactic (e.g., Initial Access, Execution)
+   - Sub-techniques if applicable
+3. DETAILED REMEDIATION STEPS:
+   - Immediate mitigation (what to do RIGHT NOW)
+   - Code-level fix (specific code changes or configurations)
+   - Infrastructure hardening (WAF rules, network controls)
+   - Long-term prevention (architectural changes)
+4. EXPLOITATION SCENARIO: How an attacker would exploit this
+5. BUSINESS IMPACT: Data breach risk, compliance violations
+6. FIX COMPLEXITY: low/medium/high with time estimate
+7. DETECTION METHODS: How to detect exploitation attempts
+
+Format as JSON:
+{{
+    "vulnerabilities": [
         {{
-            "vulnerabilities": [
-                {{
-                    "title": "...",
-                    "remediation": ["step1", "step2", ...],
-                    "business_impact": "...",
-                    "fix_complexity": "...",
-                    "priority": 1-10
-                }},
-                ...
-            ],
-            "executive_summary": "..."
+            "title": "...",
+            "severity_score": 1-10,
+            "severity_justification": "...",
+            "mitre_attack": {{
+                "technique_id": "T1XXX",
+                "technique_name": "...",
+                "tactic": "...",
+                "sub_techniques": ["T1XXX.XXX"]
+            }},
+            "remediation": {{
+                "immediate": ["step1", "step2"],
+                "code_fix": ["specific code/config changes"],
+                "infrastructure": ["WAF rules, network controls"],
+                "long_term": ["architectural improvements"]
+            }},
+            "exploitation_scenario": "...",
+            "business_impact": "...",
+            "fix_complexity": "low|medium|high",
+            "estimated_fix_time": "X hours/days",
+            "detection_methods": ["log patterns", "alerts"]
         }}
-        """
+    ],
+    "attack_chain_analysis": "How vulnerabilities could be chained",
+    "executive_summary": "Overall security posture"
+}}"""
         
         try:
             response = await self.client.chat.completions.create(
-                model="gpt-3.5-turbo",  # Using GPT-3.5-turbo for better compatibility
+                model="gpt-4o-mini",
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a cybersecurity expert. Always respond with valid JSON."
+                        "content": "You are an expert penetration tester and security architect. Provide detailed, actionable security analysis with MITRE ATT&CK mappings. Always respond with valid JSON. Be specific about code fixes."
                     },
                     {
                         "role": "user",
                         "content": prompt
                     }
                 ],
-                temperature=0.7,
-                max_tokens=2000,
-                timeout=30
+                temperature=0.3,
+                max_tokens=4000,
+                timeout=45
             )
             
             import json
             result_text = response.choices[0].message.content
             
-            # Parse JSON response
             try:
                 result = json.loads(result_text)
             except json.JSONDecodeError:
-                # Extract JSON if wrapped in markdown
                 if "```json" in result_text:
                     result_text = result_text.split("```json")[1].split("```")[0]
+                    result = json.loads(result_text)
+                elif "```" in result_text:
+                    result_text = result_text.split("```")[1].split("```")[0]
                     result = json.loads(result_text)
                 else:
                     raise
             
-            logger.info(f"GPT-4 analysis complete for {len(vulnerabilities)} vulnerabilities")
+            logger.info(f"OpenAI analysis complete for {len(vulnerabilities)} vulnerabilities with MITRE mapping")
             return result
         
         except Exception as e:
@@ -156,12 +173,16 @@ class OpenAIProvider(LLMProvider):
         self,
         vulnerabilities: List[Dict[str, Any]],
         risk_score: float,
-        risk_level: str
+        risk_level: str,
+        threat_intel: Optional[Dict[str, Any]] = None
     ) -> str:
         """Generate executive summary using GPT-4"""
         
         # Prepare top vulnerabilities for context
         top_vulns = self._prepare_vulnerability_summary(vulnerabilities[:5]) if vulnerabilities else "None detected"
+        
+        # Prepare threat intel summary
+        threat_intel_summary = self._prepare_threat_intel_summary(threat_intel) if threat_intel else "No external threat intelligence collected"
         
         prompt = f"""Analyze this security scan and generate a technical summary for security professionals.
 
@@ -176,38 +197,50 @@ SCAN METRICS:
 TOP FINDINGS:
 {top_vulns}
 
-GENERATE A TECHNICAL SUMMARY (3 paragraphs, third person):
+EXTERNAL THREAT INTELLIGENCE:
+{threat_intel_summary}
 
-1. SECURITY POSTURE: Assess the target's security state. Reference specific vulnerability types found (e.g., XSS, SQL injection, misconfigurations). Be direct about severity.
+GENERATE A TECHNICAL SUMMARY (4 paragraphs, third person):
 
-2. TECHNICAL RISKS: Identify the most critical attack vectors. Explain potential exploitation scenarios and business impact. Reference CVE IDs or CWE categories if applicable.
+1. SECURITY POSTURE & ATTACK SURFACE: Assess the target's security state. Reference specific vulnerability types found (e.g., XSS, SQL injection, misconfigurations). Include external reputation data if available. Mention MITRE ATT&CK techniques that map to findings. Be direct about severity.
 
-3. REMEDIATION PRIORITIES: Provide specific, actionable remediation steps ordered by priority. Include technical fixes (e.g., "implement Content-Security-Policy headers", "upgrade to version X", "sanitize user input with parameterized queries").
+2. EXTERNAL THREAT LANDSCAPE: Summarize what external intelligence sources reveal about this target. Include VirusTotal results, AbuseIPDB reputation, Shodan exposure (open ports, services), breach history, and Safe Browsing status. If external intel shows concerning indicators, highlight them with specific data.
+
+3. TECHNICAL RISKS & ATTACK CHAINS: Identify the most critical attack vectors combining scan findings with external intel. Explain how vulnerabilities could be chained (e.g., "Initial access via T1190 could lead to..."). Reference CVE IDs, CWE categories, MITRE technique IDs, or Shodan-detected services.
+
+4. REMEDIATION PRIORITIES & DEFENSIVE MEASURES: Provide specific, actionable remediation steps ordered by priority. Include:
+   - Immediate mitigations (within 24-48 hours)
+   - Code-level fixes with specific guidance
+   - Infrastructure hardening (WAF rules, network segmentation)
+   - Detection recommendations (SIEM rules, log monitoring)
 
 RULES:
 - Write in third person ("The target application...", "The scan identified...", "Administrators should...")
 - Be technical and specific - this is for security professionals
+- Reference MITRE ATT&CK technique IDs where applicable (e.g., T1190, T1059.007)
+- Integrate external threat intel findings naturally into the narrative
 - Do NOT include any headers like "Executive Summary" or "Security Assessment"
 - Do NOT use markdown formatting (no **, ##, or bullet points)
-- Keep each paragraph 2-4 sentences
-- If no vulnerabilities found, state the target has a strong security posture but recommend continuous monitoring"""
+- Keep each paragraph 3-5 sentences
+- If no vulnerabilities found but external intel shows concerns, focus on those
+- If both vulnerabilities and external concerns are minimal, state the target has a strong security posture"""
         
         try:
             response = await self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model="gpt-4o-mini",
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a senior penetration tester writing technical security reports. Be concise, technical, and actionable. Never use first person. Never include section headers in your output."
+                        "content": "You are a senior penetration tester and threat intelligence analyst writing technical security reports. Be concise, technical, and actionable. Always reference MITRE ATT&CK techniques when discussing attack patterns. Never use first person. Never include section headers in your output. Integrate threat intelligence findings naturally."
                     },
                     {
                         "role": "user",
                         "content": prompt
                     }
                 ],
-                temperature=0.5,
-                max_tokens=700,
-                timeout=20
+                temperature=0.4,
+                max_tokens=1200,
+                timeout=30
             )
             
             return response.choices[0].message.content.strip()
@@ -215,6 +248,55 @@ RULES:
         except Exception as e:
             logger.error(f"Executive summary generation failed: {e}")
             raise
+    
+    def _prepare_threat_intel_summary(self, threat_intel: Dict[str, Any]) -> str:
+        """Prepare threat intelligence data for LLM analysis"""
+        if not threat_intel:
+            return "No external threat intelligence available"
+        
+        parts = []
+        
+        # Reputation
+        reputation = threat_intel.get("reputation", {})
+        if reputation.get("score") is not None:
+            parts.append(f"Reputation Score: {reputation.get('score')}/100 ({reputation.get('risk_level', 'Unknown')} risk)")
+        
+        # VirusTotal
+        vt = threat_intel.get("virustotal", {})
+        if vt and vt.get("status") != "not_found":
+            parts.append(f"VirusTotal: {vt.get('malicious', 0)} malicious, {vt.get('suspicious', 0)} suspicious, {vt.get('harmless', 0)} clean detections")
+        
+        # Google Safe Browsing
+        gsb = threat_intel.get("google_safe_browsing", {})
+        if gsb:
+            status = "FLAGGED - " + ", ".join(gsb.get("threat_types", [])) if gsb.get("is_flagged") else "Clean"
+            parts.append(f"Google Safe Browsing: {status}")
+        
+        # AbuseIPDB
+        abuse = threat_intel.get("abuseipdb", {})
+        if abuse and abuse.get("ip_address"):
+            parts.append(f"AbuseIPDB: {abuse.get('abuse_confidence_score', 0)}% confidence, {abuse.get('total_reports', 0)} reports, ISP: {abuse.get('isp', 'Unknown')}")
+        
+        # Shodan
+        shodan = threat_intel.get("shodan", {})
+        if shodan and shodan.get("ip"):
+            parts.append(f"Shodan: {shodan.get('open_ports_count', 0)} open ports, {shodan.get('vuln_count', 0)} known vulnerabilities, Services: {', '.join(shodan.get('services', [])[:5]) or 'None detected'}")
+        
+        # Breach data
+        leak = threat_intel.get("leak_lookup", {})
+        if leak:
+            if leak.get("has_breaches") or leak.get("breaches_found"):
+                parts.append(f"Breach History: {leak.get('breaches_found', 'Multiple')} breaches detected")
+            else:
+                parts.append("Breach History: No breaches found")
+        
+        # Risk indicators
+        indicators = threat_intel.get("risk_indicators", [])
+        if indicators:
+            indicator_summary = ", ".join([f"{i.get('type')} ({i.get('severity')})" for i in indicators[:3]])
+            parts.append(f"Risk Indicators: {len(indicators)} active - {indicator_summary}")
+        
+        return "\n".join(parts) if parts else "External intelligence queries returned no significant findings"
     
     def _prepare_vulnerability_summary(self, vulnerabilities: List[Dict]) -> str:
         """Prepare vulnerability data for LLM analysis"""
@@ -251,59 +333,83 @@ class GroqProvider(LLMProvider):
         business_context: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Analyze vulnerabilities using Groq (Mixtral or Llama)
+        Analyze vulnerabilities using Groq (Llama 3.3) with detailed remediation and MITRE mapping
         """
         if not vulnerabilities:
             return {"recommendations": [], "summary": "No vulnerabilities found"}
         
         vuln_summary = self._prepare_vulnerability_summary(vulnerabilities[:10])
         
-        prompt = f"""
-        You are a senior security researcher analyzing vulnerability scan results.
-        
-        Target: {target_url}
-        {f'Business Context: {business_context}' if business_context else ''}
-        
-        Found Vulnerabilities:
-        {vuln_summary}
-        
-        For each vulnerability, provide:
-        1. Severity assessment (1-10 scale)
-        2. Specific remediation steps (2-3 actionable items)
-        3. Business impact if exploited
-        4. Estimated fix complexity (low/medium/high)
-        
-        Format as JSON with structure:
+        prompt = f"""You are a senior penetration tester and security architect analyzing vulnerability scan results.
+
+Target: {target_url}
+{f'Business Context: {business_context}' if business_context else ''}
+
+Found Vulnerabilities:
+{vuln_summary}
+
+For EACH vulnerability, provide a comprehensive analysis:
+
+1. SEVERITY ASSESSMENT (1-10 scale with justification)
+2. MITRE ATT&CK MAPPING:
+   - Primary Technique ID and Name (e.g., T1190 - Exploit Public-Facing Application)
+   - Associated Tactic (e.g., Initial Access, Execution, Persistence)
+   - Sub-techniques if applicable
+3. DETAILED REMEDIATION STEPS (4-6 specific, actionable items):
+   - Immediate mitigation (what to do RIGHT NOW)
+   - Code-level fix (specific code changes or configurations)
+   - Infrastructure hardening (WAF rules, network controls)
+   - Long-term prevention (architectural changes)
+4. EXPLOITATION SCENARIO: How an attacker would exploit this
+5. BUSINESS IMPACT: Data breach risk, compliance violations, operational impact
+6. FIX COMPLEXITY: low/medium/high with time estimate
+7. DETECTION METHODS: How to detect exploitation attempts
+
+Format as JSON:
+{{
+    "vulnerabilities": [
         {{
-            "vulnerabilities": [
-                {{
-                    "title": "...",
-                    "remediation": ["step1", "step2", ...],
-                    "business_impact": "...",
-                    "fix_complexity": "...",
-                    "priority": 1-10
-                }},
-                ...
-            ],
-            "executive_summary": "..."
+            "title": "...",
+            "severity_score": 1-10,
+            "severity_justification": "...",
+            "mitre_attack": {{
+                "technique_id": "T1XXX",
+                "technique_name": "...",
+                "tactic": "...",
+                "sub_techniques": ["T1XXX.XXX"]
+            }},
+            "remediation": {{
+                "immediate": ["step1", "step2"],
+                "code_fix": ["specific code/config changes"],
+                "infrastructure": ["WAF rules, network controls"],
+                "long_term": ["architectural improvements"]
+            }},
+            "exploitation_scenario": "...",
+            "business_impact": "...",
+            "fix_complexity": "low|medium|high",
+            "estimated_fix_time": "X hours/days",
+            "detection_methods": ["log patterns", "alerts"]
         }}
-        """
+    ],
+    "attack_chain_analysis": "How these vulnerabilities could be chained together",
+    "executive_summary": "Overall security posture assessment"
+}}"""
         
         try:
             response = await self.client.chat.completions.create(
-                model="llama-3.3-70b-versatile",  # Fast, capable, and free model
+                model="llama-3.3-70b-versatile",
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a cybersecurity expert. Always respond with valid JSON."
+                        "content": "You are an expert penetration tester and security architect. Provide detailed, actionable security analysis with MITRE ATT&CK mappings. Always respond with valid JSON. Be specific about code fixes, not generic advice."
                     },
                     {
                         "role": "user",
                         "content": prompt
                     }
                 ],
-                temperature=0.7,
-                max_tokens=2000
+                temperature=0.3,
+                max_tokens=4000
             )
             
             import json
@@ -316,10 +422,13 @@ class GroqProvider(LLMProvider):
                 if "```json" in result_text:
                     result_text = result_text.split("```json")[1].split("```")[0]
                     result = json.loads(result_text)
+                elif "```" in result_text:
+                    result_text = result_text.split("```")[1].split("```")[0]
+                    result = json.loads(result_text)
                 else:
                     raise
             
-            logger.info(f"Groq analysis complete for {len(vulnerabilities)} vulnerabilities")
+            logger.info(f"Groq analysis complete for {len(vulnerabilities)} vulnerabilities with MITRE mapping")
             return result
         
         except Exception as e:
@@ -330,12 +439,28 @@ class GroqProvider(LLMProvider):
         self,
         vulnerabilities: List[Dict[str, Any]],
         risk_score: float,
-        risk_level: str
+        risk_level: str,
+        threat_intel: Optional[Dict[str, Any]] = None
     ) -> str:
-        """Generate executive summary using Groq"""
+        """Generate executive summary using Groq with MITRE ATT&CK context"""
         
         # Prepare top vulnerabilities for context
         top_vulns = self._prepare_vulnerability_summary(vulnerabilities[:5]) if vulnerabilities else "None detected"
+        
+        # Prepare threat intel summary
+        threat_intel_summary = self._prepare_threat_intel_summary(threat_intel) if threat_intel else "No external threat intelligence collected"
+        
+        # Extract MITRE techniques from vulnerabilities if available
+        mitre_techniques = set()
+        for v in vulnerabilities:
+            if v.get('mitre_techniques'):
+                for t in v.get('mitre_techniques', []):
+                    if isinstance(t, dict):
+                        mitre_techniques.add(f"{t.get('id', '')} ({t.get('name', '')})")
+                    elif isinstance(t, str):
+                        mitre_techniques.add(t)
+        
+        mitre_context = f"\nMITRE ATT&CK Techniques Identified: {', '.join(list(mitre_techniques)[:10])}" if mitre_techniques else ""
         
         prompt = f"""Analyze this security scan and generate a technical summary for security professionals.
 
@@ -345,26 +470,38 @@ SCAN METRICS:
 - Critical: {sum(1 for v in vulnerabilities if v.get('severity') == 'critical')}
 - High: {sum(1 for v in vulnerabilities if v.get('severity') == 'high')}
 - Medium: {sum(1 for v in vulnerabilities if v.get('severity') == 'medium')}
-- Low: {sum(1 for v in vulnerabilities if v.get('severity') == 'low')}
+- Low: {sum(1 for v in vulnerabilities if v.get('severity') == 'low')}{mitre_context}
 
 TOP FINDINGS:
 {top_vulns}
 
-GENERATE A TECHNICAL SUMMARY (3 paragraphs, third person):
+EXTERNAL THREAT INTELLIGENCE:
+{threat_intel_summary}
 
-1. SECURITY POSTURE: Assess the target's security state. Reference specific vulnerability types found (e.g., XSS, SQL injection, misconfigurations). Be direct about severity.
+GENERATE A TECHNICAL SUMMARY (4 paragraphs, third person):
 
-2. TECHNICAL RISKS: Identify the most critical attack vectors. Explain potential exploitation scenarios and business impact. Reference CVE IDs or CWE categories if applicable.
+1. SECURITY POSTURE & ATTACK SURFACE: Assess the target's security state. Reference specific vulnerability types found (e.g., XSS, SQL injection, misconfigurations). Include external reputation data if available. Mention MITRE ATT&CK techniques that map to findings. Be direct about severity.
 
-3. REMEDIATION PRIORITIES: Provide specific, actionable remediation steps ordered by priority. Include technical fixes (e.g., "implement Content-Security-Policy headers", "upgrade to version X", "sanitize user input with parameterized queries").
+2. EXTERNAL THREAT LANDSCAPE: Summarize what external intelligence sources reveal about this target. Include VirusTotal results, AbuseIPDB reputation, Shodan exposure (open ports, services), breach history, and Safe Browsing status. If external intel shows concerning indicators, highlight them with specific data points.
+
+3. TECHNICAL RISKS & ATTACK CHAINS: Identify the most critical attack vectors combining scan findings with external intel. Explain how an attacker could chain vulnerabilities together (e.g., "Initial access via T1190 could lead to..."). Reference CVE IDs, CWE categories, MITRE technique IDs, or Shodan-detected services.
+
+4. REMEDIATION PRIORITIES & DEFENSIVE MEASURES: Provide specific, actionable remediation steps ordered by priority. Include:
+   - Immediate mitigations (within 24-48 hours)
+   - Code-level fixes with specific guidance
+   - Infrastructure hardening (WAF rules, network segmentation)
+   - Detection recommendations (SIEM rules, log monitoring)
 
 RULES:
 - Write in third person ("The target application...", "The scan identified...", "Administrators should...")
 - Be technical and specific - this is for security professionals
+- Reference MITRE ATT&CK technique IDs where applicable (e.g., T1190, T1059.007)
+- Integrate external threat intel findings naturally into the narrative
 - Do NOT include any headers like "Executive Summary" or "Security Assessment"
 - Do NOT use markdown formatting (no **, ##, or bullet points)
-- Keep each paragraph 2-4 sentences
-- If no vulnerabilities found, state the target has a strong security posture but recommend continuous monitoring"""
+- Keep each paragraph 3-5 sentences
+- If no vulnerabilities found but external intel shows concerns, focus on those
+- If both vulnerabilities and external concerns are minimal, state the target has a strong security posture"""
         
         try:
             response = await self.client.chat.completions.create(
@@ -372,15 +509,15 @@ RULES:
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a senior penetration tester writing technical security reports. Be concise, technical, and actionable. Never use first person. Never include section headers in your output."
+                        "content": "You are a senior penetration tester and threat intelligence analyst writing technical security reports. Be concise, technical, and actionable. Always reference MITRE ATT&CK techniques when discussing attack patterns. Never use first person. Never include section headers in your output. Integrate threat intelligence findings naturally."
                     },
                     {
                         "role": "user",
                         "content": prompt
                     }
                 ],
-                temperature=0.5,
-                max_tokens=700
+                temperature=0.4,
+                max_tokens=1200
             )
             
             return response.choices[0].message.content.strip()
@@ -388,6 +525,55 @@ RULES:
         except Exception as e:
             logger.error(f"Executive summary generation failed: {e}")
             raise
+    
+    def _prepare_threat_intel_summary(self, threat_intel: Dict[str, Any]) -> str:
+        """Prepare threat intelligence data for LLM analysis"""
+        if not threat_intel:
+            return "No external threat intelligence available"
+        
+        parts = []
+        
+        # Reputation
+        reputation = threat_intel.get("reputation", {})
+        if reputation.get("score") is not None:
+            parts.append(f"Reputation Score: {reputation.get('score')}/100 ({reputation.get('risk_level', 'Unknown')} risk)")
+        
+        # VirusTotal
+        vt = threat_intel.get("virustotal", {})
+        if vt and vt.get("status") != "not_found":
+            parts.append(f"VirusTotal: {vt.get('malicious', 0)} malicious, {vt.get('suspicious', 0)} suspicious, {vt.get('harmless', 0)} clean detections")
+        
+        # Google Safe Browsing
+        gsb = threat_intel.get("google_safe_browsing", {})
+        if gsb:
+            status = "FLAGGED - " + ", ".join(gsb.get("threat_types", [])) if gsb.get("is_flagged") else "Clean"
+            parts.append(f"Google Safe Browsing: {status}")
+        
+        # AbuseIPDB
+        abuse = threat_intel.get("abuseipdb", {})
+        if abuse and abuse.get("ip_address"):
+            parts.append(f"AbuseIPDB: {abuse.get('abuse_confidence_score', 0)}% confidence, {abuse.get('total_reports', 0)} reports, ISP: {abuse.get('isp', 'Unknown')}")
+        
+        # Shodan
+        shodan = threat_intel.get("shodan", {})
+        if shodan and shodan.get("ip"):
+            parts.append(f"Shodan: {shodan.get('open_ports_count', 0)} open ports, {shodan.get('vuln_count', 0)} known vulnerabilities, Services: {', '.join(shodan.get('services', [])[:5]) or 'None detected'}")
+        
+        # Breach data
+        leak = threat_intel.get("leak_lookup", {})
+        if leak:
+            if leak.get("has_breaches") or leak.get("breaches_found"):
+                parts.append(f"Breach History: {leak.get('breaches_found', 'Multiple')} breaches detected")
+            else:
+                parts.append("Breach History: No breaches found")
+        
+        # Risk indicators
+        indicators = threat_intel.get("risk_indicators", [])
+        if indicators:
+            indicator_summary = ", ".join([f"{i.get('type')} ({i.get('severity')})" for i in indicators[:3]])
+            parts.append(f"Risk Indicators: {len(indicators)} active - {indicator_summary}")
+        
+        return "\n".join(parts) if parts else "External intelligence queries returned no significant findings"
     
     def _prepare_vulnerability_summary(self, vulnerabilities: List[Dict]) -> str:
         """Prepare vulnerability data for LLM analysis"""
@@ -424,50 +610,73 @@ class AnthropicProvider(LLMProvider):
         business_context: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Analyze vulnerabilities using Claude
-        
-        Similar to OpenAI but uses Claude API
+        Analyze vulnerabilities using Claude with detailed remediation and MITRE mapping
         """
         if not vulnerabilities:
             return {"recommendations": [], "summary": "No vulnerabilities found"}
         
         vuln_summary = self._prepare_vulnerability_summary(vulnerabilities[:10])
         
-        prompt = f"""
-        You are a senior security researcher analyzing vulnerability scan results.
-        
-        Target: {target_url}
-        {f'Business Context: {business_context}' if business_context else ''}
-        
-        Found Vulnerabilities:
-        {vuln_summary}
-        
-        For each vulnerability, provide:
-        1. Severity assessment (1-10 scale)
-        2. Specific remediation steps (2-3 actionable items)
-        3. Business impact if exploited
-        4. Estimated fix complexity (low/medium/high)
-        
-        Format as JSON:
+        prompt = f"""You are a senior penetration tester and security architect analyzing vulnerability scan results.
+
+Target: {target_url}
+{f'Business Context: {business_context}' if business_context else ''}
+
+Found Vulnerabilities:
+{vuln_summary}
+
+For EACH vulnerability, provide comprehensive analysis:
+
+1. SEVERITY ASSESSMENT (1-10 scale with justification)
+2. MITRE ATT&CK MAPPING:
+   - Primary Technique ID and Name (e.g., T1190 - Exploit Public-Facing Application)
+   - Associated Tactic (e.g., Initial Access, Execution)
+   - Sub-techniques if applicable
+3. DETAILED REMEDIATION STEPS:
+   - Immediate mitigation (what to do RIGHT NOW)
+   - Code-level fix (specific code changes or configurations)
+   - Infrastructure hardening (WAF rules, network controls)
+   - Long-term prevention (architectural changes)
+4. EXPLOITATION SCENARIO: How an attacker would exploit this
+5. BUSINESS IMPACT: Data breach risk, compliance violations
+6. FIX COMPLEXITY: low/medium/high with time estimate
+7. DETECTION METHODS: How to detect exploitation attempts
+
+Format as JSON:
+{{
+    "vulnerabilities": [
         {{
-            "vulnerabilities": [
-                {{
-                    "title": "...",
-                    "remediation": ["step1", "step2", ...],
-                    "business_impact": "...",
-                    "fix_complexity": "...",
-                    "priority": 1-10
-                }},
-                ...
-            ],
-            "executive_summary": "..."
+            "title": "...",
+            "severity_score": 1-10,
+            "severity_justification": "...",
+            "mitre_attack": {{
+                "technique_id": "T1XXX",
+                "technique_name": "...",
+                "tactic": "...",
+                "sub_techniques": ["T1XXX.XXX"]
+            }},
+            "remediation": {{
+                "immediate": ["step1", "step2"],
+                "code_fix": ["specific code/config changes"],
+                "infrastructure": ["WAF rules, network controls"],
+                "long_term": ["architectural improvements"]
+            }},
+            "exploitation_scenario": "...",
+            "business_impact": "...",
+            "fix_complexity": "low|medium|high",
+            "estimated_fix_time": "X hours/days",
+            "detection_methods": ["log patterns", "alerts"]
         }}
-        """
+    ],
+    "attack_chain_analysis": "How vulnerabilities could be chained",
+    "executive_summary": "Overall security posture"
+}}"""
         
         try:
             response = await self.client.messages.create(
-                model="claude-3-sonnet-20240229",
-                max_tokens=2000,
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=4000,
+                system="You are an expert penetration tester and security architect. Provide detailed, actionable security analysis with MITRE ATT&CK mappings. Always respond with valid JSON. Be specific about code fixes.",
                 messages=[
                     {
                         "role": "user",
@@ -486,10 +695,13 @@ class AnthropicProvider(LLMProvider):
                 if "```json" in result_text:
                     result_text = result_text.split("```json")[1].split("```")[0]
                     result = json.loads(result_text)
+                elif "```" in result_text:
+                    result_text = result_text.split("```")[1].split("```")[0]
+                    result = json.loads(result_text)
                 else:
                     raise
             
-            logger.info(f"Claude analysis complete for {len(vulnerabilities)} vulnerabilities")
+            logger.info(f"Claude analysis complete for {len(vulnerabilities)} vulnerabilities with MITRE mapping")
             return result
         
         except Exception as e:
@@ -500,12 +712,28 @@ class AnthropicProvider(LLMProvider):
         self,
         vulnerabilities: List[Dict[str, Any]],
         risk_score: float,
-        risk_level: str
+        risk_level: str,
+        threat_intel: Optional[Dict[str, Any]] = None
     ) -> str:
-        """Generate executive summary using Claude"""
+        """Generate executive summary using Claude with MITRE ATT&CK context"""
         
         # Prepare top vulnerabilities for context
         top_vulns = self._prepare_vulnerability_summary(vulnerabilities[:5]) if vulnerabilities else "None detected"
+        
+        # Prepare threat intel summary
+        threat_intel_summary = self._prepare_threat_intel_summary(threat_intel) if threat_intel else "No external threat intelligence collected"
+        
+        # Extract MITRE techniques from vulnerabilities if available
+        mitre_techniques = set()
+        for v in vulnerabilities:
+            if v.get('mitre_techniques'):
+                for t in v.get('mitre_techniques', []):
+                    if isinstance(t, dict):
+                        mitre_techniques.add(f"{t.get('id', '')} ({t.get('name', '')})")
+                    elif isinstance(t, str):
+                        mitre_techniques.add(t)
+        
+        mitre_context = f"\nMITRE ATT&CK Techniques Identified: {', '.join(list(mitre_techniques)[:10])}" if mitre_techniques else ""
         
         prompt = f"""Analyze this security scan and generate a technical summary for security professionals.
 
@@ -515,32 +743,37 @@ SCAN METRICS:
 - Critical: {sum(1 for v in vulnerabilities if v.get('severity') == 'critical')}
 - High: {sum(1 for v in vulnerabilities if v.get('severity') == 'high')}
 - Medium: {sum(1 for v in vulnerabilities if v.get('severity') == 'medium')}
-- Low: {sum(1 for v in vulnerabilities if v.get('severity') == 'low')}
+- Low: {sum(1 for v in vulnerabilities if v.get('severity') == 'low')}{mitre_context}
 
 TOP FINDINGS:
 {top_vulns}
 
-GENERATE A TECHNICAL SUMMARY (3 paragraphs, third person):
+EXTERNAL THREAT INTELLIGENCE:
+{threat_intel_summary}
 
-1. SECURITY POSTURE: Assess the target's security state. Reference specific vulnerability types found (e.g., XSS, SQL injection, misconfigurations). Be direct about severity.
+GENERATE A TECHNICAL SUMMARY (4 paragraphs, third person):
 
-2. TECHNICAL RISKS: Identify the most critical attack vectors. Explain potential exploitation scenarios and business impact. Reference CVE IDs or CWE categories if applicable.
+1. SECURITY POSTURE & ATTACK SURFACE: Assess the target's security state. Reference specific vulnerability types found. Include MITRE ATT&CK techniques. Be direct about severity.
 
-3. REMEDIATION PRIORITIES: Provide specific, actionable remediation steps ordered by priority. Include technical fixes (e.g., "implement Content-Security-Policy headers", "upgrade to version X", "sanitize user input with parameterized queries").
+2. EXTERNAL THREAT LANDSCAPE: Summarize what external intelligence sources reveal. Include VirusTotal, AbuseIPDB, Shodan, breach history.
+
+3. TECHNICAL RISKS & ATTACK CHAINS: Identify attack vectors. Explain how vulnerabilities could be chained. Reference MITRE technique IDs.
+
+4. REMEDIATION PRIORITIES & DEFENSIVE MEASURES: Specific, actionable remediation steps. Include immediate mitigations, code fixes, infrastructure hardening, detection recommendations.
 
 RULES:
-- Write in third person ("The target application...", "The scan identified...", "Administrators should...")
-- Be technical and specific - this is for security professionals
-- Do NOT include any headers like "Executive Summary" or "Security Assessment"
-- Do NOT use markdown formatting (no **, ##, or bullet points)
-- Keep each paragraph 2-4 sentences
-- If no vulnerabilities found, state the target has a strong security posture but recommend continuous monitoring"""
+- Write in third person
+- Be technical and specific
+- Reference MITRE ATT&CK technique IDs where applicable
+- Integrate threat intel findings naturally
+- Do NOT include headers or markdown formatting
+- Keep paragraphs 3-5 sentences"""
         
         try:
             response = await self.client.messages.create(
-                model="claude-3-sonnet-20240229",
-                max_tokens=700,
-                system="You are a senior penetration tester writing technical security reports. Be concise, technical, and actionable. Never use first person. Never include section headers in your output.",
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=1200,
+                system="You are a senior penetration tester and threat intelligence analyst writing technical security reports. Be concise, technical, and actionable. Always reference MITRE ATT&CK techniques when discussing attack patterns. Never use first person. Never include section headers in your output.",
                 messages=[
                     {
                         "role": "user",
@@ -554,6 +787,47 @@ RULES:
         except Exception as e:
             logger.error(f"Executive summary generation failed: {e}")
             raise
+    
+    def _prepare_threat_intel_summary(self, threat_intel: Dict[str, Any]) -> str:
+        """Prepare threat intelligence data for LLM analysis"""
+        if not threat_intel:
+            return "No external threat intelligence available"
+        
+        parts = []
+        
+        reputation = threat_intel.get("reputation", {})
+        if reputation.get("score") is not None:
+            parts.append(f"Reputation Score: {reputation.get('score')}/100 ({reputation.get('risk_level', 'Unknown')} risk)")
+        
+        vt = threat_intel.get("virustotal", {})
+        if vt and vt.get("status") != "not_found":
+            parts.append(f"VirusTotal: {vt.get('malicious', 0)} malicious, {vt.get('suspicious', 0)} suspicious, {vt.get('harmless', 0)} clean detections")
+        
+        gsb = threat_intel.get("google_safe_browsing", {})
+        if gsb:
+            status = "FLAGGED - " + ", ".join(gsb.get("threat_types", [])) if gsb.get("is_flagged") else "Clean"
+            parts.append(f"Google Safe Browsing: {status}")
+        
+        abuse = threat_intel.get("abuseipdb", {})
+        if abuse and abuse.get("ip_address"):
+            parts.append(f"AbuseIPDB: {abuse.get('abuse_confidence_score', 0)}% confidence, {abuse.get('total_reports', 0)} reports")
+        
+        shodan = threat_intel.get("shodan", {})
+        if shodan and shodan.get("ip"):
+            parts.append(f"Shodan: {shodan.get('open_ports_count', 0)} open ports, {shodan.get('vuln_count', 0)} known vulnerabilities")
+        
+        leak = threat_intel.get("leak_lookup", {})
+        if leak:
+            if leak.get("has_breaches") or leak.get("breaches_found"):
+                parts.append(f"Breach History: {leak.get('breaches_found', 'Multiple')} breaches detected")
+            else:
+                parts.append("Breach History: No breaches found")
+        
+        indicators = threat_intel.get("risk_indicators", [])
+        if indicators:
+            parts.append(f"Risk Indicators: {len(indicators)} active")
+        
+        return "\n".join(parts) if parts else "External intelligence queries returned no significant findings"
     
     def _prepare_vulnerability_summary(self, vulnerabilities: List[Dict]) -> str:
         """Prepare vulnerability data for LLM analysis"""
@@ -607,7 +881,8 @@ class FallbackProvider(LLMProvider):
         self,
         vulnerabilities: List[Dict[str, Any]],
         risk_score: float,
-        risk_level: str
+        risk_level: str,
+        threat_intel: Optional[Dict[str, Any]] = None
     ) -> str:
         """Generate basic summary when no LLM is configured"""
         
@@ -616,10 +891,34 @@ class FallbackProvider(LLMProvider):
         medium = sum(1 for v in vulnerabilities if v.get('severity') == 'medium')
         low = sum(1 for v in vulnerabilities if v.get('severity') == 'low')
         
+        # Build threat intel summary
+        intel_summary = ""
+        if threat_intel:
+            reputation = threat_intel.get("reputation", {})
+            vt = threat_intel.get("virustotal", {})
+            gsb = threat_intel.get("google_safe_browsing", {})
+            shodan = threat_intel.get("shodan", {})
+            
+            intel_parts = []
+            if reputation.get("score") is not None:
+                intel_parts.append(f"reputation score of {reputation.get('score')}/100")
+            if vt.get("malicious", 0) > 0:
+                intel_parts.append(f"{vt.get('malicious')} VirusTotal detections")
+            if gsb.get("is_flagged"):
+                intel_parts.append("flagged by Google Safe Browsing")
+            if shodan.get("vuln_count", 0) > 0:
+                intel_parts.append(f"{shodan.get('vuln_count')} Shodan-identified vulnerabilities")
+            
+            if intel_parts:
+                intel_summary = f" External intelligence reveals {', '.join(intel_parts)}."
+        
         if not vulnerabilities:
-            return ("The target application demonstrates a strong security posture with no vulnerabilities detected during this scan. "
-                    "However, security is an ongoing process and administrators should implement continuous monitoring, "
-                    "regular dependency updates, and periodic penetration testing to maintain this secure state.")
+            base_msg = ("The target application demonstrates a strong security posture with no vulnerabilities detected during this scan. "
+                       "However, security is an ongoing process and administrators should implement continuous monitoring, "
+                       "regular dependency updates, and periodic penetration testing to maintain this secure state.")
+            if intel_summary:
+                base_msg += intel_summary
+            return base_msg
         
         # Build severity description
         severity_parts = []
@@ -681,23 +980,32 @@ class LLMService:
         return cls._instance
     
     def _initialize_provider(self):
-        """Initialize the appropriate LLM provider"""
-        # Priority: Groq (free, fast) > OpenAI > Anthropic > Fallback
+        """Initialize the appropriate LLM provider with fallback support"""
+        # Priority: Groq (free, fast, llama-3.3-70b) > OpenAI (gpt-4o-mini) > Anthropic (claude-3.5-sonnet) > Fallback
+        
         if settings.GROQ_API_KEY:
             try:
                 self._provider = GroqProvider()
-                logger.info("LLM Service: Using Groq (Llama 3.3)")
+                logger.info("✓ LLM Service initialized with Groq (Llama 3.3-70b-versatile) - Primary provider")
             except Exception as e:
-                logger.warning(f"Groq initialization failed: {e}, trying alternatives")
+                logger.warning(f"Groq initialization failed: {e}")
                 self._try_alternative_providers()
         
         elif settings.OPENAI_API_KEY:
             try:
                 self._provider = OpenAIProvider()
-                logger.info("LLM Service: Using OpenAI GPT-3.5")
+                logger.info("✓ LLM Service initialized with OpenAI (GPT-4o-mini)")
             except Exception as e:
-                logger.warning(f"OpenAI initialization failed: {e}, using fallback")
-                self._provider = FallbackProvider()
+                logger.warning(f"OpenAI initialization failed: {e}, trying Anthropic")
+                if os.getenv('ANTHROPIC_API_KEY'):
+                    try:
+                        self._provider = AnthropicProvider()
+                        logger.info("✓ LLM Service initialized with Anthropic (Claude 3.5 Sonnet)")
+                    except Exception as e2:
+                        logger.warning(f"Anthropic initialization failed: {e2}, using fallback")
+                        self._provider = FallbackProvider()
+                else:
+                    self._provider = FallbackProvider()
         
         elif os.getenv('ANTHROPIC_API_KEY'):
             try:
@@ -769,21 +1077,24 @@ class LLMService:
         self,
         vulnerabilities: List[Dict[str, Any]],
         risk_score: float,
-        risk_level: str
+        risk_level: str,
+        threat_intel: Optional[Dict[str, Any]] = None
     ) -> str:
         """Generate executive summary"""
         try:
             return await self._provider.generate_executive_summary(
                 vulnerabilities,
                 risk_score,
-                risk_level
+                risk_level,
+                threat_intel
             )
         except Exception as e:
             logger.error(f"Executive summary generation failed: {e}")
             return await FallbackProvider().generate_executive_summary(
                 vulnerabilities,
                 risk_score,
-                risk_level
+                risk_level,
+                threat_intel
             )
 
 

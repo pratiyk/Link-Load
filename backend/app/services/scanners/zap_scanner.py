@@ -109,6 +109,14 @@ class OWASPZAPScanner(BaseScanner):
             
             logger.info(f"[ZAP] Starting scan for {config.target_url} (deep_scan={deep_scan}, ajax_spider={use_ajax_spider})")
             
+            # Configure scan duration limit from config
+            max_duration_mins = max(1, config.max_scan_duration // 60) if config.max_scan_duration else 30
+            try:
+                zap_client.ascan.set_option_max_scan_duration_in_mins(max_duration_mins)
+                logger.info(f"[ZAP] Set max scan duration to {max_duration_mins} minutes")
+            except Exception as e:
+                logger.debug(f"[ZAP] Could not set max scan duration: {e}")
+            
             # Spider the target
             spider_scan_id = zap_client.spider.scan(
                 config.target_url,
@@ -128,8 +136,7 @@ class OWASPZAPScanner(BaseScanner):
                 # Deep scan: enable all scan policies for thorough testing
                 try:
                     zap_client.ascan.set_option_max_depth(10)
-                    zap_client.ascan.set_option_max_scan_duration_in_mins(config.max_scan_duration // 60)
-                    logger.info(f"[ZAP] Deep scan: max depth 10, duration {config.max_scan_duration // 60} min")
+                    logger.info(f"[ZAP] Deep scan: max depth 10")
                 except Exception as e:
                     logger.debug(f"[ZAP] Could not set advanced options: {e}")
             
