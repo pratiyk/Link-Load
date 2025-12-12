@@ -15,7 +15,8 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.config import settings
 from app.database.supabase_client import supabase
-security = HTTPBearer()
+# Use auto_error=False so we can return 401 instead of default 403 for missing credentials
+security = HTTPBearer(auto_error=False)
 logger = logging.getLogger(__name__)
 
 class SecurityManager:
@@ -195,7 +196,7 @@ async def verify_token(token: str) -> Optional[str]:
 
 async def get_current_user_id(
     request: Request, 
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
 ) -> str:
     """Validate JWT token and return user ID
     

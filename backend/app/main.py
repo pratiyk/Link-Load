@@ -4,10 +4,12 @@ import sys
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from starlette.middleware.gzip import GZipMiddleware
 from app.core.config import settings
 from app.core.rate_limiter import limiter
 from app.core.exceptions import (
@@ -16,7 +18,13 @@ from app.core.exceptions import (
     DatabaseException,
     AuthenticationException,
     ValidationException,
-    ResourceNotFoundException
+    ResourceNotFoundException,
+    RateLimitException
+)
+from app.core.security_middleware import (
+    InjectionPreventionMiddleware,
+    SecurityHeadersMiddleware,
+    security_logger
 )
 from app.api import ws, auth, scan_manager, ws_endpoints, scans, batch_scanner, scanner, risk_analysis, remediation
 from app.api import (
@@ -34,40 +42,134 @@ app = FastAPI(
     description="Comprehensive security scanning platform",
     version="1.0.0",
     docs_url="/docs" if settings.ENABLE_DOCS else None,
-    redoc_url="/redoc" if settings.ENABLE_DOCS else None
+    redoc_url="/redoc" if settings.ENABLE_DOCS else None,
+    # Disable OpenAPI in production for security
+    openapi_url="/openapi.json" if settings.ENABLE_DOCS else None
 )
 
 # Add rate limiter to app state
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore
 
-# CORS configuration
+# =============================================================================
+# SECURITY MIDDLEWARE STACK (Order matters - first added = last executed)
+# =============================================================================
+
+# GZip compression for responses (with security consideration for BREACH attacks)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Trusted Host Middleware - Prevents Host header attacks
+if settings.ENVIRONMENT == "production":
+    allowed_hosts = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
+
+# Injection Prevention Middleware - A03:2021
+app.add_middleware(
+    InjectionPreventionMiddleware,
+    exempt_paths=["/docs", "/redoc", "/openapi.json", "/health"]
+)
+
+# Enhanced Security Headers Middleware - A05:2021
+app.add_middleware(
+    SecurityHeadersMiddleware,
+    enable_hsts=settings.ENVIRONMENT == "production",
+    csp_directives={
+        "default-src": "'self'",
+        "script-src": "'self' 'unsafe-inline'",
+        "style-src": "'self' 'unsafe-inline'",
+        "img-src": "'self' data: https:",
+        "font-src": "'self' data:",
+        "connect-src": "'self' wss: https:",
+        "frame-ancestors": "'none'",
+        "form-action": "'self'",
+        "base-uri": "'self'",
+        "object-src": "'none'",
+        "upgrade-insecure-requests": "" if settings.ENVIRONMENT == "production" else None,
+    }
+)
+
+# CORS configuration with strict settings
 origins = settings.CORS_ORIGINS.split(",") if settings.CORS_ORIGINS else []
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-CSRF-Token"],
+    expose_headers=["X-Request-ID", "X-RateLimit-Limit", "X-RateLimit-Remaining"],
+    max_age=600,  # Cache preflight requests for 10 minutes
 )
 
 # Security headers middleware
 @app.middleware("http")
-async def add_security_headers(request, call_next):
+async def add_security_headers(request: Request, call_next):
+    # Generate unique request ID for tracing
+    import uuid
+    request_id = str(uuid.uuid4())
+    
+    # Log request for security monitoring (A09:2021)
+    client_ip = request.client.host if request.client else "unknown"
+    logger.info(f"Request: {request.method} {request.url.path} from {client_ip} [req_id={request_id}]")
+    
     response = await call_next(request)
-    response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+    
+    # Add request ID to response for tracing
+    response.headers["X-Request-ID"] = request_id
+    
+    # Core security headers (reinforced by SecurityHeadersMiddleware)
+    response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Permissions-Policy"] = "geolocation=(), microphone=()"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=(), payment=()"
+    
+    # Remove server identification headers (use del with check since MutableHeaders doesn't have pop)
+    if "Server" in response.headers:
+        del response.headers["Server"]
+    if "X-Powered-By" in response.headers:
+        del response.headers["X-Powered-By"]
+    
     return response
+
+# Request size limiting middleware
+@app.middleware("http")
+async def limit_request_size(request: Request, call_next):
+    """Prevent denial of service through large request bodies"""
+    MAX_REQUEST_SIZE = 10 * 1024 * 1024  # 10MB
+    
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > MAX_REQUEST_SIZE:
+        return JSONResponse(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            content={"error": "Request too large", "detail": "Maximum request size is 10MB"}
+        )
+    
+    return await call_next(request)
 
 # Global exception handler
 @app.exception_handler(LinkLoadException)
 async def linkload_exception_handler(request: Request, exc: LinkLoadException):
     """Handle custom LinkLoad exceptions."""
+    # Log security events appropriately
+    client_ip = request.client.host if request.client else "unknown"
+    
+    if isinstance(exc, AuthenticationException):
+        security_logger.log_authentication_attempt(
+            user_id=None,
+            email=None,
+            ip_address=client_ip,
+            success=False,
+            reason=exc.detail
+        )
+    elif isinstance(exc, RateLimitException):
+        security_logger.log_rate_limit_exceeded(
+            user_id=getattr(request.state, "user_id", None),
+            ip_address=client_ip,
+            endpoint=str(request.url.path)
+        )
+    
     logger.error(f"LinkLoad exception: {exc}", exc_info=True)
     
     return JSONResponse(
@@ -81,14 +183,20 @@ async def linkload_exception_handler(request: Request, exc: LinkLoadException):
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Handle all unhandled exceptions."""
+    """Handle all unhandled exceptions with security considerations."""
+    # Log the full error internally but don't expose details to clients
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    
+    # Don't leak internal error details in production
+    detail = "An unexpected error occurred. Please try again later."
+    if settings.ENVIRONMENT == "development":
+        detail = str(exc)
     
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "error": "InternalServerError",
-            "detail": "An unexpected error occurred. Please try again later.",
+            "detail": detail,
             "status_code": status.HTTP_500_INTERNAL_SERVER_ERROR
         }
     )

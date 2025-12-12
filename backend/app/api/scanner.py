@@ -4,12 +4,15 @@ Provides the expected /api/v1/scanner/* endpoints for E2E tests
 """
 import logging
 import uuid
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Request
 from typing import Dict, Any, Optional
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, HttpUrl, field_validator
 from datetime import datetime, timezone
 
 from app.core.security import get_current_user
+from app.core.rate_limiter import limiter, RATE_LIMITS
+from app.core.validators import SecurityValidators
+from app.core.security_middleware import SSRFProtection
 from app.database.supabase_client import supabase
 
 logger = logging.getLogger(__name__)
@@ -27,6 +30,16 @@ _test_vulnerabilities: Dict[str, list] = {}
 class ScanStartRequest(BaseModel):
     """Request to start a new scan"""
     url: HttpUrl
+    
+    @field_validator('url')
+    @classmethod
+    def validate_scan_url(cls, v):
+        """Validate URL for SSRF prevention"""
+        url_str = str(v)
+        is_valid, error = SSRFProtection.validate_url(url_str)
+        if not is_valid:
+            raise ValueError(f"Invalid scan target: {error}")
+        return v
 
 
 class ScanStartResponse(BaseModel):
@@ -62,7 +75,9 @@ class ScanResultsResponse(BaseModel):
 # ============================================================================
 
 @router.post("/start", response_model=ScanStartResponse)
+@limiter.limit(RATE_LIMITS["scan_start"])
 async def start_scan(
+    http_request: Request,
     request: ScanStartRequest,
     background_tasks: BackgroundTasks,
     current_user = Depends(get_current_user)
@@ -77,6 +92,11 @@ async def start_scan(
         # Generate unique scan ID
         scan_id = f"scan_{uuid.uuid4().hex[:12]}"
         target_url = str(request.url)
+        
+        # Additional SSRF validation
+        is_valid, error = SSRFProtection.validate_url(target_url)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=f"Invalid target URL: {error}")
         
         # Create scan record in database
         scan_record = {
@@ -114,7 +134,9 @@ async def start_scan(
 
 
 @router.get("/status/{scan_id}", response_model=ScanStatusResponse)
+@limiter.limit(RATE_LIMITS["scan_status"])
 async def get_scan_status(
+    request: Request,
     scan_id: str,
     current_user = Depends(get_current_user)
 ):
@@ -123,6 +145,10 @@ async def get_scan_status(
     
     Returns the scan progress and current state.
     """
+    # Validate scan_id format to prevent injection
+    if not scan_id.startswith("scan_") or len(scan_id) > 50:
+        raise HTTPException(status_code=400, detail="Invalid scan ID format")
+    
     try:
         # Try Supabase first, fall back to in-memory storage
         scan = None

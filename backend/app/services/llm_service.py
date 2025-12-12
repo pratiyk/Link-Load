@@ -857,6 +857,9 @@ class FallbackProvider(LLMProvider):
         """
         logger.warning("Using fallback analysis (no LLM configured)")
         
+        # Filter out None entries from vulnerabilities
+        vulnerabilities = [v for v in vulnerabilities if v is not None]
+        
         recommendations = []
         for vuln in vulnerabilities[:10]:
             recommendations.append({
@@ -885,6 +888,9 @@ class FallbackProvider(LLMProvider):
         threat_intel: Optional[Dict[str, Any]] = None
     ) -> str:
         """Generate basic summary when no LLM is configured"""
+        
+        # Filter out None entries from vulnerabilities
+        vulnerabilities = [v for v in vulnerabilities if v is not None]
         
         critical = sum(1 for v in vulnerabilities if v.get('severity') == 'critical')
         high = sum(1 for v in vulnerabilities if v.get('severity') == 'high')

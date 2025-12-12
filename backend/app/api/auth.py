@@ -5,7 +5,7 @@ import logging
 from datetime import timedelta
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, Request
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
@@ -20,6 +20,8 @@ from app.core.exceptions import (
     AuthenticationException, ValidationException, DatabaseException
 )
 from app.core.config import settings
+from app.core.rate_limiter import limiter, RATE_LIMITS
+from app.core.security_middleware import security_logger
 from app.utils.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
@@ -37,7 +39,8 @@ class SupabaseEmailConfirmRequest(BaseModel):
 
 
 @router.post("/register", response_model=UserWithTokens, status_code=status.HTTP_201_CREATED)
-async def register_user(user_data: UserCreate, db: Session = Depends(get_db)):
+@limiter.limit(RATE_LIMITS["auth_register"])
+async def register_user(request: Request, user_data: UserCreate, db: Session = Depends(get_db)):
     """
     Register a new user with email and password
     
@@ -47,6 +50,7 @@ async def register_user(user_data: UserCreate, db: Session = Depends(get_db)):
     - Creates user account
     - Returns user data with JWT tokens
     """
+    client_ip = request.client.host if request.client else "unknown"
     try:
         email = user_data.email.strip().lower()
         username = user_data.username.strip().lower()
@@ -106,7 +110,8 @@ async def register_user(user_data: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=UserWithTokens)
-async def login(credentials: UserLogin, db: Session = Depends(get_db)):
+@limiter.limit(RATE_LIMITS["auth_login"])
+async def login(request: Request, credentials: UserLogin, db: Session = Depends(get_db)):
     """
     Login with email and password
     
@@ -115,29 +120,56 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
     - Tracks failed login attempts
     - Returns user data with JWT tokens
     """
+    client_ip = request.client.host if request.client else "unknown"
     try:
         email = credentials.email.strip().lower()
         # Find user by email
         user = db.query(User).filter(User.email == email).first()
         
         if not user:
-            logger.warning("Failed login attempt for unknown email", extra={"email": email})
+            security_logger.log_authentication_attempt(
+                user_id=None,
+                email=email,
+                ip_address=client_ip,
+                success=False,
+                reason="User not found"
+            )
             raise AuthenticationException(_GENERIC_LOGIN_ERROR)
         
         # Check if account is locked
         if user.locked_until and user.locked_until > utc_now():  # type: ignore
-            logger.warning("Login attempt on locked account", extra={"email": email, "locked_until": user.locked_until})
+            security_logger.log_authentication_attempt(
+                user_id=str(user.id),
+                email=email,
+                ip_address=client_ip,
+                success=False,
+                reason="Account locked"
+            )
             raise AuthenticationException(_GENERIC_LOGIN_ERROR)
         
         # Check if account is active
         if not user.is_active:  # type: ignore
-            logger.warning("Login attempt on inactive account", extra={"email": email})
+            security_logger.log_authentication_attempt(
+                user_id=str(user.id),
+                email=email,
+                ip_address=client_ip,
+                success=False,
+                reason="Account inactive"
+            )
             raise AuthenticationException(_GENERIC_LOGIN_ERROR)
         
         # Verify password
         if not security_manager.verify_password(credentials.password, str(user.hashed_password)):
             # Increment failed login attempts
             user.failed_login_attempts += 1  # type: ignore
+            
+            security_logger.log_authentication_attempt(
+                user_id=str(user.id),
+                email=email,
+                ip_address=client_ip,
+                success=False,
+                reason=f"Invalid password (attempt {user.failed_login_attempts})"
+            )
             
             # Lock account after 5 failed attempts
             if user.failed_login_attempts >= 5:  # type: ignore
@@ -147,7 +179,6 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
                 raise AuthenticationException(_GENERIC_LOGIN_ERROR)
             
             db.commit()
-            logger.warning("Invalid credentials submitted", extra={"email": email})
             raise AuthenticationException(_GENERIC_LOGIN_ERROR)
         
         # Reset failed login attempts on successful login
@@ -156,6 +187,15 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
         user.last_login = utc_now()  # type: ignore
         db.commit()
         db.refresh(user)
+        
+        # Log successful authentication
+        security_logger.log_authentication_attempt(
+            user_id=str(user.id),
+            email=email,
+            ip_address=client_ip,
+            success=True,
+            reason=None
+        )
         
         logger.info("User logged in", extra={"email": email})
         
@@ -181,7 +221,8 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh_token(token_data: TokenRefresh, db: Session = Depends(get_db)):
+@limiter.limit(RATE_LIMITS["auth_refresh"])
+async def refresh_token(request: Request, token_data: TokenRefresh, db: Session = Depends(get_db)):
     """
     Refresh access token using refresh token
     
