@@ -653,7 +653,7 @@ describe('ScanResults experience', () => {
     await user.click(retryButton);
     expect(window.location.reload).toHaveBeenCalled();
 
-    const backButton = screen.getByRole('button', { name: /Back to Home/i });
+    const backButton = screen.getByRole('button', { name: /Return to Base/i });
     await user.click(backButton);
     expect(await screen.findByTestId('home-root')).toBeInTheDocument();
 

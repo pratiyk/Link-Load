@@ -4,6 +4,8 @@
  * Bold colors, black borders, playful shadows
  */
 
+@import url('https://fonts.googleapis.com/css2?family=VT323&family=Roboto+Condensed:wght@300;400;500;600;700&family=Share+Tech&display=swap');
+
 .scan-results-container {
   max-width: 100%;
   margin: 0;
@@ -46,7 +48,7 @@
 }
 
 .results-header h1 {
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
   font-size: 2.5rem;
   color: var(--color-black, #000);
   margin: 0;
@@ -56,7 +58,7 @@
 }
 
 .back-button {
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
   background: #FF6B6B;
   color: var(--color-black, #000);
   border: 3px solid var(--color-black, #000);
@@ -95,7 +97,7 @@
 }
 
 .scan-info-label {
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -107,7 +109,7 @@
 }
 
 .scan-info-value {
-  font-family: var(--font-sans, 'Inter', sans-serif);
+  font-family: var(--font-body, 'Roboto Condensed', sans-serif);
   font-weight: 600;
   line-height: 1.5;
   color: var(--color-black, #000);
@@ -147,7 +149,7 @@
 .scan-mode-badge {
   display: inline-block;
   padding: 0.4rem 1rem;
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
   font-weight: 700;
   font-size: 0.85rem;
   color: var(--color-black, #000);
@@ -161,7 +163,7 @@
 .duration-badge {
   display: inline-block;
   padding: 0.4rem 1rem;
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
   font-weight: 700;
   font-size: 0.85rem;
   background: #E39FCE;
@@ -174,7 +176,7 @@
 
 /* Scanners list styling */
 .scan-info-scanners {
-  font-family: var(--font-sans, 'Inter', sans-serif);
+  font-family: var(--font-body, 'Roboto Condensed', sans-serif);
   font-size: 0.85rem;
   color: var(--color-black, #000);
   font-weight: 600;
@@ -211,7 +213,7 @@
   white-space: normal;
   overflow: visible;
   box-shadow: none;
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
   position: relative;
   text-align: center;
 }
@@ -1672,7 +1674,7 @@
 }
 
 .no-vulns-container h3 {
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
   font-size: 1.5rem;
   margin-bottom: 0.5rem;
   text-transform: uppercase;
@@ -2081,7 +2083,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 1rem;
-  font-family: var(--font-sans, 'Inter', sans-serif);
+  font-family: var(--font-body, 'Roboto Condensed', sans-serif);
   color: var(--color-black, #000);
   line-height: 1.6;
   font-size: 0.9rem;
@@ -2099,7 +2101,7 @@
 }
 
 .scan-info-label {
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -2110,7 +2112,7 @@
 }
 
 .scan-info-value {
-  font-family: var(--font-sans, 'Inter', sans-serif);
+  font-family: var(--font-body, 'Roboto Condensed', sans-serif);
   font-weight: 600;
   line-height: 1.5;
   flex: 1 1 auto;
@@ -2618,7 +2620,7 @@
 
 .error-container h2 {
   margin: 0;
-  font-family: var(--font-display, 'DotGothic16', sans-serif);
+  font-family: var(--font-heading, 'VT323', monospace);
   font-size: calc(var(--font-size-2xl, 4rem) * 0.45);
   text-transform: uppercase;
   letter-spacing: 0.12em;
@@ -2643,7 +2645,7 @@
   margin: 0;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  font-family: var(--font-display, 'DotGothic16', sans-serif);
+  font-family: var(--font-heading, 'VT323', monospace);
   font-size: var(--font-size-sm, 0.9rem);
   font-weight: 700;
   cursor: pointer;
@@ -3178,7 +3180,7 @@
   color: var(--color-black, #000);
   margin-bottom: 0.5rem;
   line-height: 1;
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
 }
 
 .stat-card-title {
@@ -3283,7 +3285,7 @@
   font-size: 1.25rem;
   font-weight: 800;
   text-align: right;
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
 }
 
 /* Timeline Phases */
@@ -3426,7 +3428,7 @@
 .cost-stat-value {
   font-size: 1.5rem;
   font-weight: 800;
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
   color: #000;
 }
 
@@ -3489,7 +3491,7 @@
   display: block;
   font-size: 1rem;
   font-weight: 800;
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
 }
 
 .cost-bar-track {
@@ -3542,7 +3544,7 @@
   font-size: 1.25rem;
   font-weight: 800;
   color: #FF6B6B;
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
 }
 
 .multiplier-desc {
@@ -3660,7 +3662,7 @@
 .gauge-value {
   font-size: 2rem;
   font-weight: 800;
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
   color: #000;
 }
 
@@ -3695,7 +3697,7 @@
   font-size: 1.1rem;
   font-weight: 800;
   color: #000;
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
 }
 
 .risk-label {
@@ -3777,7 +3779,7 @@
   font-size: 1.25rem;
   font-weight: 800;
   color: #9B6DD4;
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
 }
 
 .member-role {
@@ -3791,7 +3793,7 @@
   font-size: 1.1rem;
   font-weight: 700;
   color: #000;
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
 }
 
 /* Responsive adjustments for Cost Analysis */
@@ -3860,7 +3862,7 @@
 
 .team-chip strong {
   color: #6DD4D9;
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
 }
 
 .resource-value {
@@ -3924,7 +3926,7 @@
   border: 3px solid var(--color-black, #000);
   font-weight: 800;
   font-size: 1rem;
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
 }
 
 .action-item-content {
@@ -4493,7 +4495,7 @@
   font-weight: 700;
   color: var(--color-black, #000);
   margin: 0.5rem 0 0;
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
 }
 
 /* Recommendations Enhanced */
@@ -4718,7 +4720,7 @@
 }
 
 .intel-stat-value {
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
   font-size: 1.75rem;
   font-weight: 700;
   color: var(--color-black, #000);
@@ -4828,7 +4830,7 @@
 .breach-status {
   display: inline-block;
   padding: 0.5rem 1.5rem;
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
   font-size: 1.25rem;
   font-weight: 700;
   border: 3px solid var(--color-black, #000);
@@ -4891,7 +4893,7 @@
 }
 
 .intel-section-title {
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
   font-size: 1.25rem;
   font-weight: 700;
   margin: 0 0 1.5rem 0;
@@ -4928,7 +4930,7 @@
 
 .intel-source-icon {
   font-size: 0.7rem;
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
   font-weight: 700;
   background: rgba(0, 0, 0, 0.15);
   padding: 0.2rem 0.35rem;
@@ -4948,7 +4950,7 @@
 }
 
 .intel-source-name {
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -4957,7 +4959,7 @@
 }
 
 .intel-source-value {
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
   font-size: 1.5rem;
   font-weight: 700;
   color: var(--color-black, #000);
@@ -4978,7 +4980,7 @@
 }
 
 .risk-indicators-title {
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
   font-size: 0.9rem;
   font-weight: 700;
   margin: 0 0 1rem 0;
@@ -5030,7 +5032,7 @@
 }
 
 .indicator-source-tag {
-  font-family: var(--font-display, 'DotGothic16', monospace);
+  font-family: var(--font-heading, 'VT323', monospace);
   font-weight: 700;
   text-transform: uppercase;
   font-size: 0.65rem;

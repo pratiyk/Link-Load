@@ -3,6 +3,8 @@
  * Inspired by the provided slide deck with playful geometric colour panels
  */
 
+@import url('https://fonts.googleapis.com/css2?family=VT323&family=Roboto+Condensed:wght@300;400;500;600;700&family=Share+Tech&display=swap');
+
 .home {
   max-width: 100%;
   margin: 0;
@@ -27,7 +29,7 @@
 }
 
 .navbar-logo {
-  font-family: var(--font-display);
+  font-family: var(--font-heading);
   font-size: var(--font-size-lg);
   font-weight: 600;
   letter-spacing: 0.14em;
@@ -264,7 +266,7 @@
 }
 
 .project-title {
-  font-family: var(--font-display);
+  font-family: var(--font-heading);
   font-size: var(--font-size-3xl);
   font-weight: 600;
   color: var(--color-black);
@@ -274,7 +276,7 @@
 }
 
 .subtitle {
-  font-family: var(--font-sans);
+  font-family: var(--font-body);
   font-size: var(--font-size-lg);
   color: var(--color-black);
   margin: 0;
@@ -359,7 +361,7 @@
 }
 
 .glitch-text {
-  font-family: var(--font-display);
+  font-family: var(--font-heading);
   font-size: var(--font-size-xl);
   color: var(--color-black);
   letter-spacing: 0.12em;
@@ -378,7 +380,7 @@
   justify-content: center;
   width: 100%;
   height: 100%;
-  font-family: var(--font-display);
+  font-family: var(--font-heading);
   font-size: var(--font-size-xl);
   color: var(--color-black);
   letter-spacing: 0.12em;
@@ -494,7 +496,7 @@
 }
 
 .scan-mode-title {
-  font-family: var(--font-display);
+  font-family: var(--font-heading);
   font-size: var(--font-size-sm);
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -552,7 +554,7 @@
 
 /* Decorative badge showing mode name in details */
 .mode-details-badge {
-  font-family: var(--font-display);
+  font-family: var(--font-heading);
   font-size: var(--font-size-md);
   font-weight: 900;
   padding: 6px 10px;
@@ -564,7 +566,7 @@
 }
 
 .scan-mode-btn .mode-label {
-  font-family: var(--font-display);
+  font-family: var(--font-heading);
   font-size: var(--font-size-sm);
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -615,7 +617,7 @@
 /* removed icon-specific rule; details use .mode-details-badge */
 
 .mode-details-title h4 {
-  font-family: var(--font-display);
+  font-family: var(--font-heading);
   font-size: var(--font-size-md);
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -705,7 +707,7 @@
 }
 
 .feature-status {
-  font-family: var(--font-display);
+  font-family: var(--font-heading);
   font-weight: 700;
   font-size: 9px;
   letter-spacing: 0.04em;
@@ -776,7 +778,7 @@
 
 /* ===== SECTION TITLES ===== */
 .section-title {
-  font-family: var(--font-display);
+  font-family: var(--font-heading);
   font-size: var(--font-size-2xl);
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -792,7 +794,7 @@
 
 .recent-scans-section .section-title {
   display: inline-block;
-  font-family: var(--font-display);
+  font-family: var(--font-heading);
   font-size: var(--font-size-xl);
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -837,7 +839,7 @@
 }
 
 .scan-url {
-  font-family: var(--font-display);
+  font-family: var(--font-heading);
   font-size: var(--font-size-md);
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -940,7 +942,7 @@
 }
 
 .no-scans-message p {
-  font-family: var(--font-display);
+  font-family: var(--font-heading);
   font-size: var(--font-size-md);
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -987,7 +989,7 @@
 }
 
 .large-heading {
-  font-family: var(--font-display);
+  font-family: var(--font-heading);
   font-size: var(--font-size-2xl);
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -996,7 +998,7 @@
 }
 
 .heading-description {
-  font-family: var(--font-sans);
+  font-family: var(--font-body);
   font-size: var(--font-size-lg);
   color: var(--color-black);
   max-width: 540px;
@@ -1134,7 +1136,7 @@
 }
 
 .section-title-large {
-  font-family: var(--font-display);
+  font-family: var(--font-heading);
   font-size: var(--font-size-xl);
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1144,7 +1146,7 @@
 }
 
 .section-subtitle {
-  font-family: var(--font-sans);
+  font-family: var(--font-body);
   font-size: var(--font-size-md);
   color: var(--color-black);
   max-width: 600px;
@@ -1229,7 +1231,7 @@
 }
 
 .feature-number {
-  font-family: var(--font-display);
+  font-family: var(--font-heading);
   font-size: var(--font-size-3xl);
   font-weight: 900;
   color: var(--color-black);
@@ -1238,7 +1240,7 @@
 }
 
 .feature-card h3 {
-  font-family: var(--font-display);
+  font-family: var(--font-heading);
   font-size: var(--font-size-xl);
   color: var(--color-black);
   margin: 0;
@@ -1247,7 +1249,7 @@
 }
 
 .feature-card p {
-  font-family: var(--font-sans);
+  font-family: var(--font-body);
   font-size: var(--font-size-sm);
   line-height: 1.65;
   color: var(--color-black);
@@ -1327,7 +1329,7 @@
 }
 
 .stat-value {
-  font-family: var(--font-display);
+  font-family: var(--font-heading);
   font-size: var(--font-size-3xl);
   font-weight: 900;
   color: var(--color-black);
@@ -1337,7 +1339,7 @@
 }
 
 .stat-label {
-  font-family: var(--font-sans);
+  font-family: var(--font-body);
   font-size: var(--font-size-sm);
   color: var(--color-black);
   text-transform: uppercase;

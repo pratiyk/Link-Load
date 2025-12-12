@@ -1,5 +1,7 @@
 /* Retro-inspired login + DNS verification layout */
 
+@import url('https://fonts.googleapis.com/css2?family=VT323&family=Roboto+Condensed:wght@300;400;500;600;700&family=Share+Tech&display=swap');
+
 .login-page {
     position: relative;
     min-height: 100vh;
@@ -92,7 +94,7 @@
 }
 
 .login-brand__title {
-    font-family: var(--font-display);
+    font-family: var(--font-heading);
     font-size: calc(var(--font-size-2xl) * 0.48);
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -102,7 +104,7 @@
 
 .login-brand__subtitle {
     margin: 0;
-    font-family: var(--font-sans);
+    font-family: var(--font-body);
     font-size: calc(var(--font-size-sm) * 1.05);
     font-weight: 600;
     color: var(--color-black);
@@ -137,7 +139,7 @@
 .dns-toggle__button {
     margin: 0 auto;
     padding: calc(var(--spacing-2) * 0.7) var(--spacing-4);
-    font-family: var(--font-display);
+    font-family: var(--font-heading);
     font-size: var(--font-size-xs);
     text-transform: uppercase;
     letter-spacing: 0.1em;
@@ -260,7 +262,7 @@
 }
 
 .login-card__title {
-    font-family: var(--font-display);
+    font-family: var(--font-heading);
     font-size: calc(var(--font-size-xl) * 0.8);
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -304,7 +306,7 @@
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-1);
-    font-family: var(--font-display);
+    font-family: var(--font-heading);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     font-size: var(--font-size-xs);
@@ -331,7 +333,7 @@
 .login-submit {
     justify-self: flex-start;
     padding: calc(var(--spacing-2) * 0.9) var(--spacing-4);
-    font-family: var(--font-display);
+    font-family: var(--font-heading);
     font-size: var(--font-size-sm);
     text-transform: uppercase;
     letter-spacing: 0.1em;
@@ -409,7 +411,7 @@
 }
 
 .dns-card__title {
-    font-family: var(--font-display);
+    font-family: var(--font-heading);
     font-size: calc(var(--font-size-lg) * 0.72);
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -429,7 +431,7 @@
     margin-bottom: var(--spacing-3);
     padding: 0.35rem 0.75rem;
     font-size: var(--font-size-xs);
-    font-family: var(--font-display);
+    font-family: var(--font-heading);
     text-transform: uppercase;
     letter-spacing: 0.1em;
     background: rgba(113, 208, 140, 0.2);
@@ -485,7 +487,7 @@
 }
 
 .dns-record__label {
-    font-family: var(--font-display);
+    font-family: var(--font-heading);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     font-size: var(--font-size-xs);

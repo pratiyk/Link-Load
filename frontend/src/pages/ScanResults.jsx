@@ -718,7 +718,7 @@ const ScanResults = () => {
           <div className="error-actions">
             <button onClick={() => window.location.reload()}>Retry</button>
             <button onClick={() => navigate('/')} className="error-actions__secondary">
-              Back to Home
+              Return to Base
             </button>
           </div>
         </div>
@@ -736,7 +736,7 @@ const ScanResults = () => {
           <div className="error-actions">
             <button onClick={() => window.location.reload()}>Refresh</button>
             <button onClick={() => navigate('/')} className="error-actions__secondary">
-              Back to Home
+              Return to Base
             </button>
           </div>
         </div>
@@ -2227,7 +2227,7 @@ const ScanResults = () => {
         <header className="results-header">
           <div className="header-content">
             <h1>Scan Results</h1>
-            <Link to="/" className="back-button">← Back to Home</Link>
+            <Link to="/" className="back-button"> Return to Base</Link>
           </div>
           <div className="scan-info">
             <div className="scan-info-item">

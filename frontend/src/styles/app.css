@@ -1,9 +1,4 @@
-@font-face {
-  font-family: 'Unmistakably';
-  src: url('../fonts/Unmistakably.woff2') format('woff2');
-  font-weight: normal;
-  font-style: normal;
-}
+@import url('https://fonts.googleapis.com/css2?family=VT323&family=Roboto+Condensed:wght@300;400;500;600;700&family=Share+Tech&display=swap');
 
 /* App.js - Root Styles */
 :root {
@@ -12,14 +7,17 @@
   --color-yellow: #FFD700;
   --color-purple-light: #E6E6FA;
   --color-pink: #FF69B4;
-  --font-mono: 'SF Mono', monospace;
-  --font-display: 'Unmistakably', serif;
+  --font-heading: 'VT323', monospace;
+  --font-subheading: 'Share Tech', sans-serif;
+  --font-body: 'Roboto Condensed', sans-serif;
+  --font-mono: 'Share Tech', monospace;
+  --font-display: 'VT323', monospace;
 }
 
 body {
   margin: 0;
   padding: 0;
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   background: var(--color-white);
   color: var(--color-black);
   overflow-x: hidden;
@@ -61,7 +59,9 @@ body {
 }
 
 /* Typography */
-h1, h2, h3 {
+h1,
+h2,
+h3 {
   font-family: var(--font-display);
   font-weight: normal;
 }

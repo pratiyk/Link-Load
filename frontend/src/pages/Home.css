@@ -1,8 +1,4 @@
-@import url('https://api.fontshare.com/v2/css?f[]=melodrama@400,500&display=swap');
-@import url('https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600&display=swap');
-
-@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=VT323&family=Roboto+Condensed:wght@300;400;500;600;700&family=Share+Tech&display=swap');
 
 :root {
   --color-bg: #0D1B2A;
@@ -13,13 +9,15 @@
   --color-error: #FF2E63;
   --color-terminal: #39FF14;
   --color-text-secondary: rgba(255, 255, 255, 0.7);
-  --font-pixel: 'Press Start 2P', cursive;
-  --font-mono: 'Share Tech Mono', monospace;
+  --font-heading: 'VT323', monospace;
+  --font-subheading: 'Share Tech', sans-serif;
+  --font-body: 'Roboto Condensed', sans-serif;
+  --font-pixel: 'VT323', monospace;
+  --font-mono: 'Share Tech', monospace;
   --scanline-size: 2px;
   --glitch-offset: 2px;
   --pixel-size: 2px;
-  --font-display: 'Melodrama', serif;
-  --font-body: 'General Sans', sans-serif;
+  --font-display: 'VT323', monospace;
   --ease-out: cubic-bezier(0.33, 1, 0.68, 1);
   --nav-height: 80px;
   --grid-unit: 8px;

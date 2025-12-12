@@ -215,7 +215,7 @@ const Verification = () => {
                 <header className="verification-header">
                     <div className="header-content">
                         <h1 className="verification-header__title">DNS verification</h1>
-                        <Link to="/" className="back-button">← Back to Home</Link>
+                        <Link to="/" className="back-button"> Return to Base</Link>
                     </div>
                     <p className="verification-header__subtitle">
                         Prove that you control a domain before unlocking authenticated scans and organization-wide automations.

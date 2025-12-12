@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=VT323&family=Roboto+Condensed:wght@300;400;500;600;700&family=Share+Tech&display=swap');
+
 .verification-shell {
     padding: clamp(2rem, 5vw, 4rem) clamp(1.5rem, 5vw, 4rem);
     max-width: 1320px;
@@ -60,7 +62,7 @@
 }
 
 .verification-meta-label {
-    font-family: var(--font-display);
+    font-family: var(--font-heading);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     font-size: 0.78rem;
@@ -98,7 +100,7 @@
 
 .verification-meta-copy {
     align-self: flex-start;
-    font-family: var(--font-display);
+    font-family: var(--font-heading);
     letter-spacing: 0.05em;
     border: 3px solid var(--color-black);
     background: #6DD4D9;
@@ -113,7 +115,7 @@
     min-height: 60vh;
     display: grid;
     place-items: center;
-    font-family: var(--font-display);
+    font-family: var(--font-heading);
     letter-spacing: 0.08em;
 }
 
@@ -153,7 +155,7 @@
 }
 
 .verification-header__title {
-    font-family: var(--font-display);
+    font-family: var(--font-heading);
     font-size: clamp(2.25rem, 3vw, 2.8rem);
     margin: 0;
     letter-spacing: 0.08em;
@@ -223,7 +225,7 @@
     font-size: clamp(1.5rem, 3vw, 2.3rem);
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    font-family: var(--font-display);
+    font-family: var(--font-heading);
 }
 
 .verification-panel__header--pink {
@@ -237,7 +239,7 @@
 .verification-panel__badge {
     border: 3px solid var(--color-black);
     padding: 0.35rem 0.9rem;
-    font-family: var(--font-display);
+    font-family: var(--font-heading);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     background: #FFF7DF;
@@ -261,7 +263,7 @@
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    font-family: var(--font-display);
+    font-family: var(--font-heading);
 }
 
 .verification-callout__body {
@@ -330,7 +332,7 @@
 }
 
 .verification-highlight-value {
-    font-family: var(--font-display);
+    font-family: var(--font-heading);
     font-size: 1.4rem;
     letter-spacing: 0.05em;
     margin: 0;
@@ -423,7 +425,7 @@
     font-size: 1.45rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    font-family: var(--font-display);
+    font-family: var(--font-heading);
 }
 
 .verification-rotate {
@@ -456,7 +458,7 @@
     flex-direction: column;
     gap: 0.25rem;
     font-weight: 600;
-    font-family: var(--font-display);
+    font-family: var(--font-heading);
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
@@ -528,7 +530,7 @@
     padding: 1rem 1.25rem;
     text-align: left;
     border-bottom: 1px solid #CFC4AE;
-    font-family: var(--font-sans);
+    font-family: var(--font-body);
     font-size: 0.95rem;
 }
 
@@ -812,5 +814,5 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    font-family: var(--font-display);
+    font-family: var(--font-heading);
 }

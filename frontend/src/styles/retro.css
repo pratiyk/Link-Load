@@ -1,7 +1,4 @@
-@font-face {
-  font-family: 'Pixel';
-  src: url('../assets/fonts/VT323-Regular.ttf') format('truetype');
-}
+@import url('https://fonts.googleapis.com/css2?family=VT323&family=Roboto+Condensed:wght@300;400;500;600;700&family=Share+Tech&display=swap');
 
 :root {
   /* Color palette matching the image */
@@ -10,16 +7,21 @@
   --color-accent-pink: #FF69B4;
   --color-accent-purple: #E6E6FA;
   --color-accent-gray: #F0F0F0;
-  
+
   /* Typography */
-  --font-pixel: 'Pixel', 'VT323', monospace;
+  --font-heading: 'VT323', monospace;
+  --font-subheading: 'Share Tech', sans-serif;
+  --font-body: 'Roboto Condensed', sans-serif;
+  --font-pixel: 'VT323', monospace;
   --font-size-base: 16px;
   --font-size-large: 2rem;
   --font-size-heading: 3.5rem;
 }
 
 /* Reset */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -27,14 +29,14 @@
 
 body {
   background-color: var(--color-background);
-  font-family: var(--font-pixel);
-  -webkit-font-smoothing: none;
-  -moz-osx-font-smoothing: unset;
+  font-family: var(--font-body);
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
 }
 
 /* Pixel Text Styling */
 .pixel-text {
-  font-family: var(--font-pixel);
+  font-family: var(--font-heading);
   color: var(--color-text);
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -143,9 +145,12 @@ body {
 }
 
 @keyframes float {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translateY(0);
   }
+
   50% {
     transform: translateY(-20px);
   }
@@ -183,10 +188,8 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(
-    transparent 50%,
-    rgba(0, 0, 0, 0.05) 50%
-  );
+  background: linear-gradient(transparent 50%,
+      rgba(0, 0, 0, 0.05) 50%);
   background-size: 100% 4px;
   pointer-events: none;
 }
