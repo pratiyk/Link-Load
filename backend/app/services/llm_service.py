@@ -149,19 +149,19 @@ Format as JSON:
             
             import json
             result_text = response.choices[0].message.content
-            
+            if result_text is None:
+                raise ValueError("OpenAI response content is None")
             try:
                 result = json.loads(result_text)
             except json.JSONDecodeError:
-                if "```json" in result_text:
-                    result_text = result_text.split("```json")[1].split("```")[0]
+                if isinstance(result_text, str) and "```json" in result_text:
+                    result_text = result_text.split("```json")[1].split("````")[0]
                     result = json.loads(result_text)
-                elif "```" in result_text:
-                    result_text = result_text.split("```")[1].split("```")[0]
+                elif isinstance(result_text, str) and "```" in result_text:
+                    result_text = result_text.split("```")[1].split("````")[0]
                     result = json.loads(result_text)
                 else:
                     raise
-            
             logger.info(f"OpenAI analysis complete for {len(vulnerabilities)} vulnerabilities with MITRE mapping")
             return result
         
@@ -243,7 +243,10 @@ RULES:
                 timeout=30
             )
             
-            return response.choices[0].message.content.strip()
+            content = response.choices[0].message.content
+            if content is None:
+                return ""
+            return content.strip()
         
         except Exception as e:
             logger.error(f"Executive summary generation failed: {e}")
@@ -414,20 +417,19 @@ Format as JSON:
             
             import json
             result_text = response.choices[0].message.content
-            
-            # Parse JSON response
+            if result_text is None:
+                raise ValueError("Groq response content is None")
             try:
                 result = json.loads(result_text)
             except json.JSONDecodeError:
-                if "```json" in result_text:
-                    result_text = result_text.split("```json")[1].split("```")[0]
+                if isinstance(result_text, str) and "```json" in result_text:
+                    result_text = result_text.split("```json")[1].split("````")[0]
                     result = json.loads(result_text)
-                elif "```" in result_text:
-                    result_text = result_text.split("```")[1].split("```")[0]
+                elif isinstance(result_text, str) and "```" in result_text:
+                    result_text = result_text.split("```")[1].split("````")[0]
                     result = json.loads(result_text)
                 else:
                     raise
-            
             logger.info(f"Groq analysis complete for {len(vulnerabilities)} vulnerabilities with MITRE mapping")
             return result
         
@@ -520,7 +522,10 @@ RULES:
                 max_tokens=1200
             )
             
-            return response.choices[0].message.content.strip()
+            content = response.choices[0].message.content
+            if content is None:
+                return ""
+            return content.strip()
         
         except Exception as e:
             logger.error(f"Executive summary generation failed: {e}")
@@ -598,7 +603,8 @@ class AnthropicProvider(LLMProvider):
             raise ValueError("ANTHROPIC_API_KEY environment variable not set")
         
         try:
-            import anthropic
+            import importlib
+            anthropic = importlib.import_module("anthropic")
             self.client = anthropic.AsyncAnthropic(api_key=self.api_key)
         except ImportError:
             raise ImportError("anthropic package not installed. Run: pip install anthropic")
@@ -686,21 +692,20 @@ Format as JSON:
             )
             
             import json
-            result_text = response.content[0].text
-            
-            # Parse JSON
+            result_text = response.content[0].text if response.content and response.content[0].text is not None else None
+            if result_text is None:
+                raise ValueError("Anthropic response content is None")
             try:
                 result = json.loads(result_text)
             except json.JSONDecodeError:
-                if "```json" in result_text:
-                    result_text = result_text.split("```json")[1].split("```")[0]
+                if isinstance(result_text, str) and "```json" in result_text:
+                    result_text = result_text.split("```json")[1].split("````")[0]
                     result = json.loads(result_text)
-                elif "```" in result_text:
-                    result_text = result_text.split("```")[1].split("```")[0]
+                elif isinstance(result_text, str) and "```" in result_text:
+                    result_text = result_text.split("```")[1].split("````")[0]
                     result = json.loads(result_text)
                 else:
                     raise
-            
             logger.info(f"Claude analysis complete for {len(vulnerabilities)} vulnerabilities with MITRE mapping")
             return result
         
@@ -782,7 +787,10 @@ RULES:
                 ]
             )
             
-            return response.content[0].text.strip()
+            content = response.content[0].text if response.content and response.content[0].text is not None else None
+            if content is None:
+                return ""
+            return content.strip()
         
         except Exception as e:
             logger.error(f"Executive summary generation failed: {e}")
@@ -1064,6 +1072,8 @@ class LLMService:
             Dict with AI analysis and recommendations
         """
         try:
+            if self._provider is None:
+                raise ValueError("No LLM provider initialized")
             result = await self._provider.analyze_vulnerabilities(
                 vulnerabilities,
                 target_url,
@@ -1088,6 +1098,8 @@ class LLMService:
     ) -> str:
         """Generate executive summary"""
         try:
+            if self._provider is None:
+                raise ValueError("No LLM provider initialized")
             return await self._provider.generate_executive_summary(
                 vulnerabilities,
                 risk_score,

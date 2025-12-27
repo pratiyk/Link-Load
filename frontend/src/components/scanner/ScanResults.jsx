@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Card, Badge, Button, Collapse } from '@supabase/ui';
 import { formatDistanceToNow } from 'date-fns';
-import { 
+import {
     Chart as ChartJS,
     ArcElement,
     Tooltip,

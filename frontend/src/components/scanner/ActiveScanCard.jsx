@@ -57,11 +57,14 @@ const ActiveScanCard = ({ scan, onCancel }) => {
                                 {progress?.percent.toFixed(1)}%
                             </span>
                         </div>
-                        <Progress
-                            value={progress?.percent || 0}
-                            color={getStatusColor(scan.status)}
-                            size="large"
-                        />
+                        <div style={{ width: '100%' }}>
+                            <Progress
+                                value={progress?.percent || 0}
+                                color={getStatusColor(scan.status)}
+                                size="large"
+                                style={{ width: '100%' }}
+                            />
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">

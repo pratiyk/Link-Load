@@ -33,17 +33,6 @@ The system executes coordinated multi-scanner operations, processes raw intellig
 
 ---
 
-## DEMO
-
-https://github.com/user-attachments/assets/LinkLoad.mp4
-
-<video src="LinkLoad.mp4" controls width="100%">
-  Your browser does not support the video tag.
-</video>
-
-> **Note:** If the video doesn't play inline, [download LinkLoad.mp4](LinkLoad.mp4) to view the full platform demonstration.
-
----
 
 ## TABLE OF CONTENTS
 

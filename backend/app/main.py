@@ -31,7 +31,8 @@ from app.api import (
     vulnerability_scanner,
     vulnerabilities,
     intelligence,
-    domain_verification
+    domain_verification,
+    mitre
 )
 
 logger = logging.getLogger(__name__)
@@ -245,11 +246,13 @@ app.include_router(vulnerabilities.router)
 app.include_router(intelligence.router, prefix=settings.API_PREFIX)  # Intelligence routes
 app.include_router(risk_analysis.router)  # Enhanced risk analysis endpoints
 app.include_router(remediation.router, prefix=settings.API_PREFIX)  # Remediation guidance
+
 app.include_router(scan_manager.router, prefix=settings.API_PREFIX)  # Scan management
 app.include_router(scans.router)  # Comprehensive scanning endpoints
 app.include_router(ws_endpoints.router, prefix=settings.API_PREFIX)  # WebSocket endpoints
 app.include_router(batch_scanner.router)  # Batch scanning endpoints
 app.include_router(domain_verification.router)  # Domain verification workflows
+app.include_router(mitre.router, prefix=settings.API_PREFIX)  # MITRE ATT&CK techniques endpoint
 
 # Health check endpoints
 @app.get("/")

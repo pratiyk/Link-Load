@@ -2,6 +2,21 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import scannerService from '../services/scannerService';
+import mitreService from '../services/mitreService';
+// Helper: Build a keyword regex from a technique's name/description
+function buildTechniqueRegex(technique) {
+  // Use name, description, and platforms for pattern matching
+  const keywords = [];
+  if (technique.name) keywords.push(technique.name);
+  if (technique.description) keywords.push(technique.description);
+  if (Array.isArray(technique.platforms)) keywords.push(...technique.platforms);
+  // Remove special chars, split, and join for a broad match
+  const pattern = keywords.join(' ').replace(/[^\w\s]/g, ' ');
+  // Only use words longer than 3 chars
+  const words = Array.from(new Set(pattern.split(/\s+/).filter(w => w.length > 3)));
+  if (!words.length) return null;
+  return new RegExp(words.join('|'), 'i');
+}
 import './ScanResults.css';
 
 const severityOrder = ['critical', 'high', 'medium', 'low'];
@@ -105,6 +120,20 @@ const ScanResults = () => {
   const [summaryError, setSummaryError] = useState(null);
   const [summaryCached, setSummaryCached] = useState(false);
   const [summaryFetchToken, setSummaryFetchToken] = useState(0);
+
+  // MITRE techniques state
+  const [mitreTechniques, setMitreTechniques] = useState([]);
+  const [mitreLoading, setMitreLoading] = useState(false);
+  const [mitreError, setMitreError] = useState(null);
+
+  // Fetch MITRE techniques on mount
+  useEffect(() => {
+    setMitreLoading(true);
+    mitreService.getAllTechniques()
+      .then(setMitreTechniques)
+      .catch((e) => setMitreError(e.message || 'Failed to load MITRE techniques'))
+      .finally(() => setMitreLoading(false));
+  }, []);
 
   const vulnerabilityStats = useMemo(() => {
     const counts = {
@@ -846,56 +875,36 @@ const ScanResults = () => {
     console.log('[RENDER] Rendering MITRE section with', techniques.length, 'techniques from backend');
 
     // Client-side fallback: Generate MITRE mappings from vulnerabilities if backend didn't provide them
-    if (techniques.length === 0 && results.vulnerabilities?.length > 0) {
+    if (techniques.length === 0 && results.vulnerabilities?.length > 0 && mitreTechniques.length > 0) {
       const vulnMappings = [];
       const seenTechniques = new Set();
 
-      // MITRE ATT&CK mapping rules based on vulnerability patterns
-      const mitrePatterns = [
-        { pattern: /sql injection|sqli/i, id: 'T1190', name: 'Exploit Public-Facing Application', tactic: 'Initial Access' },
-        { pattern: /xss|cross-site scripting/i, id: 'T1059.007', name: 'JavaScript', tactic: 'Execution' },
-        { pattern: /command injection|rce|remote code/i, id: 'T1059', name: 'Command and Scripting Interpreter', tactic: 'Execution' },
-        { pattern: /authentication|login|password|brute/i, id: 'T1110', name: 'Brute Force', tactic: 'Credential Access' },
-        { pattern: /file upload/i, id: 'T1105', name: 'Ingress Tool Transfer', tactic: 'Command and Control' },
-        { pattern: /path traversal|directory traversal|lfi/i, id: 'T1083', name: 'File and Directory Discovery', tactic: 'Discovery' },
-        { pattern: /ssrf|server-side request/i, id: 'T1090', name: 'Proxy', tactic: 'Command and Control' },
-        { pattern: /xxe|xml external/i, id: 'T1203', name: 'Exploitation for Client Execution', tactic: 'Execution' },
-        { pattern: /csrf|cross-site request/i, id: 'T1185', name: 'Browser Session Hijacking', tactic: 'Collection' },
-        { pattern: /deserialization/i, id: 'T1059', name: 'Command and Scripting Interpreter', tactic: 'Execution' },
-        { pattern: /\.git|\.svn|version control/i, id: 'T1213.003', name: 'Code Repositories', tactic: 'Collection' },
-        { pattern: /exposed|sensitive|leaked/i, id: 'T1552', name: 'Unsecured Credentials', tactic: 'Credential Access' },
-        { pattern: /header|cors|csp|hsts/i, id: 'T1189', name: 'Drive-by Compromise', tactic: 'Initial Access' },
-        { pattern: /certificate|ssl|tls/i, id: 'T1557', name: 'Adversary-in-the-Middle', tactic: 'Credential Access' },
-        { pattern: /cookie|session/i, id: 'T1539', name: 'Steal Web Session Cookie', tactic: 'Credential Access' },
-        { pattern: /admin|management|console/i, id: 'T1078', name: 'Valid Accounts', tactic: 'Persistence' },
-        { pattern: /outdated|vulnerable version|cve/i, id: 'T1190', name: 'Exploit Public-Facing Application', tactic: 'Initial Access' },
-        { pattern: /information disclosure|error/i, id: 'T1592', name: 'Gather Victim Host Information', tactic: 'Reconnaissance' },
-        { pattern: /waf|firewall/i, id: 'T1518.001', name: 'Security Software Discovery', tactic: 'Discovery' },
-        { pattern: /technology|framework|wappalyzer/i, id: 'T1592.002', name: 'Gather Victim Host Information: Software', tactic: 'Reconnaissance' },
-        { pattern: /endpoint|api|swagger/i, id: 'T1595.002', name: 'Active Scanning: Vulnerability Scanning', tactic: 'Reconnaissance' },
-      ];
+      // Build regexes for all MITRE techniques (cache for this render)
+      const techniqueRegexes = mitreTechniques.map(t => ({
+        technique: t,
+        regex: buildTechniqueRegex(t)
+      })).filter(t => t.regex);
 
       for (const vuln of results.vulnerabilities) {
         const combinedText = `${vuln.title || ''} ${vuln.description || ''}`.toLowerCase();
-
-        for (const rule of mitrePatterns) {
-          if (rule.pattern.test(combinedText) && !seenTechniques.has(rule.id)) {
-            seenTechniques.add(rule.id);
+        for (const { technique, regex } of techniqueRegexes) {
+          if (regex.test(combinedText) && !seenTechniques.has(technique.id)) {
+            seenTechniques.add(technique.id);
             vulnMappings.push({
-              id: rule.id,
-              name: rule.name,
-              tactic: rule.tactic,
+              id: technique.id,
+              name: technique.name,
+              tactic: (technique.tactics && technique.tactics.length > 0 && technique.tactics[0].phase_name) || '',
               description: `Mapped from vulnerability: ${vuln.title || 'Security Finding'}`,
-              confidence: 0.7,
-              source: 'client-side'
+              confidence: 0.6,
+              source: 'client-side',
+              url: technique.url
             });
           }
         }
       }
-
       if (vulnMappings.length > 0) {
         techniques = vulnMappings;
-        console.log('[RENDER] Generated', techniques.length, 'client-side MITRE mappings from vulnerabilities');
+        console.log('[RENDER] Generated', techniques.length, 'dynamic MITRE mappings from vulnerabilities');
       }
     }
 
@@ -1003,7 +1012,6 @@ const ScanResults = () => {
                   title="Aggregated reputation score from multiple threat intelligence sources. Scores below 40 indicate high risk, 40-70 moderate risk, and above 70 low risk."
                 >
                   <div className="intel-source-header">
-                    <span className="intel-source-icon">REP</span>
                     <span className="intel-source-name">Reputation Score</span>
                   </div>
                   <div className="intel-source-value">{reputation.score}/100</div>
@@ -1018,7 +1026,6 @@ const ScanResults = () => {
                   title="VirusTotal aggregates results from 70+ antivirus engines and URL/domain scanners. Malicious detections indicate the target was flagged as harmful by security vendors."
                 >
                   <div className="intel-source-header">
-                    <span className="intel-source-icon">VT</span>
                     <span className="intel-source-name">VirusTotal</span>
                   </div>
                   <div className="intel-source-value">
@@ -1035,7 +1042,6 @@ const ScanResults = () => {
                   title="Google Safe Browsing checks URLs against Google's constantly updated lists of unsafe web resources including malware, phishing, and unwanted software sites."
                 >
                   <div className="intel-source-header">
-                    <span className="intel-source-icon">GSB</span>
                     <span className="intel-source-name">Safe Browsing</span>
                   </div>
                   <div className="intel-source-value">{gsb.is_flagged ? 'FLAGGED' : 'Safe'}</div>
@@ -1050,7 +1056,6 @@ const ScanResults = () => {
                   title="AbuseIPDB is a crowd-sourced IP address abuse database. The confidence score indicates the likelihood that the IP is involved in malicious activity based on user reports."
                 >
                   <div className="intel-source-header">
-                    <span className="intel-source-icon">ADB</span>
                     <span className="intel-source-name">AbuseIPDB</span>
                   </div>
                   <div className="intel-source-value">{abuse.abuse_confidence_score || 0}%</div>
@@ -1065,7 +1070,6 @@ const ScanResults = () => {
                   title="Shodan is a search engine for Internet-connected devices. It reveals open ports, running services, and known vulnerabilities on the target's IP address."
                 >
                   <div className="intel-source-header">
-                    <span className="intel-source-icon">SHD</span>
                     <span className="intel-source-name">Shodan</span>
                   </div>
                   <div className="intel-source-value">{shodan.open_ports_count || 0} Ports</div>
@@ -1080,7 +1084,6 @@ const ScanResults = () => {
                   title="SecurityTrails provides DNS intelligence including historical records, subdomains, and domain ownership data to map the target's infrastructure."
                 >
                   <div className="intel-source-header">
-                    <span className="intel-source-icon">STR</span>
                     <span className="intel-source-name">SecurityTrails</span>
                   </div>
                   <div className="intel-source-value">{sectrails.subdomains_count || 0} Subdomains</div>
@@ -1095,7 +1098,6 @@ const ScanResults = () => {
                   title="Leak Lookup searches known data breach databases to check if the domain or associated accounts have been compromised in past security incidents."
                 >
                   <div className="intel-source-header">
-                    <span className="intel-source-icon">BRC</span>
                     <span className="intel-source-name">Breach Check</span>
                   </div>
                   <div className="intel-source-value">{leakLookup.breaches_found ? 'Breached' : 'No Breaches'}</div>
@@ -1110,7 +1112,6 @@ const ScanResults = () => {
                   title="Vulners is a vulnerability database that aggregates exploits, security advisories, and CVE data. Finding exploits means attackers have ready-to-use attack code."
                 >
                   <div className="intel-source-header">
-                    <span className="intel-source-icon">VLN</span>
                     <span className="intel-source-name">Vulners Exploits</span>
                   </div>
                   <div className="intel-source-value">{vulners.total_exploits || 0} Exploits</div>

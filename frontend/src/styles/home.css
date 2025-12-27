@@ -389,9 +389,11 @@
   line-height: 1.2;
 }
 
+
 .progress-bar {
   width: 100%;
-  max-width: calc(var(--spacing-5) * var(--ratio));
+  max-width: 100%;
+  /* Force full width */
   height: 10px;
   border: 2px solid var(--color-black);
   background: rgba(17, 24, 39, 0.08);
@@ -400,6 +402,8 @@
 
 .progress-fill {
   height: 100%;
+  width: 100%;
+  /* Always fill parent width, actual fill set inline */
   background: var(--color-block-green);
   border-right: 2px solid var(--color-black);
   transition: width 0.35s ease;
@@ -409,7 +413,8 @@
   display: flex;
   justify-content: space-between;
   width: 100%;
-  max-width: calc(var(--spacing-5) * var(--ratio));
+  max-width: 100%;
+  /* Force full width */
   font-size: var(--font-size-xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;

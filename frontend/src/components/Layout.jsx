@@ -14,10 +14,10 @@ const Layout = ({ children }) => {
                     <div className="footer-content">
                         <div className="footer-callsign">
                             <span className="footer-bracket">[</span>
-                            <span className="footer-label">LINKLOAD</span>
+                            <span className="footer-label">LINK&LOAD</span>
                             <span className="footer-bracket">]</span>
                             <span className="footer-divider">//</span>
-                            <span className="footer-status">OPEN SOURCE RECONNAISSANCE PLATFORM</span>
+                            <span className="footer-status">Tactical Web Security Reconnaissance Platform</span>
                         </div>
                         <div className="footer-credits">
                             <span className="footer-operator">Operator: Prateek Shrivastava</span>

@@ -310,25 +310,9 @@ class ComprehensiveScanner:
             # Execute scanners concurrently with hard timeout to ensure completion
             print(f"[COMPREHENSIVE] Running {len(tasks)} scanner tasks: {task_scanners} (timeout: {scanner_timeout}s)", file=sys.stderr, flush=True)
             if tasks:
-                try:
-                    # Wrap all scanners in a single timeout to ensure they complete within allotted time
-                    results = await asyncio.wait_for(
-                        asyncio.gather(*tasks, return_exceptions=True),
-                        timeout=scanner_timeout
-                    )
-                    print(f"[COMPREHENSIVE] Got {len(results)} results", file=sys.stderr, flush=True)
-                except asyncio.TimeoutError:
-                    logger.warning(f"Scanner tasks exceeded hard timeout of {scanner_timeout}s, proceeding with partial results")
-                    results = []
-                    # Try to stop any running scanners
-                    for scanner_type in task_scanners:
-                        if scanner_type in self.scanners:
-                            try:
-                                scanner = self.scanners[scanner_type]
-                                for scan_task_id in list(scanner.active_scans.keys()):
-                                    await scanner.stop_scan(scan_task_id)
-                            except Exception as e:
-                                logger.debug(f"Failed to stop {scanner_type} scanner: {e}")
+                # Wait for all scanner tasks to finish, no hard timeout
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                print(f"[COMPREHENSIVE] Got {len(results)} results", file=sys.stderr, flush=True)
 
                 for scanner_name, result in zip(task_scanners, results):
                     if isinstance(result, Exception):
