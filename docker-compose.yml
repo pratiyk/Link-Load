@@ -222,6 +222,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app/backend
+      - ./backend/logs:/app/backend/logs
       - /app/backend/__pycache__
       - scanner_shared:/shared
       - ./reports:/app/reports

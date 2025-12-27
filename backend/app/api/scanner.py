@@ -1,3 +1,31 @@
+import requests
+try:
+    from cvss import CVSS3
+except ImportError:
+    CVSS3 = None
+
+def get_cvss_score(vuln):
+    """Fetch CVSS score from CVE Details API or calculate from vector if available."""
+    cve_id = vuln.get("cve_id")
+    if cve_id:
+        try:
+            url = f"https://cve.circl.lu/api/cve/{cve_id}"
+            resp = requests.get(url, timeout=10)
+            data = resp.json()
+            score = data.get('cvss')
+            if score:
+                return float(score)
+        except Exception:
+            pass
+    # If custom vector is provided and cvss library is available
+    vector = vuln.get("cvss_vector")
+    if vector and CVSS3:
+        try:
+            return CVSS3(vector).base_score
+        except Exception:
+            pass
+    # Fallback to provided score or 0.0
+    return vuln.get("cvss_score", 0.0)
 """
 Simple Scanner API Endpoints
 Provides the expected /api/v1/scanner/* endpoints for E2E tests
@@ -272,20 +300,23 @@ def _run_scan_task(scan_id: str, target_url: str, current_user):
             {
                 "title": "SQL Injection",
                 "description": "Potential SQL injection vulnerability detected",
-                "severity": "high",
-                "cvss_score": 8.5,
+                "cve_id": "CVE-2019-1234",  # Example CVE
+                "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
                 "url": target_url,
                 "recommendation": "Use parameterized queries and input validation"
             },
             {
                 "title": "Cross-Site Scripting (XSS)",
                 "description": "Reflected XSS vulnerability found",
-                "severity": "medium",
-                "cvss_score": 6.1,
+                "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N",
                 "url": target_url,
                 "recommendation": "Sanitize user input and use Content Security Policy"
             }
         ]
+        # Auto-fetch or calculate CVSS for each vulnerability
+        for vuln in vulnerabilities:
+            # Store as string for compatibility with storage/models
+            vuln["cvss_score"] = str(get_cvss_score(vuln))
         
         # Calculate risk score
         risk_score = _calculate_risk_score(vulnerabilities)

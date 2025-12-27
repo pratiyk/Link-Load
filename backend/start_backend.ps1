@@ -57,6 +57,40 @@ if (Test-Path $pythonExe) {
     exit 1
 }
 
+# Ensure Redis server is running
+$redisExe = "C:\prateek\projects\linkload\tools\Redis-x64-3.0.504\redis-server.exe"
+$redisCli = "C:\prateek\projects\linkload\tools\Redis-x64-3.0.504\redis-cli.exe"
+$redisPort = 6379
+Write-Host "[INFO] Checking if Redis server is running on port $redisPort..." -ForegroundColor Green
+try {
+    $redisPing = & $redisCli -h localhost -p $redisPort ping 2>&1
+    if ($redisPing -eq "PONG") {
+        Write-Host "[SUCCESS] Redis server already running on port $redisPort" -ForegroundColor Green
+    } else {
+        throw "Redis not running"
+    }
+} catch {
+    Write-Host "[INFO] Starting Redis server..." -ForegroundColor Yellow
+    Start-Process -FilePath $redisExe -WindowStyle Hidden
+    # Wait for Redis to start
+    $redisReady = $false
+    for ($i = 0; $i -lt 15; $i++) {
+        Start-Sleep -Seconds 1
+        try {
+            $redisPing = & $redisCli -h localhost -p $redisPort ping 2>&1
+            if ($redisPing -eq "PONG") {
+                $redisReady = $true
+                break
+            }
+        } catch {}
+    }
+    if ($redisReady) {
+        Write-Host "[SUCCESS] Redis server started on port $redisPort" -ForegroundColor Green
+    } else {
+        Write-Warning "Redis server did not start within 15 seconds. Backend cache may not work."
+    }
+}
+
 # Helper to validate scanner binaries
 function Test-ScannerBinary {
     param(
@@ -121,7 +155,7 @@ if ([string]::IsNullOrWhiteSpace($env:ZAP_BASE_URL)) {
 try {
     $zapUri = [System.Uri]$zapUrl
     $zapPort = $zapUri.Port
-    $zapHost = $zapUri.Host
+    # $zapHost = $zapUri.Host  # Removed unused variable
 } catch {
     Write-Warning "Invalid ZAP_BASE_URL '$zapUrl', defaulting to http://localhost:8090"
     $zapUri = [System.Uri]"http://localhost:8090"

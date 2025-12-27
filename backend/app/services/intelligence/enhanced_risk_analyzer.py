@@ -619,61 +619,49 @@ class EnhancedRiskAnalyzer:
         business_context: Dict[str, Any],
         risk_score: float
     ) -> Dict[str, Any]:
-        """Perform cost-benefit analysis for remediation."""
-        # Estimate potential loss based on industry data (IBM Cost of Data Breach 2024)
-        # Average breach cost in India: ~₹17.9 crore, scaled by risk score and industry
-        base_loss = business_context.get('estimated_breach_cost', 500000)  # Default ₹5L base
-        
-        # Scale by risk score (0-10 maps to 0.1x - 1x of base loss)
-        potential_loss = base_loss * (risk_score / 10.0)
-        
-        # Industry multiplier - based on average breach costs by sector
-        industry = business_context.get('industry', IndustryType.GENERAL)
-        industry_loss_multipliers = {
-            IndustryType.FINANCIAL: 2.5,      # High regulatory fines, customer trust impact
-            IndustryType.HEALTHCARE: 2.2,     # HIPAA penalties, patient data sensitivity
-            IndustryType.ECOMMERCE: 1.8,      # Payment card data, customer churn
-            IndustryType.GOVERNMENT: 2.0,     # National security, public trust
-            IndustryType.TECHNOLOGY: 1.5,     # IP theft, competitive advantage loss
-            IndustryType.EDUCATION: 1.3,      # Student data, moderate regulatory
-            IndustryType.GENERAL: 1.0
-        }
-        
-        industry_enum = IndustryType(industry) if industry in [i.value for i in IndustryType] else IndustryType.GENERAL
-        potential_loss *= industry_loss_multipliers.get(industry_enum, 1.0)
-        
-        # Estimate remediation cost based on actual developer/security expert rates
-        # Rates: Senior Security Expert ~₹5K/hr, Developer ~₹2.5K/hr
-        severity = vulnerability.get('severity', 'medium').lower()
-        base_fix_costs = {
-            'critical': 50000,   # ~10-16 hours senior security expert
-            'high': 25000,       # ~6-8 hours mixed team
-            'medium': 12000,     # ~3-4 hours developer
-            'low': 5000,         # ~1-2 hours developer
-            'info': 2000         # ~0.5-1 hour documentation
-        }
-        remediation_cost = base_fix_costs.get(severity, 12000)
-        
-        # ROI calculation
-        roi = ((potential_loss - remediation_cost) / remediation_cost) * 100 if remediation_cost > 0 else 0
-        
-        # Break-even point (how many incidents to justify fix)
-        break_even = remediation_cost / potential_loss if potential_loss > 0 else float('inf')
-        
-        return {
-            'potential_loss': round(potential_loss, 2),
-            'remediation_cost': round(remediation_cost, 2),
-            'roi_percentage': round(roi, 2),
-            'break_even_incidents': round(break_even, 2),
-            'net_benefit': round(potential_loss - remediation_cost, 2),
-            'recommendation': 'IMMEDIATE FIX' if roi > 100 else 'SCHEDULE FIX' if roi > 0 else 'EVALUATE ALTERNATIVES',
-            'cost_breakdown': {
-                'engineering_hours': round(remediation_cost * 0.6, 2),
-                'testing_hours': round(remediation_cost * 0.2, 2),
-                'deployment_cost': round(remediation_cost * 0.15, 2),
-                'contingency': round(remediation_cost * 0.05, 2)
+            """Perform cost-benefit analysis for remediation using CVE Details and LLM APIs."""
+            import os
+            from app.services.intelligence.external_cost_api import get_cve_remediation_cost, get_llm_estimate
+            # Load API keys from environment
+            openai_api_key = os.getenv("OPENAI_API_KEY")
+            groq_api_key = os.getenv("GROQ_API_KEY")
+            # Use CVE Details API for remediation cost
+            cve_id = vulnerability.get('cve_id')
+            remediation_cost = get_cve_remediation_cost(cve_id) if cve_id else 12000
+            # Use Groq LLM for potential loss estimation if available, else OpenAI
+            vuln_title = vulnerability.get('title', '')
+            vuln_desc = vulnerability.get('description', '')
+            provider = "groq" if groq_api_key else "openai"
+            llm_result = get_llm_estimate(vuln_title, vuln_desc, openai_api_key=openai_api_key, groq_api_key=groq_api_key, provider=provider)
+            # Parse LLM result for INR values (simple demo, should use regex in production)
+            import re
+            potential_loss = 500000
+            llm_result_str = llm_result if isinstance(llm_result, str) else str(llm_result) if llm_result is not None else ""
+            match = re.search(r"potential loss.*?(\d+[,.]?\d*)", llm_result_str, re.IGNORECASE)
+            if match:
+                try:
+                    potential_loss = float(match.group(1).replace(",", ""))
+                except Exception:
+                    potential_loss = 500000
+            # ROI calculation
+            roi = ((potential_loss - remediation_cost) / remediation_cost) * 100 if remediation_cost > 0 else 0
+            break_even = remediation_cost / potential_loss if potential_loss > 0 else float('inf')
+            return {
+                'potential_loss': round(potential_loss, 2),
+                'remediation_cost': round(remediation_cost, 2),
+                'roi_percentage': round(roi, 2),
+                'break_even_incidents': round(break_even, 2),
+                'net_benefit': round(potential_loss - remediation_cost, 2),
+                'recommendation': 'IMMEDIATE FIX' if roi > 100 else 'SCHEDULE FIX' if roi > 0 else 'EVALUATE ALTERNATIVES',
+                'cost_breakdown': {
+                    'engineering_hours': round(remediation_cost * 0.6, 2),
+                    'testing_hours': round(remediation_cost * 0.2, 2),
+                    'deployment_cost': round(remediation_cost * 0.15, 2),
+                    'contingency': round(remediation_cost * 0.05, 2)
+                },
+                'llm_raw': llm_result,
+                'llm_provider': provider
             }
-        }
 
     async def _generate_enhanced_recommendations(
         self,

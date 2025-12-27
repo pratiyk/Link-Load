@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from pydantic import BaseModel
 
-from app.database import get_db
+from app.database.supabase_client import supabase
 from app.services.scanners.scanner_orchestrator import ScannerOrchestrator
 from app.core.security import get_current_user
 from app.models.user import User
@@ -54,21 +54,17 @@ class ScanSummary(BaseModel):
     scan_coverage: float = 0.0
 
 class ScanResponse(BaseModel):
-    """Response with scan details"""
-    id: str
+    scan_id: str
     user_id: str
     target_url: str
     scan_types: List[str]
     status: str
-    scan_config: Dict[str, Any]
+    options: dict = {}
     started_at: datetime
-    completed_at: Optional[datetime]
-    progress: Optional[ScanProgress]
-    summary: Optional[ScanSummary]
-    errors: Optional[List[str]]
-    
-    class Config:
-        from_attributes = True
+    completed_at: Optional[datetime] = None
+    risk_score: Optional[float] = None
+    risk_level: Optional[str] = None
+    # Add more fields as needed from owasp_scans
 import uuid
 
 router = APIRouter()
@@ -79,7 +75,7 @@ async def initiate_scan(
     request: ScanRequest,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    # db: Session = Depends(get_db)  # No longer needed for Supabase endpoints
 ):
     """Start a new security scan"""
     scan_id = str(uuid.uuid4())
@@ -95,15 +91,17 @@ async def initiate_scan(
         "started_at": utc_now_naive()
     }
     
-    # Add to database
-    from sqlalchemy import text
-    db.execute(
-        text("""INSERT INTO security_scans (id, user_id, target_url, scan_types, status, 
-        scan_config, started_at) VALUES (:id, :user_id, :target_url, :scan_types,
-        :status, :scan_config, :started_at)""")
-        .bindparams(**scan)
-    )
-    db.commit()
+    # Add to Supabase
+    from app.database.supabase_client import supabase
+    supabase.create_scan({
+        "scan_id": scan_id,
+        "user_id": str(current_user.id),
+        "target_url": request.target_url,
+        "scan_types": request.scan_types,
+        "status": "pending",
+        "options": request.scan_config.dict(),
+        "started_at": scan["started_at"],
+    })
     
     # Start scan in background
     background_tasks.add_task(
@@ -119,117 +117,37 @@ async def initiate_scan(
 @router.get("/scans/{scan_id}", response_model=ScanResponse)
 async def get_scan_status(
     scan_id: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user)
 ):
-    """Get status of a specific scan"""
-    stmt = text(
-        """SELECT * FROM security_scans 
-        WHERE id = :scan_id AND user_id = :user_id"""
-    )
-    scan = db.execute(
-        stmt.bindparams(scan_id=scan_id, user_id=current_user.id)
-    ).fetchone()
-    
+    """Get status of a specific scan from Supabase owasp_scans table"""
+    scan = supabase.fetch_scan(scan_id, user_id=str(current_user.id))
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found")
-    
-    return ScanResponse(**dict(scan))
+    return ScanResponse(**scan)
 
 @router.get("/scans", response_model=List[ScanResponse])
 async def list_scans(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
     limit: int = 10,
     offset: int = 0
 ):
-    """List all scans for the current user"""
-    stmt = text(
-        """SELECT * FROM security_scans 
-        WHERE user_id = :user_id 
-        ORDER BY started_at DESC 
-        LIMIT :limit OFFSET :offset"""
-    )
-    scans = db.execute(
-        stmt.bindparams(
-            user_id=current_user.id,
-            limit=limit,
-            offset=offset
-        )
-    ).fetchall()
-    
-    return [ScanResponse(**dict(scan)) for scan in scans]
+    """List all scans for the current user from Supabase owasp_scans table"""
+    scans = supabase.get_user_scans(str(current_user.id), limit=limit, offset=offset)
+    return [ScanResponse(**scan) for scan in scans]
 
 @router.delete("/scans/{scan_id}")
 async def cancel_scan(
     scan_id: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user)
 ):
-    """Cancel an ongoing scan"""
-    stmt = text(
-        """SELECT status FROM security_scans 
-        WHERE id = :scan_id AND user_id = :user_id"""
-    )
-    scan = db.execute(
-        stmt.bindparams(scan_id=scan_id, user_id=current_user.id)
-    ).fetchone()
-    
-    if not scan:
-        raise HTTPException(status_code=404, detail="Scan not found")
-    
-    if scan.status not in ["pending", "running"]:
-        raise HTTPException(status_code=400, detail="Scan cannot be cancelled")
-    
-    # Stop the scan
-    orchestrator.stop_scan(scan_id)
-    
-    # Update status
-    stmt = text(
-        """UPDATE security_scans 
-        SET status = 'cancelled', completed_at = :completed_at 
-        WHERE id = :scan_id"""
-    )
-    db.execute(
-        stmt.bindparams(
-            scan_id=scan_id,
-            completed_at=utc_now_naive()
-        )
-    )
-    db.commit()
-    
-    return {"status": "cancelled"}
+    """Cancel an ongoing scan (Supabase logic not yet implemented)"""
+    raise NotImplementedError("Supabase-based scan cancellation not yet implemented.")
 
 @router.get("/scans/{scan_id}/findings")
 async def get_scan_findings(
     scan_id: str,
     severity: Optional[str] = None,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user)
 ):
-    """Get vulnerability findings for a specific scan"""
-    # Verify scan ownership
-    stmt = text(
-        """SELECT id FROM security_scans 
-        WHERE id = :scan_id AND user_id = :user_id"""
-    )
-    scan = db.execute(
-        stmt.bindparams(scan_id=scan_id, user_id=current_user.id)
-    ).fetchone()
-    
-    if not scan:
-        raise HTTPException(status_code=404, detail="Scan not found")
-    
-    # Build query
-    query = """SELECT * FROM vulnerability_findings 
-             WHERE scan_id = :scan_id"""
-    if severity:
-        query += " AND severity = :severity"
-
-    stmt = text(query)
-    params = {"scan_id": scan_id}
-    if severity:
-        params["severity"] = severity
-    
-    findings = db.execute(stmt.bindparams(**params)).fetchall()
-    return [dict(finding) for finding in findings]
+    """Get vulnerability findings for a specific scan (Supabase logic not yet implemented)"""
+    raise NotImplementedError("Supabase-based findings retrieval not yet implemented.")

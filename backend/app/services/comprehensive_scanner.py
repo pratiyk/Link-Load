@@ -462,11 +462,12 @@ class ComprehensiveScanner:
             # Perform AI analysis
             await self._perform_ai_analysis(scan_id, normalized_vulns, options)
 
-            # Perform MITRE mapping
-            await self._perform_mitre_mapping(scan_id, normalized_vulns)
 
-            # Calculate risk score with threat intel context
-            await self._calculate_risk_assessment(scan_id, normalized_vulns, threat_intel)
+            # Only perform MITRE mapping and risk assessment for new scans
+            scan_record = supabase.fetch_scan(scan_id)
+            if not scan_record or not scan_record.get('status') or scan_record.get('status') == 'in_progress':
+                await self._perform_mitre_mapping(scan_id, normalized_vulns)
+                await self._calculate_risk_assessment(scan_id, normalized_vulns, threat_intel)
 
             # Update scan to completed
             await self._update_scan_progress(

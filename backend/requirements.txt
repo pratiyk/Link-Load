@@ -1,3 +1,4 @@
+cvss
 # Core dependencies - Python 3.12+ compatible
 fastapi>=0.115.0
 uvicorn>=0.35.0
@@ -43,6 +44,7 @@ tqdm>=4.67.0
 # Web and networking
 aiohttp>=3.10.0
 requests>=2.32.0
+openai>=1.50.0
 httpx>=0.28.0
 websockets>=14.0
 fastapi-websocket-pubsub>=0.3.0

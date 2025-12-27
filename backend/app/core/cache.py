@@ -1,15 +1,16 @@
 import logging
 from typing import Optional
 
+
 try:
-    from fastapi_cache import FastAPICache
-    from fastapi_cache.backends.redis import RedisBackend
+    from fastapi_cache2 import FastApiCache
+    from fastapi_cache2.backends.redis import RedisBackend
     CACHE_AVAILABLE = True
 except ImportError:
     CACHE_AVAILABLE = False
 
 try:
-    from redis import asyncio as aioredis
+    import redis.asyncio as redis_asyncio
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
@@ -40,19 +41,12 @@ class CacheManager:
             self._initialized = True
             return
 
-        try:
-            # Initialize Redis connection
-            self._redis = aioredis.Redis(
-                host=settings.REDIS_HOST,
-                port=settings.REDIS_PORT,
-                password=settings.REDIS_PASSWORD,
-                db=settings.REDIS_DB,
-                decode_responses=True,
-                encoding="utf-8"
-            )
 
-            # Initialize FastAPI Cache
-            FastAPICache.init(
+        try:
+            # Create redis.asyncio connection
+            redis_url = f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
+            self._redis = redis_asyncio.from_url(redis_url, decode_responses=True)
+            FastApiCache.init(
                 RedisBackend(self._redis),
                 prefix="linkload_cache:",
                 expire=settings.CACHE_EXPIRE_IN_SECONDS
@@ -69,6 +63,7 @@ class CacheManager:
         if not self._initialized:
             raise RuntimeError("CacheManager not initialized. Call initialize() first.")
         return self._redis
+
 
     async def close(self):
         if self._redis:

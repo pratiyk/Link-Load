@@ -27,8 +27,12 @@ COPY requirements-docker.txt constraints.txt ./
 # Install Python dependencies with constraints for version overrides
 RUN pip install --no-cache-dir -c constraints.txt -r requirements-docker.txt
 
+
 # Copy application code
 COPY . .
+
+# Ensure logs directory exists for log file handlers
+RUN mkdir -p /app/backend/logs
 
 # Expose port
 EXPOSE 8000

@@ -73,14 +73,25 @@ class ScannerService {
     }
   }
 
-  async listScans(skip = 0, limit = 10, status = null) {
+  async listScans(offset = 0, limit = 10, status = null) {
     try {
-      const params = { skip, limit };
+      const params = { limit, offset };
       if (status) {
         params.status = status;
       }
-      const response = await apiClient.get(API_ENDPOINTS.scans.comprehensive.list, { params });
-      return response.data;
+      // Use the new Supabase-backed endpoint
+      const response = await apiClient.get('/api/v1/scans', { params });
+      // Map backend fields to frontend expectations
+      const scans = Array.isArray(response.data)
+        ? response.data.map(scan => ({
+          scan_id: scan.scan_id || scan.id || scan.id_,
+          target_url: scan.target_url,
+          status: scan.status,
+          started_at: scan.started_at,
+          ...scan
+        }))
+        : [];
+      return { scans };
     } catch (error) {
       throw new Error(error?.response?.data?.detail || "Failed to list scans");
     }
