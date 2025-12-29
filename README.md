@@ -680,7 +680,7 @@ curl -X POST http://localhost:8000/api/v1/verification/verify \
 **Backend Configuration (`backend/.env`):**
 ```bash
 # ===== Database Configuration =====
-DATABASE_URL=postgresql://user:pass@localhost:5432/linkload
+DATABASE_URL=postgresql://postgres:UNYe92CVavEN6u7a@localhost:15432/postgres
 SUPABASE_URL=https://project.supabase.co
 SUPABASE_KEY=your-anon-key
 SUPABASE_SERVICE_KEY=your-service-key
@@ -987,7 +987,7 @@ docker-compose logs postgres
 docker-compose exec postgres pg_isready
 
 # Connect to database
-docker-compose exec postgres psql -U linkload -d linkload
+docker-compose exec postgres psql -U postgres -d postgres
 
 # For Supabase issues, verify credentials in backend/.env
 ```

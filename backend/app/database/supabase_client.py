@@ -52,10 +52,7 @@ class SupabaseClient:
         # Initialize SQLAlchemy engine for raw SQL operations
         db_url = os.getenv("DATABASE_URL")
         if not db_url:
-            db_url = (
-                f"postgresql://{settings.SUPABASE_USER}:{settings.SUPABASE_PASSWORD}@"
-                f"{settings.SUPABASE_HOST}:{settings.SUPABASE_PORT}/{settings.SUPABASE_DB}"
-            )
+            raise RuntimeError("DATABASE_URL must be set to your Supabase PostgreSQL connection string.")
 
         connect_args = self._build_connect_args(db_url)
 

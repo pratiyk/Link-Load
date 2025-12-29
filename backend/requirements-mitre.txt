@@ -1,0 +1,4 @@
+# Required for MITRE ATT&CK integration
+stix2
+
+taxii2-client

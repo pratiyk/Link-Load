@@ -36,6 +36,13 @@ optuna>=4.0.0
 openai>=1.50.0
 groq>=0.13.0
 
+# NOTE: To avoid MLflow FileStore deprecation warning, set the tracking URI to a database backend, e.g.:
+# export MLFLOW_TRACKING_URI=sqlite:///mlflow.db
+
+# MITRE ATT&CK dependencies
+stix2
+taxii2-client
+
 # Utilities and monitoring
 redis>=5.2.0
 loguru>=0.7.3

@@ -1,3 +1,8 @@
+// Debug: Log test env variable
+if (typeof window !== 'undefined') {
+  // eslint-disable-next-line no-console
+  console.log('[DEBUG] TEST ENV VARIABLE:', process.env.REACT_APP_TEST_VARIABLE);
+}
 import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
