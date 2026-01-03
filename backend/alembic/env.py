@@ -23,8 +23,9 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Set database URL directly for development with SQLite
-config.set_main_option("sqlalchemy.url", "sqlite:///app.db")
+# Configure database URL (default to SQLite for local dev)
+database_url = os.getenv("DATABASE_URL", "sqlite:///app.db")
+config.set_main_option("sqlalchemy.url", database_url)
 
 # Add your model's MetaData object here for 'autogenerate' support
 target_metadata = Base.metadata

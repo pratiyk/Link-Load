@@ -73,25 +73,37 @@ class ScannerService {
     }
   }
 
-  async listScans(offset = 0, limit = 10, status = null) {
+  async listScans(skip = 0, limit = 10, status = null) {
     try {
-      const params = { limit, offset };
+      const params = { skip, limit };
       if (status) {
         params.status = status;
       }
-      // Use the new Supabase-backed endpoint
-      const response = await apiClient.get('/api/v1/scans', { params });
-      // Map backend fields to frontend expectations
-      const scans = Array.isArray(response.data)
-        ? response.data.map(scan => ({
-          scan_id: scan.scan_id || scan.id || scan.id_,
-          target_url: scan.target_url,
-          status: scan.status,
-          started_at: scan.started_at,
-          ...scan
-        }))
-        : [];
-      return { scans };
+
+      const endpoint = API_ENDPOINTS.scans?.comprehensive?.list || '/api/v1/scans/comprehensive/list';
+      const response = await apiClient.get(endpoint, { params });
+      const payload = response.data;
+
+      const rawScans = Array.isArray(payload?.scans)
+        ? payload.scans
+        : Array.isArray(payload)
+          ? payload
+          : [];
+
+      const scans = rawScans.map(scan => ({
+        scan_id: scan.scan_id || scan.id || scan.id_,
+        target_url: scan.target_url,
+        status: scan.status,
+        started_at: scan.started_at,
+        ...scan
+      }));
+
+      return {
+        scans,
+        total: typeof payload?.total === 'number' ? payload.total : scans.length,
+        skip: typeof payload?.skip === 'number' ? payload.skip : skip,
+        limit: typeof payload?.limit === 'number' ? payload.limit : limit
+      };
     } catch (error) {
       throw new Error(error?.response?.data?.detail || "Failed to list scans");
     }

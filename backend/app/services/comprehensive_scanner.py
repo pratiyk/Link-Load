@@ -727,162 +727,206 @@ class ComprehensiveScanner:
                 stage="Mapping to MITRE ATT&CK"
             )
 
-            # Use advanced MITRE mapper if available
+            mitre_mapping: List[Dict[str, Any]] = []
+            advanced_mapper_available = True
+
             try:
                 from sqlalchemy.orm import Session
                 from app.database import SessionLocal
                 from app.services.intelligence_mapping.mitre_mapper import MITREMapper
-                
+
                 db: Session = SessionLocal()
                 mitre_mapper = MITREMapper(db)
-                
-                all_techniques = []
-                all_ttps = []
-                all_capec = []
-                
+
                 try:
-                    # Process vulnerabilities with timeout
-                    for vuln in vulnerabilities[:20]:  # Process top 20 vulnerabilities
-                        description = f"{vuln.get('title', '')} {vuln.get('description', '')}"
+                    seen_techniques: Dict[str, Dict[str, Any]] = {}
+                    all_ttps = []
+                    all_capec = []
+
+                    for vuln in vulnerabilities[:20]:
+                        description = f"{vuln.get('title', '')} {vuln.get('description', '')}".strip()
                         cve_id = vuln.get('cve_id')
-                        
+
                         try:
-                            # Add timeout to MITRE mapping call
                             mapping_result = await asyncio.wait_for(
                                 mitre_mapper.map_vulnerability(description, cve_id),
-                                timeout=5.0  # 5 second timeout per vulnerability
+                                timeout=5.0
                             )
-                            
-                            # Extract techniques with confidence scores
-                            for tech in mapping_result.get('techniques', [])[:3]:  # Top 3 per vuln
-                                technique_data = {
-                                    "id": tech['technique_id'],
-                                    "name": tech.get('name', 'Unknown'),
-                                    "confidence": tech.get('confidence', 0.0),
-                                    "method": tech.get('method', 'unknown'),
-                                    "vulnerability_id": vuln.get('vulnerability_id'),
-                                    "tactic": tech.get('tactic', 'Unknown')
-                                }
-                                all_techniques.append(technique_data)
-                            
-                            # Collect TTPs
+
+                            for tech in mapping_result.get('techniques', [])[:3]:
+                                serialized = self._serialize_mitre_technique(tech, vuln)
+                                tech_id = serialized.get('id')
+                                if not tech_id:
+                                    continue
+                                previous = seen_techniques.get(tech_id)
+                                if not previous or serialized.get('confidence', 0) > previous.get('confidence', 0):
+                                    seen_techniques[tech_id] = serialized
+
                             all_ttps.extend(mapping_result.get('ttps', []))
-                            
-                            # Collect CAPEC patterns
                             all_capec.extend(mapping_result.get('capec_patterns', []))
-                            
+
                         except asyncio.TimeoutError:
                             logger.debug(f"MITRE mapping timeout for {vuln.get('title')}")
                             continue
                         except Exception as ve:
                             logger.debug(f"MITRE mapping failed for vulnerability {vuln.get('title')}: {ve}")
                             continue
+
+                    mitre_mapping = sorted(seen_techniques.values(), key=lambda x: x.get('confidence', 0), reverse=True)[:15]
+
+                    if mitre_mapping:
+                        avg_conf = sum(t.get('confidence', 0) for t in mitre_mapping) / len(mitre_mapping)
+                        logger.info(
+                            "Advanced MITRE mapping completed: %d techniques, avg confidence %.2f",
+                            len(mitre_mapping),
+                            avg_conf
+                        )
+                    else:
+                        logger.info("Advanced MITRE mapper returned no techniques; will fall back to heuristics")
                 finally:
                     db.close()
-                
-                # Remove duplicates and sort by confidence
-                seen_techniques = {}
-                for tech in all_techniques:
-                    tech_id = tech['id']
-                    if tech_id not in seen_techniques or tech['confidence'] > seen_techniques[tech_id]['confidence']:
-                        seen_techniques[tech_id] = tech
-                
-                unique_mapping = list(seen_techniques.values())
-                unique_mapping.sort(key=lambda x: x.get('confidence', 0), reverse=True)
-                
-                # Prepare comprehensive MITRE data
-                mitre_data = {
-                    "techniques": unique_mapping[:15],  # Top 15 techniques
-                    "ttps": all_ttps[:10],  # Top 10 TTPs
-                    "capec_patterns": all_capec[:10],  # Top 10 CAPEC patterns
-                    "mapping_confidence": sum(t.get('confidence', 0) for t in unique_mapping) / len(unique_mapping) if unique_mapping else 0,
-                    "total_techniques_found": len(unique_mapping),
-                    "tactics_coverage": list(set([t.get('tactic', 'Unknown') for t in unique_mapping]))
-                }
-                
-                supabase.update_scan(scan_id, {"mitre_mapping": unique_mapping})
-                logger.info(f"Advanced MITRE mapping completed: {len(unique_mapping)} techniques, avg confidence: {mitre_data['mapping_confidence']:.2f}")
-                
+
             except ImportError as ie:
-                logger.warning(f"Advanced MITRE mapper not available: {ie}, falling back to basic mapping")
-                # Fallback to simple mapping with enhanced pattern matching
-                mitre_mapping = []
-                
-                for vuln in vulnerabilities:
-                    vuln_type = (vuln.get("title", "") or "").lower()
-                    vuln_desc = (vuln.get("description", "") or "").lower()
-                    combined_text = f"{vuln_type} {vuln_desc}"
-                    
-                    technique = None
-                    
-                    # High-severity attack techniques
-                    if "sql injection" in combined_text or "sqli" in combined_text:
-                        technique = {"id": "T1190", "name": "Exploit Public-Facing Application", "tactic": "Initial Access", "confidence": 0.85}
-                    elif "xss" in combined_text or "cross-site scripting" in combined_text:
-                        technique = {"id": "T1059.007", "name": "JavaScript", "tactic": "Execution", "confidence": 0.8}
-                    elif "authentication" in combined_text or "login" in combined_text or "password" in combined_text:
-                        technique = {"id": "T1110", "name": "Brute Force", "tactic": "Credential Access", "confidence": 0.75}
-                    elif "command injection" in combined_text or "rce" in combined_text or "remote code" in combined_text:
-                        technique = {"id": "T1059", "name": "Command and Scripting Interpreter", "tactic": "Execution", "confidence": 0.9}
-                    elif "file upload" in combined_text:
-                        technique = {"id": "T1105", "name": "Ingress Tool Transfer", "tactic": "Command and Control", "confidence": 0.75}
-                    elif "path traversal" in combined_text or "directory traversal" in combined_text or "lfi" in combined_text:
-                        technique = {"id": "T1083", "name": "File and Directory Discovery", "tactic": "Discovery", "confidence": 0.8}
-                    elif "ssrf" in combined_text or "server-side request" in combined_text:
-                        technique = {"id": "T1090", "name": "Proxy", "tactic": "Command and Control", "confidence": 0.75}
-                    elif "xxe" in combined_text or "xml external" in combined_text:
-                        technique = {"id": "T1203", "name": "Exploitation for Client Execution", "tactic": "Execution", "confidence": 0.8}
-                    elif "deserialization" in combined_text:
-                        technique = {"id": "T1059", "name": "Command and Scripting Interpreter", "tactic": "Execution", "confidence": 0.85}
-                    elif "csrf" in combined_text or "cross-site request" in combined_text:
-                        technique = {"id": "T1185", "name": "Browser Session Hijacking", "tactic": "Collection", "confidence": 0.7}
-                    
-                    # Discovery / Reconnaissance techniques (info-level)
-                    elif "waf" in combined_text or "firewall" in combined_text:
-                        technique = {"id": "T1518.001", "name": "Security Software Discovery", "tactic": "Discovery", "confidence": 0.7}
-                    elif "technology" in combined_text or "framework" in combined_text or "wappalyzer" in combined_text:
-                        technique = {"id": "T1592.002", "name": "Gather Victim Host Information: Software", "tactic": "Reconnaissance", "confidence": 0.65}
-                    elif ".git" in combined_text or ".svn" in combined_text or "version control" in combined_text:
-                        technique = {"id": "T1213.003", "name": "Code Repositories", "tactic": "Collection", "confidence": 0.75}
-                    elif ".idea" in combined_text or "debug" in combined_text or "config" in combined_text:
-                        technique = {"id": "T1083", "name": "File and Directory Discovery", "tactic": "Discovery", "confidence": 0.65}
-                    elif "exposed" in combined_text or "sensitive" in combined_text or "leaked" in combined_text:
-                        technique = {"id": "T1552", "name": "Unsecured Credentials", "tactic": "Credential Access", "confidence": 0.7}
-                    elif "header" in combined_text or "cors" in combined_text or "csp" in combined_text:
-                        technique = {"id": "T1189", "name": "Drive-by Compromise", "tactic": "Initial Access", "confidence": 0.5}
-                    elif "certificate" in combined_text or "ssl" in combined_text or "tls" in combined_text:
-                        technique = {"id": "T1557", "name": "Adversary-in-the-Middle", "tactic": "Credential Access", "confidence": 0.6}
-                    elif "endpoint" in combined_text or "api" in combined_text or "swagger" in combined_text:
-                        technique = {"id": "T1595.002", "name": "Active Scanning: Vulnerability Scanning", "tactic": "Reconnaissance", "confidence": 0.6}
-                    elif "cookie" in combined_text or "session" in combined_text:
-                        technique = {"id": "T1539", "name": "Steal Web Session Cookie", "tactic": "Credential Access", "confidence": 0.65}
-                    elif "backup" in combined_text or "archive" in combined_text:
-                        technique = {"id": "T1005", "name": "Data from Local System", "tactic": "Collection", "confidence": 0.6}
-                    elif "admin" in combined_text or "management" in combined_text or "console" in combined_text:
-                        technique = {"id": "T1078", "name": "Valid Accounts", "tactic": "Persistence", "confidence": 0.6}
-                    elif "outdated" in combined_text or "vulnerable version" in combined_text or "cve" in combined_text:
-                        technique = {"id": "T1190", "name": "Exploit Public-Facing Application", "tactic": "Initial Access", "confidence": 0.7}
-                    elif "information disclosure" in combined_text or "error" in combined_text:
-                        technique = {"id": "T1592", "name": "Gather Victim Host Information", "tactic": "Reconnaissance", "confidence": 0.55}
-                    
-                    if technique:
-                        mitre_mapping.append(technique)
+                advanced_mapper_available = False
+                logger.warning(f"Advanced MITRE mapper not available: {ie}; falling back to heuristic mapping")
 
-                # Remove duplicates
-                seen = set()
-                unique_mapping = []
-                for t in mitre_mapping:
-                    if t["id"] not in seen:
-                        seen.add(t["id"])
-                        unique_mapping.append(t)
+            if not mitre_mapping:
+                mitre_mapping = self._generate_basic_mitre_mapping(vulnerabilities)
+                if mitre_mapping:
+                    logger.info(
+                        "Heuristic MITRE mapping produced %d techniques (advanced available=%s)",
+                        len(mitre_mapping),
+                        advanced_mapper_available
+                    )
+                else:
+                    logger.info("No MITRE techniques detected even after heuristic fallback")
 
-                supabase.update_scan(scan_id, {"mitre_mapping": unique_mapping})
-                logger.info(f"Basic MITRE mapping completed for scan {scan_id}: {len(unique_mapping)} techniques")
+            supabase.update_scan(scan_id, {"mitre_mapping": mitre_mapping})
 
         except Exception as e:
             logger.error(f"MITRE mapping failed: {e}")
             import traceback
             traceback.print_exc()
+
+    def _serialize_mitre_technique(
+        self,
+        technique_result: Dict[str, Any],
+        vulnerability: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Normalize MITRE mapper output into a serializable structure."""
+        technique_obj = technique_result.get("technique")
+        name = technique_result.get("name")
+        if not name and technique_obj is not None:
+            name = getattr(technique_obj, "name", None)
+
+        tactic = technique_result.get("tactic")
+        if not tactic and technique_obj is not None:
+            tactics = getattr(technique_obj, "tactics", [])
+            if tactics:
+                tactic = getattr(tactics[0], "name", None)
+
+        description = technique_result.get("description")
+        if not description and technique_obj is not None:
+            description = getattr(technique_obj, "description", None)
+
+        methods = technique_result.get("methods")
+        if isinstance(methods, list):
+            method_label = ",".join(methods)
+        else:
+            method_label = technique_result.get("method", "ensemble")
+
+        vuln_ref = None
+        if vulnerability:
+            vuln_ref = vulnerability.get("vuln_id") or vulnerability.get("scanner_id") or vulnerability.get("id")
+
+        return {
+            "id": technique_result.get("technique_id") or technique_result.get("id"),
+            "name": name or "Unknown Technique",
+            "tactic": tactic or "Unknown",
+            "description": description or (f"Mapped from {vulnerability.get('title')}" if vulnerability else None),
+            "confidence": float(technique_result.get("confidence", 0.0) or 0.0),
+            "method": method_label,
+            "source": "mitre_mapper",
+            "vulnerability_ref": vuln_ref
+        }
+
+    def _generate_basic_mitre_mapping(
+        self,
+        vulnerabilities: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Heuristic MITRE mapping based on keyword detection."""
+        mitre_mapping: List[Dict[str, Any]] = []
+        seen_ids: set[str] = set()
+
+        for vuln in vulnerabilities:
+            vuln_type = (vuln.get("title", "") or "").lower()
+            vuln_desc = (vuln.get("description", "") or "").lower()
+            combined_text = f"{vuln_type} {vuln_desc}"
+
+            technique: Optional[Dict[str, Any]] = None
+
+            if "sql injection" in combined_text or "sqli" in combined_text:
+                technique = {"id": "T1190", "name": "Exploit Public-Facing Application", "tactic": "Initial Access", "confidence": 0.85}
+            elif "xss" in combined_text or "cross-site scripting" in combined_text:
+                technique = {"id": "T1059.007", "name": "JavaScript", "tactic": "Execution", "confidence": 0.8}
+            elif "authentication" in combined_text or "login" in combined_text or "password" in combined_text:
+                technique = {"id": "T1110", "name": "Brute Force", "tactic": "Credential Access", "confidence": 0.75}
+            elif "command injection" in combined_text or "rce" in combined_text or "remote code" in combined_text:
+                technique = {"id": "T1059", "name": "Command and Scripting Interpreter", "tactic": "Execution", "confidence": 0.9}
+            elif "file upload" in combined_text:
+                technique = {"id": "T1105", "name": "Ingress Tool Transfer", "tactic": "Command and Control", "confidence": 0.75}
+            elif "path traversal" in combined_text or "directory traversal" in combined_text or "lfi" in combined_text:
+                technique = {"id": "T1083", "name": "File and Directory Discovery", "tactic": "Discovery", "confidence": 0.8}
+            elif "ssrf" in combined_text or "server-side request" in combined_text:
+                technique = {"id": "T1090", "name": "Proxy", "tactic": "Command and Control", "confidence": 0.75}
+            elif "xxe" in combined_text or "xml external" in combined_text:
+                technique = {"id": "T1203", "name": "Exploitation for Client Execution", "tactic": "Execution", "confidence": 0.8}
+            elif "deserialization" in combined_text:
+                technique = {"id": "T1059", "name": "Command and Scripting Interpreter", "tactic": "Execution", "confidence": 0.85}
+            elif "csrf" in combined_text or "cross-site request" in combined_text:
+                technique = {"id": "T1185", "name": "Browser Session Hijacking", "tactic": "Collection", "confidence": 0.7}
+            elif "waf" in combined_text or "firewall" in combined_text:
+                technique = {"id": "T1518.001", "name": "Security Software Discovery", "tactic": "Discovery", "confidence": 0.7}
+            elif "technology" in combined_text or "framework" in combined_text or "wappalyzer" in combined_text:
+                technique = {"id": "T1592.002", "name": "Gather Victim Host Information: Software", "tactic": "Reconnaissance", "confidence": 0.65}
+            elif ".git" in combined_text or ".svn" in combined_text or "version control" in combined_text:
+                technique = {"id": "T1213.003", "name": "Code Repositories", "tactic": "Collection", "confidence": 0.75}
+            elif ".idea" in combined_text or "debug" in combined_text or "config" in combined_text:
+                technique = {"id": "T1083", "name": "File and Directory Discovery", "tactic": "Discovery", "confidence": 0.65}
+            elif "exposed" in combined_text or "sensitive" in combined_text or "leaked" in combined_text:
+                technique = {"id": "T1552", "name": "Unsecured Credentials", "tactic": "Credential Access", "confidence": 0.7}
+            elif "header" in combined_text or "cors" in combined_text or "csp" in combined_text:
+                technique = {"id": "T1189", "name": "Drive-by Compromise", "tactic": "Initial Access", "confidence": 0.5}
+            elif "certificate" in combined_text or "ssl" in combined_text or "tls" in combined_text:
+                technique = {"id": "T1557", "name": "Adversary-in-the-Middle", "tactic": "Credential Access", "confidence": 0.6}
+            elif "endpoint" in combined_text or "api" in combined_text or "swagger" in combined_text:
+                technique = {"id": "T1595.002", "name": "Active Scanning: Vulnerability Scanning", "tactic": "Reconnaissance", "confidence": 0.6}
+            elif "cookie" in combined_text or "session" in combined_text:
+                technique = {"id": "T1539", "name": "Steal Web Session Cookie", "tactic": "Credential Access", "confidence": 0.65}
+            elif "backup" in combined_text or "archive" in combined_text:
+                technique = {"id": "T1005", "name": "Data from Local System", "tactic": "Collection", "confidence": 0.6}
+            elif "admin" in combined_text or "management" in combined_text or "console" in combined_text:
+                technique = {"id": "T1078", "name": "Valid Accounts", "tactic": "Persistence", "confidence": 0.6}
+            elif "outdated" in combined_text or "vulnerable version" in combined_text or "cve" in combined_text:
+                technique = {"id": "T1190", "name": "Exploit Public-Facing Application", "tactic": "Initial Access", "confidence": 0.7}
+            elif "information disclosure" in combined_text or "error" in combined_text:
+                technique = {"id": "T1592", "name": "Gather Victim Host Information", "tactic": "Reconnaissance", "confidence": 0.55}
+
+            if technique:
+                tech_id = technique["id"]
+                if tech_id in seen_ids:
+                    continue
+                seen_ids.add(tech_id)
+                mapped = {
+                    **technique,
+                    "description": f"Mapped from vulnerability: {vuln.get('title') or 'Security Finding'}",
+                    "method": "heuristic",
+                    "source": "heuristic",
+                    "vulnerability_ref": vuln.get("vuln_id") or vuln.get("scanner_id") or vuln.get("id")
+                }
+                mitre_mapping.append(mapped)
+
+        return mitre_mapping
 
     async def _calculate_risk_assessment(
         self,

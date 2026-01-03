@@ -321,11 +321,20 @@ const Home = () => {
         <nav className="navbar">
           <div className="navbar-logo"></div>
           <ul className="navbar-menu">
+            <li className="navbar-menu__item">
+              <button
+                type="button"
+                className="mission-link nav-pill"
+                onClick={() => navigate('/mission-file')}
+              >
+                Mission File
+              </button>
+            </li>
             {isAuthenticated ? (
               <li className="navbar-menu__item navbar-menu__item--account" ref={accountMenuRef}>
                 <button
                   type="button"
-                  className="account-trigger"
+                  className="account-trigger nav-pill"
                   aria-haspopup="true"
                   aria-expanded={isMenuOpen}
                   onClick={() => setIsMenuOpen((previous) => !previous)}
@@ -365,7 +374,7 @@ const Home = () => {
               </li>
             ) : (
               <li className="navbar-menu__item navbar-menu__item--cta">
-                <a className="navbar-link--cta" href="/login">Login / Register</a>
+                <a className="navbar-link--cta nav-pill" href="/login">Login / Register</a>
               </li>
             )}
           </ul>

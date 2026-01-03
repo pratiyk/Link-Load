@@ -11,6 +11,7 @@ import Register from "./pages/Register";
 import Verification from "./pages/Verification";
 import ScanResults from "./pages/ScanResults";
 import Profile from "./pages/Profile";
+import MissionFile from "./pages/MissionFile";
 import NotFound from "./pages/NotFound";
 
 import "./styles/variables.css";
@@ -25,6 +26,7 @@ function App() {
         <Route path="/scan/:scanId" element={<ScanResults />} />
         <Route path="/register" element={<Register />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/mission-file" element={<MissionFile />} />
         <Route path="/settings/verification" element={<Verification />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

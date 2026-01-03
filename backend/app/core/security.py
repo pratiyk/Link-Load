@@ -69,57 +69,27 @@ class SecurityManager:
 
     @staticmethod
     def verify_supabase_token(token: str) -> Optional[dict]:
-        """Validate Supabase JWT using the project REST API."""
-        if not settings.SUPABASE_URL or not settings.SUPABASE_KEY:
-            logger.debug("Supabase configuration missing; skipping token verification")
+        """Validate Supabase JWT locally using SUPABASE_JWT_SECRET."""
+        import os
+        supabase_jwt_secret = os.getenv("SUPABASE_JWT_SECRET") or getattr(settings, "SUPABASE_JWT_SECRET", None)
+        if not supabase_jwt_secret:
+            logger.error("SUPABASE_JWT_SECRET not set in environment or settings.")
             return None
-
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "apikey": settings.SUPABASE_KEY,
-        }
-        user_endpoint = f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1/user"
-
         try:
-            with httpx.Client(timeout=5) as client:
-                response = client.get(user_endpoint, headers=headers)
-        except httpx.HTTPError as exc:
-            logger.warning("Supabase token introspection failed: %s", exc)
-            return None
-
-        if response.status_code != status.HTTP_200_OK:
-            logger.debug(
-                "Supabase user endpoint returned %s during token verification",
-                response.status_code,
+            payload = jwt.decode(
+                token,
+                supabase_jwt_secret,
+                algorithms=["HS256"],
+                options={"verify_aud": False},  # Set to True and provide audience if needed
             )
+        except JWTError as e:
+            logger.warning(f"Supabase JWT validation failed: {e}")
             return None
-
-        try:
-            user_data = response.json()
-        except ValueError:
-            logger.warning("Supabase user endpoint returned invalid JSON")
+        # Optionally, check for required claims
+        if "sub" not in payload:
+            logger.debug("Supabase token payload missing subject (sub)")
             return None
-
-        try:
-            claims = jwt.get_unverified_claims(token)
-        except JWTError:
-            claims = {}
-
-        payload = {
-            "sub": user_data.get("id") or claims.get("sub"),
-            "email": user_data.get("email") or claims.get("email"),
-            "provider": "supabase",
-            "app_metadata": user_data.get("app_metadata") or claims.get("app_metadata") or {},
-            "user_metadata": user_data.get("user_metadata") or claims.get("user_metadata") or {},
-            "email_confirmed_at": user_data.get("email_confirmed_at") or claims.get("email_confirmed_at"),
-            "jti": claims.get("jti"),
-            "exp": claims.get("exp"),
-        }
-
-        if not payload.get("sub"):
-            logger.debug("Supabase token payload missing subject")
-            return None
-
+        payload["provider"] = "supabase"
         return payload
 
     @staticmethod
@@ -275,92 +245,67 @@ def _ensure_unique_username(db: Session, base_username: str, user_id: Optional[s
 
 
 def _ensure_supabase_user(db: Session, payload: dict) -> User:
+    """Ensure Supabase-authenticated users are mirrored in our local users table."""
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Supabase token payload missing subject",
+            detail="Supabase token missing subject",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
-    email = (payload.get("email") or "").lower()
-    if not email:
-        email = f"{user_id}@supabase.local"
-
     metadata = payload.get("user_metadata") or {}
+    email = (payload.get("email") or metadata.get("email") or "").lower()
+    full_name = metadata.get("full_name") or metadata.get("name")
     preferred_username = (
         metadata.get("username")
         or metadata.get("preferred_username")
-        or (email.split("@")[0] if email else f"user_{user_id[:8]}")
+        or (email.split("@")[0] if email else f"user_{str(user_id)[:8]}")
     )
     sanitized_username = _sanitize_username(preferred_username)
-    username = _ensure_unique_username(db, sanitized_username, user_id=user_id)
-    full_name = metadata.get("full_name") or metadata.get("name")
     is_verified = bool(payload.get("email_confirmed_at"))
 
     user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        user = db.query(User).filter(User.email == email).first()
-        if user and user.id != user_id:
-            user.id = user_id
 
-    created_new_user = False
-    if not user:
-        user = User(
-            id=user_id,
-            email=email,
-            username=username,
-            hashed_password=security_manager.hash_password(secrets.token_urlsafe(32)),
-            full_name=full_name,
-            is_active=True,
-            is_verified=is_verified,
-        )
-        db.add(user)
-        created_new_user = True
+    if user:
+        updated = False
+        if email and user.email != email:
+            user.email = email
+            updated = True
+        if full_name and user.full_name != full_name:
+            user.full_name = full_name
+            updated = True
+        if user.username is None:
+            user.username = _ensure_unique_username(db, sanitized_username, user_id)
+            updated = True
+        if user.is_verified != is_verified:
+            user.is_verified = is_verified
+            updated = True
 
-    changed = created_new_user
-
-    if user.email != email:
-        user.email = email
-        changed = True
-
-    if (created_new_user or not getattr(user, "username", None)) and user.username != username:
-        user.username = username
-        changed = True
-
-    if full_name is not None and user.full_name != full_name:
-        user.full_name = full_name
-        changed = True
-
-    if not user.is_active:
-        user.is_active = True
-        changed = True
-
-    if user.is_verified != is_verified:
-        user.is_verified = is_verified
-        changed = True
-
-    if not user.hashed_password:
-        user.hashed_password = security_manager.hash_password(secrets.token_urlsafe(16))
-        changed = True
-
-    if changed:
-        try:
-            db.flush()
+        if updated:
+            db.add(user)
             db.commit()
-        except IntegrityError as exc:
-            db.rollback()
-            logger.error("Failed to synchronize Supabase user %s: %s", user_id, exc)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Unable to synchronize Supabase user",
-            ) from exc
+            db.refresh(user)
+        return user
 
-        if created_new_user:
-            logger.info("Created local user entry for Supabase subject %s", user_id)
+    placeholder_password = security_manager.hash_password(secrets.token_urlsafe(32))
+    username = _ensure_unique_username(db, sanitized_username, user_id)
+    email_value = email or f"{user_id}@supabase.local"
 
-        db.refresh(user)
+    new_user = User(
+        id=user_id,
+        email=email_value,
+        username=username,
+        hashed_password=placeholder_password,
+        full_name=full_name,
+        is_active=True,
+        is_verified=is_verified,
+    )
 
-    return user
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
 
 async def get_current_user(
     request: Request, 
@@ -386,16 +331,22 @@ async def get_current_user(
 
     if auth_payload.get("provider") == "supabase":
         user = _ensure_supabase_user(db, auth_payload)
+        if not user or not user.get("id"):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Supabase user not found",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return user
     else:
         user = db.query(User).filter(User.id == user_id).first()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return user
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return user
 
 async def get_current_user_ws(websocket: WebSocket) -> Optional[str]:
     """Authenticate user for WebSocket connection

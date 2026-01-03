@@ -26,6 +26,11 @@ from app.core.security_middleware import (
     SecurityHeadersMiddleware,
     security_logger
 )
+from app.core.logging_config import (
+    configure_logging,
+    get_system_logger_name,
+    get_business_logger_name,
+)
 from app.api import ws, auth, scan_manager, ws_endpoints, scans, batch_scanner, scanner, risk_analysis, remediation
 from app.api import (
     vulnerability_scanner,
@@ -35,7 +40,11 @@ from app.api import (
     mitre
 )
 
+configure_logging()
+
 logger = logging.getLogger(__name__)
+system_logger = logging.getLogger(get_system_logger_name())
+business_logger = logging.getLogger(get_business_logger_name())
 
 # Initialize application
 app = FastAPI(
@@ -111,7 +120,9 @@ async def add_security_headers(request: Request, call_next):
     
     # Log request for security monitoring (A09:2021)
     client_ip = request.client.host if request.client else "unknown"
-    logger.info(f"Request: {request.method} {request.url.path} from {client_ip} [req_id={request_id}]")
+    system_logger.info(
+        f"Request: {request.method} {request.url.path} from {client_ip} [req_id={request_id}]"
+    )
     
     response = await call_next(request)
     
@@ -213,14 +224,14 @@ async def startup_event():
     try:
         # Database tables already created by reset_db.py
         # Skip init_db() to avoid model import issues
-        logger.info("Skipping database initialization (tables already exist)")
+        system_logger.info("Skipping database initialization (tables already exist)")
         
         # Initialize Redis cache
         from app.core.cache import cache_manager
         await cache_manager.initialize()
-        logger.info("Redis cache initialized successfully")
+        system_logger.info("Redis cache initialized successfully")
     except Exception as e:
-        logger.error(f"Failed to initialize services: {e}")
+        system_logger.error(f"Failed to initialize services: {e}")
         import traceback
         traceback.print_exc()
         # Don't re-raise - allow app to start anyway
@@ -233,9 +244,9 @@ async def shutdown_event():
         # Close Redis connections
         from app.core.cache import cache_manager
         await cache_manager.close()
-        logger.info("Redis cache connections closed")
+        system_logger.info("Redis cache connections closed")
     except Exception as e:
-        logger.error(f"Error during cleanup: {e}")
+        system_logger.error(f"Error during cleanup: {e}")
 
 # Register routers
 app.include_router(auth.router, prefix=settings.API_PREFIX)  # Authentication routes
@@ -270,7 +281,7 @@ async def health():
             conn.execute(text("SELECT 1"))
         db_health = True
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
+        system_logger.error(f"Health check failed: {e}")
         db_health = False
     
     return {
@@ -286,4 +297,4 @@ os.makedirs(reports_dir, exist_ok=True)
 try:
     app.mount("/reports", StaticFiles(directory=reports_dir), name="reports")
 except Exception as e:
-    logger.warning(f"Could not mount reports directory: {e}")
+    system_logger.warning(f"Could not mount reports directory: {e}")

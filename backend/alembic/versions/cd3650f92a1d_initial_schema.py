@@ -17,6 +17,37 @@ branch_labels = None
 depends_on = None
 
 def upgrade():
+    # Create core auth tables so later revisions can reference users
+    op.create_table(
+        'users',
+        sa.Column('id', sa.String(), primary_key=True),
+        sa.Column('email', sa.String(), nullable=False),
+        sa.Column('username', sa.String(), nullable=False),
+        sa.Column('hashed_password', sa.String(), nullable=False),
+        sa.Column('full_name', sa.String(), nullable=True),
+        sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
+        sa.Column('is_superuser', sa.Boolean(), nullable=False, server_default='false'),
+        sa.Column('is_verified', sa.Boolean(), nullable=False, server_default='false'),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()')),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()')),
+        sa.Column('last_login', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('failed_login_attempts', sa.Integer(), nullable=False, server_default='0'),
+        sa.Column('locked_until', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('api_key', sa.String(), nullable=True),
+        sa.Column('preferences', sa.Text(), nullable=True)
+    )
+    op.create_index('ix_users_email', 'users', ['email'], unique=True)
+    op.create_index('ix_users_username', 'users', ['username'], unique=True)
+    op.create_index('ix_users_api_key', 'users', ['api_key'], unique=True)
+
+    op.create_table(
+        'revoked_tokens',
+        sa.Column('jti', sa.String(), primary_key=True),
+        sa.Column('token_type', sa.String(), nullable=False),
+        sa.Column('revoked_at', sa.DateTime(timezone=True), server_default=sa.text('now()')),
+        sa.Column('expires_at', sa.DateTime(timezone=True), nullable=False)
+    )
+
     # Create batch_scans table
     op.create_table(
         'batch_scans',
@@ -137,6 +168,11 @@ def upgrade():
     op.create_index('ix_threat_intel_data_finding_id', 'threat_intel_data', ['finding_id'])
 
 def downgrade():
+    op.drop_table('revoked_tokens')
+    op.drop_index('ix_users_api_key', table_name='users')
+    op.drop_index('ix_users_username', table_name='users')
+    op.drop_index('ix_users_email', table_name='users')
+    op.drop_table('users')
     op.drop_table('threat_intel_data')
     op.drop_table('vulnerability_mitigations')
     op.drop_table('vulnerability_findings')

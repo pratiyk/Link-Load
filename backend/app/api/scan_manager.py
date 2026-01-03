@@ -1,4 +1,5 @@
 from typing import Any, Dict, List, Optional
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, BackgroundTasks
 from sqlalchemy.orm import Session
@@ -10,6 +11,7 @@ from app.services.scanners.scanner_orchestrator import ScannerOrchestrator
 from app.core.security import get_current_user
 from app.models.user import User
 from app.utils.datetime_utils import utc_now_naive
+from app.core.logging_config import get_business_logger_name
 from datetime import datetime
 
 class ScanConfig(BaseModel):
@@ -69,6 +71,8 @@ import uuid
 
 router = APIRouter()
 orchestrator = ScannerOrchestrator()
+logger = logging.getLogger(__name__)
+business_logger = logging.getLogger(get_business_logger_name())
 
 @router.post("/scans", response_model=ScanResponse)
 async def initiate_scan(
@@ -81,21 +85,28 @@ async def initiate_scan(
     scan_id = str(uuid.uuid4())
     
     # Create scan record
+    user_id = current_user["id"] if isinstance(current_user, dict) else current_user.id
     scan = {
         "id": scan_id,
-        "user_id": current_user.id,
+        "user_id": user_id,
         "target_url": request.target_url,
         "scan_types": request.scan_types,
         "status": "pending",
         "scan_config": request.scan_config.dict(),
         "started_at": utc_now_naive()
     }
-    
+    business_logger.info(
+        "SCAN_INITIATED | user_id=%s | scan_id=%s | target=%s | types=%s",
+        str(user_id),
+        scan_id,
+        request.target_url,
+        ",".join(request.scan_types),
+    )
     # Add to Supabase
     from app.database.supabase_client import supabase
     supabase.create_scan({
         "scan_id": scan_id,
-        "user_id": str(current_user.id),
+        "user_id": str(user_id),
         "target_url": request.target_url,
         "scan_types": request.scan_types,
         "status": "pending",
@@ -120,9 +131,16 @@ async def get_scan_status(
     current_user: User = Depends(get_current_user)
 ):
     """Get status of a specific scan from Supabase owasp_scans table"""
-    scan = supabase.fetch_scan(scan_id, user_id=str(current_user.id))
+    user_id = current_user["id"] if isinstance(current_user, dict) else current_user.id
+    scan = supabase.fetch_scan(scan_id, user_id=str(user_id))
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found")
+    business_logger.info(
+        "SCAN_STATUS_REQUEST | user_id=%s | scan_id=%s | status=%s",
+        str(user_id),
+        scan_id,
+        scan.get("status"),
+    )
     return ScanResponse(**scan)
 
 @router.get("/scans", response_model=List[ScanResponse])
@@ -132,7 +150,15 @@ async def list_scans(
     offset: int = 0
 ):
     """List all scans for the current user from Supabase owasp_scans table"""
-    scans = supabase.get_user_scans(str(current_user.id), limit=limit, offset=offset)
+    user_id = current_user["id"] if isinstance(current_user, dict) else current_user.id
+    scans = supabase.get_user_scans(str(user_id), limit=limit, offset=offset)
+    business_logger.info(
+        "SCAN_LIST_REQUEST | user_id=%s | count=%s | limit=%s | offset=%s",
+        str(user_id),
+        len(scans),
+        limit,
+        offset,
+    )
     return [ScanResponse(**scan) for scan in scans]
 
 @router.delete("/scans/{scan_id}")

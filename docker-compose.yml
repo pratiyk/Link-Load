@@ -138,6 +138,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: linkload-backend
+    env_file:
+      - ./backend/.env
     environment:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_KEY: ${SUPABASE_KEY}

@@ -282,14 +282,53 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const isSupabaseAuth = () => isSupabaseConfigured && localStorage.getItem('auth_provider') === 'supabase' && supabase;
+
   const updateProfile = async (profileData) => {
     try {
-      const updatedUser = await authApi.updateProfile(profileData);
+      if (isSupabaseAuth()) {
+        const sanitizedEmail = profileData.email?.trim().toLowerCase();
+        const updatePayload = {};
+
+        if (profileData.full_name !== undefined) {
+          updatePayload.data = {
+            ...(user?.user_metadata || {}),
+            full_name: profileData.full_name || null
+          };
+        }
+
+        if (sanitizedEmail && sanitizedEmail !== user?.email) {
+          updatePayload.email = sanitizedEmail;
+        }
+
+        if (Object.keys(updatePayload).length === 0) {
+          toast.success('Profile updated successfully');
+          return { success: true, provider: 'supabase', skipped: true };
+        }
+
+        const { data, error } = await supabase.auth.updateUser(updatePayload);
+        if (error) {
+          throw new Error(error.message || 'Profile update failed');
+        }
+
+        if (data?.user) {
+          setUser(data.user);
+        }
+        toast.success('Profile updated successfully');
+        return { success: true, provider: 'supabase' };
+      }
+
+      const payload = {
+        full_name: profileData.full_name?.trim() || undefined,
+        username: profileData.username?.trim() || undefined
+      };
+
+      const updatedUser = await authApi.updateProfile(payload);
       setUser(updatedUser);
       toast.success('Profile updated successfully');
-      return { success: true };
+      return { success: true, provider: 'backend' };
     } catch (error) {
-      const message = error.response?.data?.detail || 'Profile update failed';
+      const message = typeof error === 'string' ? error : error?.message || 'Profile update failed';
       toast.error(message);
       return { success: false, error: message };
     }
@@ -297,11 +336,44 @@ export const AuthProvider = ({ children }) => {
 
   const changePassword = async (currentPassword, newPassword) => {
     try {
+      if (isSupabaseAuth()) {
+        if (!user?.email) {
+          throw new Error('No email associated with this account');
+        }
+
+        const { data: verifyData, error: verifyError } = await supabase.auth.signInWithPassword({
+          email: user.email,
+          password: currentPassword
+        });
+
+        if (verifyError) {
+          throw new Error('Current password is incorrect');
+        }
+
+        if (verifyData?.session) {
+          setAuthToken(verifyData.session.access_token);
+          if (verifyData.session.refresh_token) {
+            setRefreshToken(verifyData.session.refresh_token);
+          }
+          localStorage.setItem('supabase_access_token', verifyData.session.access_token);
+          localStorage.setItem('supabase_refresh_token', verifyData.session.refresh_token || '');
+          localStorage.setItem('auth_provider', 'supabase');
+        }
+
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        if (error) {
+          throw new Error(error.message || 'Password change failed');
+        }
+
+        toast.success('Password changed successfully');
+        return { success: true, provider: 'supabase' };
+      }
+
       await authApi.changePassword(currentPassword, newPassword);
       toast.success('Password changed successfully');
-      return { success: true };
+      return { success: true, provider: 'backend' };
     } catch (error) {
-      const message = error.response?.data?.detail || 'Password change failed';
+      const message = typeof error === 'string' ? error : error?.message || 'Password change failed';
       toast.error(message);
       return { success: false, error: message };
     }

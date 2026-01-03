@@ -5,7 +5,7 @@ Ensures that all user-specific data (scans, domains, etc.) is properly
 scoped to the authenticated user and cannot be accessed by other users.
 """
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -96,7 +96,18 @@ def verify_domain_ownership(
     return domain
 
 
-def require_authenticated_user(current_user: Optional[User]) -> User:
+def _extract_user_id(current_user: Union[User, Dict[str, Any], None]) -> Optional[str]:
+    """Return the user ID regardless of whether the user is an ORM object or Supabase dict."""
+    if not current_user:
+        return None
+    if isinstance(current_user, dict):
+        user_id = current_user.get("id") or current_user.get("user_id")
+    else:
+        user_id = getattr(current_user, "id", None)
+    return str(user_id) if user_id else None
+
+
+def require_authenticated_user(current_user: Optional[Union[User, Dict[str, Any]]]) -> Union[User, Dict[str, Any]]:
     """
     Ensure that the current request has an authenticated user.
     
@@ -115,7 +126,8 @@ def require_authenticated_user(current_user: Optional[User]) -> User:
             detail="Authentication required"
         )
     
-    if not hasattr(current_user, "id") or not current_user.id:
+    user_id = _extract_user_id(current_user)
+    if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid user object"
@@ -124,7 +136,7 @@ def require_authenticated_user(current_user: Optional[User]) -> User:
     return current_user
 
 
-def get_user_id(current_user: User) -> str:
+def get_user_id(current_user: Union[User, Dict[str, Any]]) -> str:
     """
     Extract and validate user ID from authenticated user.
     
@@ -137,7 +149,7 @@ def get_user_id(current_user: User) -> str:
     Raises:
         HTTPException: If user ID is invalid
     """
-    user_id = getattr(current_user, "id", None)
+    user_id = _extract_user_id(current_user)
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

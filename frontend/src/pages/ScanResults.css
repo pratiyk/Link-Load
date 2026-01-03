@@ -31,7 +31,7 @@
   content: '';
   position: absolute;
   right: var(--spacing-4, 2rem);
-  bottom: -14px;
+  bottom: -25px;
   width: var(--spacing-4, 2rem);
   height: var(--spacing-4, 2rem);
   background: #4CAF91;
@@ -1995,6 +1995,47 @@
     bottom: -40px;
     gap: 0.25rem;
     padding: 0.25rem;
+  }
+
+
+  @media (max-width: 420px) {
+    .header-content {
+      align-items: stretch;
+    }
+
+    .tabs-container {
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .tab {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .results-header,
+    .tabs-content {
+      padding: var(--spacing-2, 1rem);
+    }
+
+    .results-section {
+      margin: 0 var(--spacing-1, 0.5rem) var(--spacing-3, 1.5rem);
+    }
+
+    .scan-info {
+      gap: 0.75rem;
+    }
+
+    .risk-score-content {
+      gap: 1rem;
+    }
+
+    .timeline-item,
+    .overview-card,
+    .feature-note,
+    .insight-card-modern {
+      padding: var(--spacing-3, 1.25rem);
+    }
   }
 
   .insight-marker {

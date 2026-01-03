@@ -29,6 +29,8 @@ const severityWeights = {
   unknown: 0.5
 };
 
+const USD_TO_INR = 83; // Approximate conversion to display rupee amounts
+
 const deriveRiskLevel = (score) => {
   if (score === null || score === undefined) return 'Unknown';
   if (score >= 8) return 'Critical';
@@ -286,7 +288,7 @@ const ScanResults = () => {
       }, 0);
     };
 
-    const estimatedCost = Math.round(
+    const estimatedCostUSD = Math.round(
       calculateCost(vulnerabilityStats.grouped?.critical, baseCriticalCost) +
       calculateCost(vulnerabilityStats.grouped?.high, baseHighCost) +
       calculateCost(vulnerabilityStats.grouped?.medium, baseMediumCost) +
@@ -294,13 +296,16 @@ const ScanResults = () => {
       calculateCost(vulnerabilityStats.grouped?.info, baseInfoCost)
     );
 
-    const potentialLoss = Math.round(
+    const potentialLossUSD = Math.round(
       (calculateCost(vulnerabilityStats.grouped?.critical, baseCriticalCost) * 15) +
       (calculateCost(vulnerabilityStats.grouped?.high, baseHighCost) * 10) +
       (calculateCost(vulnerabilityStats.grouped?.medium, baseMediumCost) * 6) +
       (calculateCost(vulnerabilityStats.grouped?.low, baseLowCost) * 3) +
       (calculateCost(vulnerabilityStats.grouped?.info, baseInfoCost) * 1.5)
     );
+
+    const estimatedCost = Math.round(estimatedCostUSD * USD_TO_INR);
+    const potentialLoss = Math.round(potentialLossUSD * USD_TO_INR);
 
     // Effort hours calculation
     const effortHours = Math.round(

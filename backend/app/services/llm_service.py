@@ -12,6 +12,7 @@ Run: Configure GROQ_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY in .env
 
 import os
 import asyncio
+import json
 from typing import Optional, List, Dict, Any
 from abc import ABC, abstractmethod
 import logging
@@ -328,6 +329,161 @@ class GroqProvider(LLMProvider):
             self.client = AsyncGroq(api_key=self.api_key)
         except ImportError:
             raise ImportError("groq package not installed. Run: pip install groq")
+
+    async def _complete_chat(
+        self,
+        messages: List[Dict[str, Any]],
+        *,
+        temperature: float,
+        max_tokens: int
+    ) -> str:
+        """Call Groq chat completion with retries and normalized output."""
+        last_error: Optional[Exception] = None
+        for attempt in range(2):
+            try:
+                response = await self.client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens
+                )
+                content = self._extract_message_content(response)
+                if content:
+                    return content.strip()
+                raise ValueError("Groq response missing content/choices")
+            except Exception as exc:  # noqa: PERF203 - explicit retries
+                last_error = exc
+                logger.warning(
+                    "Groq chat completion attempt %s failed: %s",
+                    attempt + 1,
+                    exc
+                )
+        raise last_error or ValueError("Groq response missing content after retries")
+
+    def _extract_message_content(self, response: Any) -> Optional[str]:
+        """Normalize Groq response payloads to a raw text string."""
+        if response is None:
+            return None
+
+        choices = getattr(response, "choices", None)
+        if choices is None and isinstance(response, dict):
+            choices = response.get("choices")
+
+        if choices:
+            first_choice = choices[0]
+            message = getattr(first_choice, "message", None)
+            if message is None and isinstance(first_choice, dict):
+                message = first_choice.get("message")
+
+            if message is not None:
+                content = getattr(message, "content", None)
+                if content is None and isinstance(message, dict):
+                    content = message.get("content")
+                if isinstance(content, list):
+                    content = " ".join(
+                        [
+                            segment.get("text", "") if isinstance(segment, dict) else str(segment)
+                            for segment in content
+                        ]
+                    )
+                if content:
+                    return str(content)
+
+            text_attr = getattr(first_choice, "text", None)
+            if text_attr:
+                return str(text_attr)
+            if isinstance(first_choice, dict):
+                text_value = first_choice.get("text") or first_choice.get("content")
+                if text_value:
+                    return str(text_value)
+
+        # Some Groq clients return aggregated text helpers
+        if hasattr(response, "output_text"):
+            output_text = getattr(response, "output_text")
+            if output_text:
+                return str(output_text)
+        if isinstance(response, dict):
+            return response.get("output_text") or response.get("content")
+        return None
+
+    def _clean_json_payload(self, raw_text: str) -> str:
+        """Strip code fences and extraneous characters before JSON parsing."""
+        if not raw_text:
+            return ""
+
+        cleaned = raw_text.strip()
+        for fence in ("```json", "```JSON", "```"):
+            if fence in cleaned:
+                parts = cleaned.split(fence, 1)
+                if len(parts) > 1:
+                    cleaned = parts[1]
+                if "```" in cleaned:
+                    cleaned = cleaned.split("```", 1)[0]
+                break
+
+        cleaned = cleaned.strip("`\n\r \t")
+        start = cleaned.find("{")
+        end = cleaned.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            cleaned = cleaned[start:end + 1]
+        return cleaned
+
+    def _parse_json_response(self, raw_text: str) -> Optional[Dict[str, Any]]:
+        """Parse Groq JSON payload safely, returning None on failure."""
+        if not raw_text:
+            return None
+
+        cleaned = self._clean_json_payload(raw_text)
+        if not cleaned:
+            return None
+
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError as err:
+            logger.warning("Groq JSON parsing failed: %s", err)
+            return None
+
+    def _empty_analysis_result(self, vulnerabilities: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Provide structured fallback when Groq output cannot be parsed."""
+        severity_map = {
+            "critical": 9,
+            "high": 8,
+            "medium": 6,
+            "low": 4,
+            "info": 2
+        }
+
+        fallback_entries: List[Dict[str, Any]] = []
+        for vuln in vulnerabilities:
+            severity_key = str(vuln.get("severity", "medium")).lower()
+            fallback_entries.append({
+                "title": vuln.get("title", "Unknown"),
+                "severity_score": severity_map.get(severity_key, 5),
+                "severity_justification": "LLM analysis unavailable; derived from scanner severity.",
+                "mitre_attack": {
+                    "technique_id": "",
+                    "technique_name": "",
+                    "tactic": "",
+                    "sub_techniques": []
+                },
+                "remediation": {
+                    "immediate": [],
+                    "code_fix": [],
+                    "infrastructure": [],
+                    "long_term": []
+                },
+                "exploitation_scenario": "LLM analysis unavailable.",
+                "business_impact": "LLM analysis unavailable.",
+                "fix_complexity": "unknown",
+                "estimated_fix_time": "unknown",
+                "detection_methods": []
+            })
+
+        return {
+            "vulnerabilities": fallback_entries,
+            "attack_chain_analysis": "LLM analysis unavailable; unable to compute attack chains.",
+            "executive_summary": "LLM analysis unavailable; review scanner findings manually."
+        }
     
     async def analyze_vulnerabilities(
         self,
@@ -399,8 +555,7 @@ Format as JSON:
 }}"""
         
         try:
-            response = await self.client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+            result_text = await self._complete_chat(
                 messages=[
                     {
                         "role": "system",
@@ -414,28 +569,20 @@ Format as JSON:
                 temperature=0.3,
                 max_tokens=4000
             )
-            
-            import json
-            result_text = response.choices[0].message.content
-            if result_text is None:
-                raise ValueError("Groq response content is None")
-            try:
-                result = json.loads(result_text)
-            except json.JSONDecodeError:
-                if isinstance(result_text, str) and "```json" in result_text:
-                    result_text = result_text.split("```json")[1].split("````")[0]
-                    result = json.loads(result_text)
-                elif isinstance(result_text, str) and "```" in result_text:
-                    result_text = result_text.split("```")[1].split("````")[0]
-                    result = json.loads(result_text)
-                else:
-                    raise
-            logger.info(f"Groq analysis complete for {len(vulnerabilities)} vulnerabilities with MITRE mapping")
+
+            result = self._parse_json_response(result_text)
+            if result is None:
+                raise ValueError("Groq analysis returned an empty or invalid JSON payload")
+
+            logger.info(
+                "Groq analysis complete for %s vulnerabilities with MITRE mapping",
+                len(vulnerabilities)
+            )
             return result
-        
+
         except Exception as e:
-            logger.error(f"Groq analysis failed: {e}")
-            raise
+            logger.error("Groq analysis failed, returning fallback payload: %s", e)
+            return self._empty_analysis_result(vulnerabilities)
     
     async def generate_executive_summary(
         self,
@@ -506,8 +653,7 @@ RULES:
 - If both vulnerabilities and external concerns are minimal, state the target has a strong security posture"""
         
         try:
-            response = await self.client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+            content = await self._complete_chat(
                 messages=[
                     {
                         "role": "system",
@@ -521,15 +667,21 @@ RULES:
                 temperature=0.4,
                 max_tokens=1200
             )
-            
-            content = response.choices[0].message.content
-            if content is None:
-                return ""
+
             return content.strip()
-        
+
         except Exception as e:
-            logger.error(f"Executive summary generation failed: {e}")
-            raise
+            logger.error(
+                "Executive summary generation failed, using fallback summary: %s",
+                e
+            )
+            fallback = FallbackProvider()
+            return await fallback.generate_executive_summary(
+                vulnerabilities,
+                risk_score,
+                risk_level,
+                threat_intel
+            )
     
     def _prepare_threat_intel_summary(self, threat_intel: Dict[str, Any]) -> str:
         """Prepare threat intelligence data for LLM analysis"""

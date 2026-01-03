@@ -162,6 +162,77 @@ const Profile = () => {
     };
   }, [user, verifiedSites]);
 
+  const heroStats = useMemo(() => ([
+    {
+      id: 'clearance',
+      label: 'Clearance',
+      value: operatorStatus.clearanceLevel || 'PENDING',
+      detail: operatorStatus.operationalStatus === 'ACTIVE' ? 'Account active' : 'Account inactive',
+      tone: 'cyan'
+    },
+    {
+      id: 'active',
+      label: 'Active Missions',
+      value: missionStats.activeMissions || 0,
+      detail: 'Running scans',
+      tone: 'yellow'
+    },
+    {
+      id: 'completed',
+      label: 'Completed',
+      value: missionStats.completedMissions || 0,
+      detail: 'Closed operations',
+      tone: 'green'
+    },
+    {
+      id: 'zones',
+      label: 'Verified Zones',
+      value: operatorStatus.securedZones || 0,
+      detail: 'Domains secured',
+      tone: 'pink'
+    },
+    {
+      id: 'risk',
+      label: 'Avg Risk',
+      value: missionStats.avgThreatLevel || 0,
+      detail: '/10 threat index',
+      tone: 'coral'
+    }
+  ]), [operatorStatus, missionStats]);
+
+  const heroIntel = useMemo(() => {
+    const monthsTracked = missionStats.missionsByMonth.length || 1;
+    const missionTempo = missionStats.missionsByMonth.reduce((sum, item) => sum + item.count, 0) / monthsTracked;
+    const threatDensity = missionStats.totalMissions ? Math.round(missionStats.totalThreats / missionStats.totalMissions) : 0;
+    const completionRate = missionStats.totalMissions
+      ? Math.round((missionStats.completedMissions / missionStats.totalMissions) * 100)
+      : 0;
+
+    return [
+      {
+        id: 'tempo',
+        label: 'Mission Tempo',
+        value: `${missionTempo.toFixed(1)}/mo`,
+        caption: 'Avg scans per month'
+      },
+      {
+        id: 'density',
+        label: 'Threat Density',
+        value: threatDensity,
+        caption: 'Issues per scan'
+      },
+      {
+        id: 'completion',
+        label: 'Completion Rate',
+        value: `${completionRate}%`,
+        caption: 'Missions closed'
+      }
+    ];
+  }, [missionStats]);
+
+  const latestMission = useMemo(() => missionStats.recentMissions?.[0] || null, [missionStats]);
+  const formatMissionStatus = (status = '') => status.replace(/_/g, ' ').toUpperCase();
+
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
     setError('');
@@ -169,12 +240,17 @@ const Profile = () => {
     setLoading(true);
 
     try {
-      const result = await updateProfile({ name, email });
+      const payload = {
+        full_name: name?.trim() || '',
+        email: email?.trim().toLowerCase()
+      };
+      const result = await updateProfile(payload);
       if (result.success) {
         setSuccess('Profile updated successfully');
       }
     } catch (err) {
-      setError(err.message || 'Update failed');
+      const message = typeof err === 'string' ? err : err?.message || 'Update failed';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -200,7 +276,8 @@ const Profile = () => {
         setConfirmPassword('');
       }
     } catch (err) {
-      setError(err.message || 'Password change failed');
+      const message = typeof err === 'string' ? err : err?.message || 'Password change failed';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -672,16 +749,101 @@ const Profile = () => {
   return (
     <Layout>
       <div className="profile-container">
-        {/* Header */}
-        <div className="profile-header">
-          <div className="header-content">
+        <header className="profile-header">
+          <div className="profile-header__bar">
             <h1>Profile</h1>
             <button onClick={() => navigate('/')} className="back-button">
               Return to Base
             </button>
           </div>
-          <p className="profile-subtitle">Manage your account settings, security, and review scan analytics</p>
-        </div>
+        </header>
+
+        {/* Hero */}
+        <section className="profile-hero">
+          <div className="profile-hero__content">
+            <p className="profile-hero__kicker">Operator Console // Profile Sync</p>
+            <h1>Operator Status Sheet</h1>
+            <p className="profile-hero__lede">
+              Keep your credentials, security posture, and mission intel synchronized with the rest of the Link&Load deck.
+            </p>
+            <div className="profile-hero__meta">
+              <span className="profile-chip">
+                Member Since {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
+              </span>
+              <span className="profile-chip">Last Active {operatorStatus.lastActive}</span>
+            </div>
+            <div className="profile-hero__actions">
+              <button
+                type="button"
+                className="profile-cta profile-cta--primary"
+                onClick={() => navigate('/')}
+              >
+                Launch Console
+              </button>
+              <button
+                type="button"
+                className="profile-cta profile-cta--secondary"
+                onClick={() => navigate('/mission-file')}
+              >
+                Mission File
+              </button>
+            </div>
+
+            <div className="profile-hero__intel">
+              <div className="intel-callout">
+                <div className="intel-callout__body">
+                  <span className="intel-callout__label">Latest Mission</span>
+                  {latestMission ? (
+                    <>
+                      <div className="intel-callout__target">{latestMission.target_url || 'Unknown target'}</div>
+                      <div className="intel-callout__meta">
+                        <span>
+                          {latestMission.created_at || latestMission.started_at
+                            ? new Date(latestMission.created_at || latestMission.started_at).toLocaleString()
+                            : 'Awaiting deployment'}
+                        </span>
+                        {typeof latestMission.vulnerability_count === 'number' && (
+                          <span>• {latestMission.vulnerability_count} findings</span>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="intel-callout__target">No missions logged</div>
+                      <p className="intel-callout__note">
+                        Run your first scan to populate mission intel and threat history.
+                      </p>
+                    </>
+                  )}
+                </div>
+                <div className="intel-callout__status">
+                  <span className={`intel-status intel-status--${(latestMission?.status || 'pending').toLowerCase()}`}>
+                    {latestMission ? formatMissionStatus(latestMission.status) : 'PENDING'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="intel-metrics">
+                {heroIntel.map((metric) => (
+                  <div key={metric.id} className="intel-metric-card">
+                    <span className="intel-metric__label">{metric.label}</span>
+                    <span className="intel-metric__value">{metric.value}</span>
+                    <span className="intel-metric__caption">{metric.caption}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="profile-hero__status">
+            {heroStats.map((stat) => (
+              <div key={stat.id} className={`hero-stat hero-stat--${stat.tone}`}>
+                <span className="hero-stat__label">{stat.label}</span>
+                <span className="hero-stat__value">{stat.value}</span>
+                <span className="hero-stat__detail">{stat.detail}</span>
+              </div>
+            ))}
+          </div>
+        </section>
 
         {/* Tabs Navigation */}
         <div className="profile-tabs-container">

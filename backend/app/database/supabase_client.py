@@ -334,7 +334,8 @@ class SupabaseClient:
             Exception: If user_id is provided but doesn't match the scan owner
         """
         try:
-            res = self.client.table("owasp_scans").select("*").eq("scan_id", scan_id).execute()
+            client = self.admin or self.client
+            res = client.table("owasp_scans").select("*").eq("scan_id", scan_id).execute()
             if not res.data or len(res.data) == 0:
                 # Fallback to memory
                 return self._memory_scans.get(scan_id)
@@ -482,18 +483,25 @@ class SupabaseClient:
             return False
             
     def get_user_scans(self, user_id: str, status: Optional[str] = None, limit: int = 10, offset: int = 0) -> List[dict]:
-        """Get scans for a specific user"""
+        """Get scans for a specific user.
+
+        Uses the service-role client so we are not subject to Supabase RLS when
+        the backend itself is already enforcing user ownership before calling
+        this helper. Falling back to the anon client kept returning empty
+        datasets even when scans existed, which meant the UI never showed
+        history while running in Docker."""
         try:
-            query = self.client.table("owasp_scans").select("*").eq("user_id", user_id)
-            
+            client = self.admin or self.client
+            query = client.table("owasp_scans").select("*").eq("user_id", user_id)
+
             if status:
                 query = query.eq("status", status)
-                
+
             query = query.order("started_at", desc=True)
             query = query.range(offset, offset + limit - 1)
-            
+
             res = query.execute()
-            return res.data
+            return res.data or []
         except Exception as e:
             logger.error(f"Failed to fetch user scans: {str(e)}", exc_info=True)
             return []

@@ -158,7 +158,9 @@ async def start_comprehensive_scan(
         scan_id = f"scan_{uuid.uuid4().hex[:12]}"
         
         # Create scan record (explicitly require authenticated user)
-        user_id = current_user.id
+        # Use helper to support both dict and ORM user objects
+        from app.core.authorization import get_user_id
+        user_id = get_user_id(current_user)
         scan_record = {
             "scan_id": scan_id,
             "user_id": user_id,
@@ -542,8 +544,11 @@ async def get_scan_results(
         # Require authentication and get user_id
         user_id = get_user_id(current_user)
         
-        # Fetch scan
-        scan = supabase.fetch_scan(scan_id)
+        # Fetch scan using service-role route and enforce ownership early
+        scan = supabase.fetch_scan(scan_id, user_id=user_id)
+        if not scan:
+            logger.warning("Scan %s not found for user %s", scan_id, user_id)
+            raise HTTPException(status_code=404, detail="Scan not found")
         logger.info(f"Fetched scan {scan_id}: status={scan.get('status')}, risk_score={scan.get('risk_score')}")
         
         # Verify ownership
