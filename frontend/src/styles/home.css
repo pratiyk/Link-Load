@@ -54,7 +54,7 @@
 
 .nav-pill {
   font-family: var(--font-heading, 'VT323', monospace);
-  font-size: var(--font-size-sm);
+  font-size: calc(var(--font-size-sm) * 1.15);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-weight: 700;

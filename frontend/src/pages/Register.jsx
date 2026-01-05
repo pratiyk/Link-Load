@@ -283,28 +283,6 @@ const Register = () => {
             </div>
           </section>
 
-          <section className="register-support">
-            <div className="register-support__surface">
-              <h2 className="dns-card__title">Why Supabase Auth?</h2>
-              <ul className="register-benefits">
-                <li>
-                  <ShieldCheck size={18} />
-                  <span>Session management with row-level security ensures your vulnerability data stays isolated per workspace.</span>
-                </li>
-                <li>
-                  <Sparkles size={18} />
-                  <span>Instant verification emails let teams onboard quickly while keeping malicious actors out.</span>
-                </li>
-                <li>
-                  <Mail size={18} />
-                  <span>Bring your own SMTP to align with corporate email policies without extra configuration.</span>
-                </li>
-              </ul>
-              <p className="register-legal">
-                After verifying your email, return to the login screen to access Link&amp;Load. Contact support if you need SSO or SCIM provisioning.
-              </p>
-            </div>
-          </section>
         </div>
       </div>
     </Layout>

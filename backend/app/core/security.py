@@ -331,7 +331,7 @@ async def get_current_user(
 
     if auth_payload.get("provider") == "supabase":
         user = _ensure_supabase_user(db, auth_payload)
-        if not user or not user.get("id"):
+        if not user or not getattr(user, "id", None):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Supabase user not found",

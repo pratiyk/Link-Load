@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import random
 from sqlalchemy.orm import Session
 from app.database import SessionLocal, engine
@@ -44,12 +44,10 @@ def create_training_data(n_assets=100, n_vulns_per_asset=5):
                     severity=base_severity,
                     cvss_score=cvss,
                     cvss_vector=f"CVSS:3.1/AV:N/AC:{'L' if random.random() > 0.3 else 'H'}/PR:N/UI:N/S:U/C:H/I:H/A:H",
-                    attack_complexity=random.choice(["LOW", "HIGH"]),
                     attack_vector=random.choice(["NETWORK", "ADJACENT", "LOCAL", "PHYSICAL"]),
-                    privileges_required=random.choice(["NONE", "LOW", "HIGH"]),
                     raw_data={"generated": True},
                     asset_id=asset.id,
-                    created_at=datetime.utcnow() - timedelta(days=random.randint(0, 365))
+                    created_at=datetime.now(timezone.utc) - timedelta(days=random.randint(0, 365))
                 )
                 db.add(vuln)
                 db.flush()
@@ -62,7 +60,7 @@ def create_training_data(n_assets=100, n_vulns_per_asset=5):
                         source=random.choice(["recorded_future", "virus_total", "shodan"]),
                         threat_type=random.choice(["exploit", "malware", "ransomware"]),
                         confidence_score=random.uniform(0.1, 1.0),
-                        last_seen=datetime.utcnow() - timedelta(days=random.randint(0, 90))
+                        last_seen=datetime.now(timezone.utc) - timedelta(days=random.randint(0, 90))
                     )
                     db.add(threat)
 
@@ -70,8 +68,15 @@ def create_training_data(n_assets=100, n_vulns_per_asset=5):
                 mitigation = VulnerabilityMitigation(
                     vulnerability_id=vuln.id,
                     recommendation="Generated mitigation advice",
-                    implementation_status=random.choice(["not_started", "in_progress", "completed"]),
-                    effectiveness_score=random.uniform(0, 10)
+                    priority=random.randint(1, 5),
+                    estimated_effort=random.choice(["low", "medium", "high"]),
+                    remediation_type=random.choice(["code_fix", "config_change", "patch", "compensating_control"]),
+                    business_impact=random.choice([
+                        "customer_data_exposure",
+                        "service_disruption",
+                        "regulatory_risk",
+                        "financial_fraud"
+                    ])
                 )
                 db.add(mitigation)
 
