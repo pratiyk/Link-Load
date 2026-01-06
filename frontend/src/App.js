@@ -13,6 +13,9 @@ import ScanResults from "./pages/ScanResults";
 import Profile from "./pages/Profile";
 import MissionFile from "./pages/MissionFile";
 import NotFound from "./pages/NotFound";
+import ApiSecurity from "./pages/ApiSecurity";
+import SourceCodeSecurity from "./pages/SourceCodeSecurity";
+import CloudSecurityPosture from "./pages/CloudSecurityPosture";
 
 import "./styles/variables.css";
 import "./App.css";
@@ -28,6 +31,9 @@ function App() {
         <Route path="/profile" element={<Profile />} />
         <Route path="/mission-file" element={<MissionFile />} />
         <Route path="/settings/verification" element={<Verification />} />
+        <Route path="/capabilities/api-security" element={<ApiSecurity />} />
+        <Route path="/capabilities/source-code-security" element={<SourceCodeSecurity />} />
+        <Route path="/capabilities/cloud-security-posture" element={<CloudSecurityPosture />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Router>

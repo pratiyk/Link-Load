@@ -639,11 +639,13 @@ async def list_scans(
     """List the current user's scans with optional filtering.
     
     SECURITY: Users can only retrieve their own scans.
+    Data is stored and fetched from Supabase cloud.
     """
     try:
         # Require authentication and get user_id
         user_id = get_user_id(current_user)
         
+        # Fetch scans from Supabase cloud
         scans = supabase.get_user_scans(user_id, status, limit, skip)
         return {
             "scans": scans,

@@ -10,7 +10,7 @@
     max-width: 100%;
     margin: 0;
     padding: 0;
-    background: var(--color-white, #fff7df);
+    background: #fff7df;
     min-height: 100vh;
     position: relative;
     z-index: 1;
@@ -34,7 +34,7 @@
     bottom: -14px;
     width: var(--spacing-4, 2rem);
     height: var(--spacing-4, 2rem);
-    background: #4CAF91;
+    background: #71d08c;
     border: 3px solid var(--color-black, #000);
 }
 
@@ -216,23 +216,23 @@
 }
 
 .intel-status--completed {
-    background: #4CAF91;
+    background: #71d08c;
     color: #000;
 }
 
 .intel-status--in_progress {
-    background: #FFD93D;
+    background: #ffdf4f;
     color: #000;
 }
 
 .intel-status--pending {
-    background: #6DD4D9;
+    background: #5ec6e8;
     color: #000;
 }
 
 .intel-status--failed,
 .intel-status--error {
-    background: #FF6B6B;
+    background: #f1563f;
     color: #000;
 }
 
@@ -285,12 +285,12 @@
 }
 
 .profile-cta--primary {
-    background: #FFD93D;
+    background: #ffdf4f;
     color: var(--color-black, #000);
 }
 
 .profile-cta--secondary {
-    background: #6DD4D9;
+    background: #5ec6e8;
     color: var(--color-black, #000);
 }
 
@@ -337,23 +337,23 @@
 }
 
 .hero-stat--cyan {
-    background: #6DD4D9;
+    background: #5ec6e8;
 }
 
 .hero-stat--yellow {
-    background: #FFD93D;
+    background: #ffdf4f;
 }
 
 .hero-stat--green {
-    background: #4CAF91;
+    background: #71d08c;
 }
 
 .hero-stat--pink {
-    background: #f4b5d4;
+    background: #f1b4d4;
 }
 
 .hero-stat--coral {
-    background: #FF6B6B;
+    background: #f1563f;
 }
 
 /* ============================================
@@ -400,22 +400,22 @@
 }
 
 .profile-tab--cyan.active {
-    background: #6DD4D9;
+    background: #5ec6e8;
     color: #000;
 }
 
 .profile-tab--coral.active {
-    background: #FF6B6B;
+    background: #f1563f;
     color: #000;
 }
 
 .profile-tab--green.active {
-    background: #4CAF91;
+    background: #71d08c;
     color: #000;
 }
 
 .profile-tab--yellow.active {
-    background: #FFD93D;
+    background: #ffdf4f;
     color: #000;
 }
 
@@ -423,27 +423,27 @@
    COLOR BACKGROUNDS
    ============================================ */
 .cyan-bg {
-    background-color: #6DD4D9 !important;
+    background-color: #5ec6e8 !important;
     color: #000 !important;
 }
 
 .coral-bg {
-    background-color: #FF6B6B !important;
+    background-color: #f1563f !important;
     color: #000 !important;
 }
 
 .green-bg {
-    background-color: #4CAF91 !important;
+    background-color: #71d08c !important;
     color: #000 !important;
 }
 
 .yellow-bg {
-    background-color: #FFD93D !important;
+    background-color: #ffdf4f !important;
     color: #000 !important;
 }
 
 .pink-bg {
-    background-color: #E39FCE !important;
+    background-color: #f1b4d4 !important;
     color: #000 !important;
 }
 
@@ -473,13 +473,13 @@
 .profile-feedback--error {
     background: #FFEFEE;
     color: #8b1d1d;
-    border-color: #FF6B6B;
+    border-color: #f1563f;
 }
 
 .profile-feedback--success {
     background: #E4F5EC;
     color: #1f5132;
-    border-color: #4CAF91;
+    border-color: #71d08c;
 }
 
 /* ============================================
@@ -596,23 +596,23 @@
 }
 
 .profile-panel__header--cyan {
-    background: #6DD4D9;
+    background: #5ec6e8;
 }
 
 .profile-panel__header--pink {
-    background: #e39fce;
+    background: #f1b4d4;
 }
 
 .profile-panel__header--green {
-    background: #4CAF91;
+    background: #71d08c;
 }
 
 .profile-panel__header--coral {
-    background: #FF6B6B;
+    background: #f1563f;
 }
 
 .profile-panel__header--yellow {
-    background: #FFD93D;
+    background: #ffdf4f;
 }
 
 .header-badge {
@@ -740,7 +740,7 @@
 }
 
 .profile-button--primary {
-    background: #FFD93D;
+    background: #ffdf4f;
     color: var(--color-black, #000);
 }
 
@@ -748,7 +748,7 @@
     padding: 0.5rem 1rem;
     font-size: 0.8rem;
     box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.15);
-    background: #FFD93D;
+    background: #ffdf4f;
     color: var(--color-black, #000);
 }
 
@@ -799,22 +799,22 @@
 }
 
 .badge--active {
-    background: #4CAF91;
+    background: #71d08c;
     color: #000;
 }
 
 .badge--inactive {
-    background: #FF6B6B;
+    background: #f1563f;
     color: #000;
 }
 
 .badge--verified {
-    background: #6DD4D9;
+    background: #5ec6e8;
     color: #000;
 }
 
 .badge--pending {
-    background: #FFD93D;
+    background: #ffdf4f;
     color: #000;
 }
 
@@ -845,11 +845,11 @@
 }
 
 .clearance--ok {
-    border-left-color: #4CAF91;
+    border-left-color: #71d08c;
 }
 
 .clearance--warning {
-    border-left-color: #FFD93D;
+    border-left-color: #ffdf4f;
 }
 
 .clearance-content {
@@ -911,15 +911,15 @@
 }
 
 .threat--high {
-    background: #FF6B6B;
+    background: #f1563f;
 }
 
 .threat--medium {
-    background: #FFD93D;
+    background: #ffdf4f;
 }
 
 .threat--low {
-    background: #4CAF91;
+    background: #71d08c;
 }
 
 .threat-bar-track {
@@ -940,15 +940,15 @@
 }
 
 .threat-fill--high {
-    background: #FF6B6B;
+    background: #f1563f;
 }
 
 .threat-fill--medium {
-    background: #FFD93D;
+    background: #ffdf4f;
 }
 
 .threat-fill--low {
-    background: #4CAF91;
+    background: #71d08c;
 }
 
 .threat-count {
@@ -1011,7 +1011,7 @@
 
 .activity-bar-fill {
     width: 100%;
-    background: #6DD4D9;
+    background: #5ec6e8;
     transition: height 0.3s ease;
     min-height: 0;
 }
@@ -1096,17 +1096,17 @@
 }
 
 .status--completed {
-    background: #4CAF91;
+    background: #71d08c;
 }
 
 .status--in_progress,
 .status--pending {
-    background: #6DD4D9;
+    background: #5ec6e8;
 }
 
 .status--failed,
 .status--error {
-    background: #FF6B6B;
+    background: #f1563f;
 }
 
 .mission-threats {
@@ -1139,7 +1139,7 @@
 }
 
 .zone-card__header {
-    background: #6DD4D9;
+    background: #5ec6e8;
     padding: 1rem 1.5rem;
     border-bottom: 3px solid var(--color-black, #000);
 }
@@ -1162,7 +1162,7 @@
 .zone-status {
     display: inline-block;
     padding: 0.5rem 1rem;
-    background: #4CAF91;
+    background: #71d08c;
     border: 2px solid var(--color-black, #000);
     font-family: var(--font-heading, 'VT323', monospace);
     font-size: 0.9rem;
@@ -1195,7 +1195,7 @@
     width: 60px;
     height: 60px;
     border: 6px solid #f3f3f3;
-    border-top: 6px solid #6DD4D9;
+    border-top: 6px solid #5ec6e8;
     animation: spin 1s linear infinite;
 }
 

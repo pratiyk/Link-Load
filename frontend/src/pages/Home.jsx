@@ -6,6 +6,30 @@ import scannerService from '../services/scannerService';
 import logo from '../assets/logo.png';
 import { useAuth } from '../context/AuthContext';
 
+const CAPABILITY_SHORTCUTS = [
+  {
+    key: 'api-security',
+    title: 'API Security Scanning',
+    description: 'Harden REST and GraphQL endpoints before deployment.',
+    path: '/capabilities/api-security',
+    accent: 'blue'
+  },
+  {
+    key: 'source-code-security',
+    title: 'Source Code Security (SAST)',
+    description: 'Detect security flaws inside repositories before merge.',
+    path: '/capabilities/source-code-security',
+    accent: 'green'
+  },
+  {
+    key: 'cloud-posture',
+    title: 'Cloud Security Posture',
+    description: 'Continuously audit cloud accounts for misconfigurations.',
+    path: '/capabilities/cloud-security-posture',
+    accent: 'coral'
+  }
+];
+
 const Home = () => {
   const navigate = useNavigate();
   const { isAuthenticated, logout } = useAuth();
@@ -314,6 +338,13 @@ const Home = () => {
     }
   };
 
+  const handleCapabilityNavigate = (path) => {
+    if (!isAuthenticated) {
+      return;
+    }
+    navigate(path);
+  };
+
   return (
     <Layout>
       <div className="home">
@@ -409,14 +440,13 @@ const Home = () => {
                     <div className="scan-mode-indicator">
                       Mode: {scanModes[scanMode]?.label || 'Standard'} | Max: {scanModes[scanMode]?.timeout || 30} min
                     </div>
-                  </div>
-                ) : !isAuthenticated ? (
-                  <div className="auth-prompt-screen">
-                    Sign in to start scan
+                    <span className="capability-window__footer">
+                      <span className="capability-card__cta-label">{isAuthenticated ? 'Launch module' : 'Sign in to unlock'}</span>
+                    </span>
                   </div>
                 ) : (
-                  <div className={`glitch-text ${scanUrl ? 'ready' : ''}`}>
-                    {scanUrl ? 'READY TO SCAN' : 'PRESS START SCAN'}
+                  <div className={`glitch-text ${isAuthenticated && scanUrl ? 'ready' : ''}`}>
+                    {!isAuthenticated ? 'SIGN IN TO START' : scanUrl ? 'READY TO SCAN' : 'PRESS START SCAN'}
                   </div>
                 )}
               </div>
@@ -430,7 +460,7 @@ const Home = () => {
                 onKeyPress={handleKeyPress}
                 placeholder="Enter target URL (e.g., https://example.com)"
                 className="scan-input"
-                disabled={isScanActive}
+                disabled={isScanActive || !isAuthenticated}
               />
 
               {/* Scan Mode Selector */}
@@ -526,56 +556,105 @@ const Home = () => {
           </div>
         </section>
 
+        <section className="capability-section" id="capabilities">
+          <div className="capability-header">
+            <h2 className="capability-title">Expand Your Recon Coverage</h2>
+            <p className="capability-subtitle">Activate deeper assessments once you are logged in.</p>
+          </div>
+          <div className="capability-grid">
+            {CAPABILITY_SHORTCUTS.map((capability) => (
+              <button
+                key={capability.key}
+                type="button"
+                className={`capability-card capability-card--${capability.accent} ${!isAuthenticated ? 'capability-card--locked' : ''}`}
+                onClick={() => handleCapabilityNavigate(capability.path)}
+                disabled={!isAuthenticated}
+              >
+                <span className="capability-window">
+                  <span className="capability-window__header">
+                    <span className="capability-window__controls">
+                      <span className="window-dot" aria-hidden="true"></span>
+                      <span className="window-dot" aria-hidden="true"></span>
+                      <span className="window-dot" aria-hidden="true"></span>
+                    </span>
+                    <span className="capability-window__widgets" aria-hidden="true">
+                      <span className="window-widget window-widget--min"></span>
+                      <span className="window-widget window-widget--max"></span>
+                      <span className="window-widget window-widget--close"></span>
+                    </span>
+                  </span>
+                  <span className="capability-window__body">
+                    <span className="window-corner window-corner--tl" aria-hidden="true"></span>
+                    <span className="window-corner window-corner--tr" aria-hidden="true"></span>
+                    <span className="window-corner window-corner--bl" aria-hidden="true"></span>
+                    <span className="window-corner window-corner--br" aria-hidden="true"></span>
+                    <span className="capability-card__title">{capability.title}</span>
+                    <span className="capability-card__description">{capability.description}</span>
+                  </span>
+                  <span className="capability-window__footer">
+                    <span className="capability-card__cta-label">{isAuthenticated ? 'Launch module' : 'Sign in to unlock'}</span>
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+          {!isAuthenticated && (
+            <p className="capability-hint">Sign in to open advanced modules and extend your coverage.</p>
+          )}
+        </section>
+
         {/* Recent Scans Section - Always visible for authenticated users */}
         {isAuthenticated && (
           <section className="recent-scans-section" id="history">
-            <h2 className="section-title">Recent Scans</h2>
-            {recentScans.length > 0 ? (
-              <div className="recent-scans-list">
-                {recentScans.map((scan) => (
-                  <div
-                    key={scan.scan_id}
-                    className="recent-scan-item"
-                    onClick={() => handleScanFromHistory(scan.scan_id)}
-                  >
-                    <div className="scan-info">
-                      <div className="scan-url">{scan.target_url}</div>
-                      <div className="scan-meta">
-                        {scan.status && (
-                          <span className={`status-badge ${scan.status}`}>
-                            {scan.status.toUpperCase()}
-                          </span>
-                        )}
-                        {scan.started_at && (
-                          <span className="scan-time">
-                            {new Date(scan.started_at).toLocaleDateString()}
-                          </span>
-                        )}
+            <div className="recent-scans-container">
+              <h2 className="section-title">Recent Scans</h2>
+              {recentScans.length > 0 ? (
+                <div className="recent-scans-list">
+                  {recentScans.map((scan) => (
+                    <div
+                      key={scan.scan_id}
+                      className="recent-scan-item"
+                      onClick={() => handleScanFromHistory(scan.scan_id)}
+                    >
+                      <div className="scan-info">
+                        <div className="scan-url">{scan.target_url}</div>
+                        <div className="scan-meta">
+                          {scan.status && (
+                            <span className={`status-badge ${scan.status}`}>
+                              {scan.status.toUpperCase()}
+                            </span>
+                          )}
+                          {scan.started_at && (
+                            <span className="scan-time">
+                              {new Date(scan.started_at).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="scan-actions">
+                        <button
+                          className="delete-scan-btn"
+                          onClick={(e) => handleDeleteScan(scan.scan_id, e)}
+                          title="Delete scan permanently"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            <line x1="10" y1="11" x2="10" y2="17"></line>
+                            <line x1="14" y1="11" x2="14" y2="17"></line>
+                          </svg>
+                        </button>
+                        <div className="scan-arrow">→</div>
                       </div>
                     </div>
-                    <div className="scan-actions">
-                      <button
-                        className="delete-scan-btn"
-                        onClick={(e) => handleDeleteScan(scan.scan_id, e)}
-                        title="Delete scan permanently"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3 6 5 6 21 6"></polyline>
-                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                          <line x1="10" y1="11" x2="10" y2="17"></line>
-                          <line x1="14" y1="11" x2="14" y2="17"></line>
-                        </svg>
-                      </button>
-                      <div className="scan-arrow">→</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="no-scans-message">
-                <p>No territory charted yet. Launch your first reconnaissance scan to map the landscape and uncover hidden treasures... or threats.</p>
-              </div>
-            )}
+                  ))}
+                </div>
+              ) : (
+                <div className="no-scans-message">
+                  <p>No territory charted yet. Launch your first reconnaissance scan to map the landscape and uncover hidden treasures... or threats.</p>
+                </div>
+              )}
+            </div>
           </section>
         )}
 
