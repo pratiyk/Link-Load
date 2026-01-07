@@ -440,9 +440,6 @@ const Home = () => {
                     <div className="scan-mode-indicator">
                       Mode: {scanModes[scanMode]?.label || 'Standard'} | Max: {scanModes[scanMode]?.timeout || 30} min
                     </div>
-                    <span className="capability-window__footer">
-                      <span className="capability-card__cta-label">{isAuthenticated ? 'Launch module' : 'Sign in to unlock'}</span>
-                    </span>
                   </div>
                 ) : (
                   <div className={`glitch-text ${isAuthenticated && scanUrl ? 'ready' : ''}`}>

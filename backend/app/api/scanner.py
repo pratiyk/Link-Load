@@ -336,11 +336,20 @@ def _run_scan_task(scan_id: str, target_url: str, current_user):
         # Store vulnerabilities
         vuln_records = []
         for vuln in vulnerabilities:
+            # Validate and normalize severity
+            raw_severity = vuln.get("severity", "medium")
+            if isinstance(raw_severity, str):
+                severity = raw_severity.lower()
+                if severity not in ["critical", "high", "medium", "low", "info"]:
+                    severity = "medium"  # Safe default for unknown severities
+            else:
+                severity = "medium"
+            
             vuln_data = {
                 "scan_id": scan_id,
                 "title": vuln.get("title", "Unknown Vulnerability"),
                 "description": vuln.get("description", ""),
-                "severity": vuln.get("severity", "info"),
+                "severity": severity,
                 "cvss_score": vuln.get("cvss_score", 0.0),
                 "location": vuln.get("url", target_url),
                 "recommendation": vuln.get("recommendation", ""),

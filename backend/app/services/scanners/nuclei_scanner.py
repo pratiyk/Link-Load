@@ -394,11 +394,22 @@ class NucleiScanner(BaseScanner):
                         classification = info.get('classification', {}) or {}
                         template_id = finding.get('template-id') or finding.get('templateID')
                         title = info.get('name') or template_id
+                        
+                        # Normalize severity - Nuclei sometimes returns None or invalid values
+                        raw_severity = info.get('severity', 'medium')
+                        if raw_severity and isinstance(raw_severity, str):
+                            severity = raw_severity.lower()
+                            # Validate against known severity levels
+                            if severity not in ['critical', 'high', 'medium', 'low', 'info']:
+                                severity = 'medium'
+                        else:
+                            severity = 'medium'
+                        
                         vuln = {
                             'vuln_id': template_id,
                             'title': title,
                             'name': template_id,
-                            'severity': info.get('severity'),
+                            'severity': severity,
                             'cvss_score': classification.get('cvss-score') or classification.get('cvss_score') or 0.0,
                             'confidence': 'confirmed',
                             'description': info.get('description'),

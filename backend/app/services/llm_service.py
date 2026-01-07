@@ -203,17 +203,17 @@ EXTERNAL THREAT INTELLIGENCE:
 
 GENERATE A TECHNICAL SUMMARY (4 paragraphs, third person):
 
-1. SECURITY POSTURE & ATTACK SURFACE: Assess the target's security state. Reference specific vulnerability types found (e.g., XSS, SQL injection, misconfigurations). Include external reputation data if available. Mention MITRE ATT&CK techniques that map to findings. Be direct about severity.
+1. SECURITY POSTURE & ATTACK SURFACE: Assess the target's security state with accurate severity classifications. Reference specific vulnerability types found (e.g., XSS, SQL injection, misconfigurations) and explain WHY each is rated at its severity level (Critical/High/Medium/Low). For high-severity issues, describe the immediate exploitability. Include external reputation data if available. Mention MITRE ATT&CK techniques that map to findings. Be direct and precise about severity - don't downplay critical vulnerabilities.
 
-2. EXTERNAL THREAT LANDSCAPE: Summarize what external intelligence sources reveal about this target. Include VirusTotal results, AbuseIPDB reputation, Shodan exposure (open ports, services), breach history, and Safe Browsing status. If external intel shows concerning indicators, highlight them with specific data.
+2. EXTERNAL THREAT LANDSCAPE: Summarize what external intelligence sources reveal about this target. Include VirusTotal results, AbuseIPDB reputation, Shodan exposure (open ports, services), breach history, and Safe Browsing status. If external intel shows concerning indicators, highlight them with specific data and explain their severity impact.
 
-3. TECHNICAL RISKS & ATTACK CHAINS: Identify the most critical attack vectors combining scan findings with external intel. Explain how vulnerabilities could be chained (e.g., "Initial access via T1190 could lead to..."). Reference CVE IDs, CWE categories, MITRE technique IDs, or Shodan-detected services.
+3. TECHNICAL RISKS & ATTACK CHAINS: Identify the most critical attack vectors combining scan findings with external intel. For each major vulnerability, explain the potential exploit path and business impact. Explain how vulnerabilities could be chained (e.g., "Initial access via T1190 SQL injection could lead to privilege escalation and data exfiltration"). Reference CVE IDs, CWE categories, MITRE technique IDs, or Shodan-detected services. Prioritize by actual risk, not just CVSS scores.
 
-4. REMEDIATION PRIORITIES & DEFENSIVE MEASURES: Provide specific, actionable remediation steps ordered by priority. Include:
-   - Immediate mitigations (within 24-48 hours)
-   - Code-level fixes with specific guidance
-   - Infrastructure hardening (WAF rules, network segmentation)
-   - Detection recommendations (SIEM rules, log monitoring)
+4. REMEDIATION PRIORITIES & DEFENSIVE MEASURES: Provide specific, actionable remediation steps ordered by TRUE risk priority (consider exploitability + business impact, not just severity labels). Include:
+   - CRITICAL/HIGH: Immediate mitigations (within 24-48 hours) with specific commands/code changes
+   - MEDIUM: Code-level fixes with specific guidance (1-2 weeks)
+   - Infrastructure hardening (WAF rules, network segmentation, principle of least privilege)
+   - Detection recommendations (SIEM rules, log monitoring, IDS/IPS signatures)
 
 RULES:
 - Write in third person ("The target application...", "The scan identified...", "Administrators should...")
@@ -232,7 +232,7 @@ RULES:
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a senior penetration tester and threat intelligence analyst writing technical security reports. Be concise, technical, and actionable. Always reference MITRE ATT&CK techniques when discussing attack patterns. Never use first person. Never include section headers in your output. Integrate threat intelligence findings naturally."
+                        "content": "You are a senior penetration tester and threat intelligence analyst with OSCP, OSCE certifications writing technical security reports. Be concise, technical, and actionable. IMPORTANT: Assess vulnerability severity accurately - don't inflate minor issues. Critical/High ratings require immediate exploitability + significant business impact. Always reference MITRE ATT&CK techniques when discussing attack patterns. Never use first person. Never include section headers in your output. Integrate threat intelligence findings naturally. Focus on actual exploitability and real-world attack scenarios."
                     },
                     {
                         "role": "user",
@@ -834,7 +834,7 @@ Format as JSON:
             response = await self.client.messages.create(
                 model="claude-3-5-sonnet-20241022",
                 max_tokens=4000,
-                system="You are an expert penetration tester and security architect. Provide detailed, actionable security analysis with MITRE ATT&CK mappings. Always respond with valid JSON. Be specific about code fixes.",
+                system="You are an expert penetration tester and security architect with 15+ years experience. Provide detailed, actionable security analysis with accurate MITRE ATT&CK mappings. CRITICAL: Assess severity realistically - don't over-rate vulnerabilities. A 9-10 severity requires IMMEDIATE exploitability + CRITICAL business impact (RCE, auth bypass, mass data breach). Most XSS is 4-6, not 8-10. Always respond with valid JSON. Be specific about code fixes with examples. Consider real-world exploitation difficulty and business context.",
                 messages=[
                     {
                         "role": "user",

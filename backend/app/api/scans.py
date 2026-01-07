@@ -478,7 +478,7 @@ def _transform_remediation_strategies(
                 'QA Engineers': 1
             },
             'estimated_timeline': f'{max(1, total_vulns // 5)} - {max(2, total_vulns // 3)} weeks',
-            'budget_range': f'${(total_vulns * 1000):,} - ${(total_vulns * 3000):,}'
+            'budget_range': f'₹{(total_vulns * 80000):,} - ₹{(total_vulns * 250000):,}'
         }
     
     # Transform recommendations - ensure proper structure
