@@ -342,11 +342,6 @@ class ComprehensiveScanner:
             scanner_counts: Dict[str, int] = {}
             result_types: Dict[str, str] = {}
             
-            # Get overall scan timeout (in minutes) and calculate hard deadline
-            timeout_minutes = options.get("timeout_minutes", 30)
-            # Leave 2 minutes buffer for post-processing (AI analysis, enrichment, etc.)
-            scanner_timeout = max(60, (timeout_minutes * 60) - 120)
-            
             for scanner_type in scan_types:
                 print(f"[COMPREHENSIVE] Checking scanner type: {scanner_type.lower()}", file=sys.stderr, flush=True)
                 if scanner_type.lower() in self.scanners:
@@ -364,9 +359,9 @@ class ComprehensiveScanner:
                     print(f"[COMPREHENSIVE] Scanner {scanner_type.lower()} NOT available!", file=sys.stderr, flush=True)
 
             # Execute scanners concurrently with hard timeout to ensure completion
-            print(f"[COMPREHENSIVE] Running {len(tasks)} scanner tasks: {task_scanners} (timeout: {scanner_timeout}s)", file=sys.stderr, flush=True)
+            print(f"[COMPREHENSIVE] Running {len(tasks)} scanner tasks: {task_scanners} (no hard timeout)", file=sys.stderr, flush=True)
             if tasks:
-                # Wait for all scanner tasks to finish, no hard timeout
+                # Wait for all scanner tasks to finish without a hard timeout
                 results = await asyncio.gather(*tasks, return_exceptions=True)
                 print(f"[COMPREHENSIVE] Got {len(results)} results", file=sys.stderr, flush=True)
 
@@ -567,8 +562,6 @@ class ComprehensiveScanner:
             
             deep_scan = options.get("deep_scan", False)
             include_low_risk = options.get("include_low_risk", True)
-            timeout_minutes = options.get("timeout_minutes", 30)
-            
             scanner_config = ScannerConfig(
                 target_url=target_url,
                 scan_types=[scanner_type],
@@ -576,12 +569,12 @@ class ComprehensiveScanner:
                 deep_scan=deep_scan,
                 include_low_risk=include_low_risk,
                 ajax_spider=deep_scan,  # Enable AJAX spider for deep scans
-                max_scan_duration=timeout_minutes * 60
+                max_scan_duration=None
             )
             
             logger.info(
                 f"Scanner config for {scanner_type}: deep_scan={deep_scan}, "
-                f"include_low_risk={include_low_risk}, timeout={timeout_minutes}min"
+                f"include_low_risk={include_low_risk}, timeout=unbounded"
             )
 
             # Execute scan
@@ -589,10 +582,8 @@ class ComprehensiveScanner:
             logger.info(f"{scanner_type} scan started with task ID: {scan_task_id}")
             
             # Wait for scan to complete (poll status)
-            max_wait = timeout_minutes * 60
             wait_interval = 10 if deep_scan else 5  # Longer intervals for deep scans
             elapsed = 0
-            timed_out = True
             
             # Calculate base progress for this scanner (distribute across scanner types)
             scanner_list = list(self.scanners.keys())
@@ -601,65 +592,34 @@ class ComprehensiveScanner:
             # Progress range: 20-80% is for scanning (each scanner gets an equal slice)
             base_progress = 20 + (scanner_index * 60 // total_scanners)
             max_scanner_progress = 20 + ((scanner_index + 1) * 60 // total_scanners)
-            
-            while elapsed < max_wait:
+
+            while True:
                 status = await scanner.get_scan_status(scan_task_id)
                 scan_status = status.get('status')
                 
                 if scan_status == 'completed':
-                    timed_out = False
                     break
                 elif scan_status in ['failed', 'error', 'not_found']:
                     logger.error(f"{scanner_type} scan failed: {status}")
                     return []
                 
                 # Calculate and send incremental progress update
-                progress_ratio = min(elapsed / max_wait, 0.95)  # Cap at 95% until complete
+                # Without a hard timeout, use elapsed time to show forward motion only
+                progress_ratio = min(0.95, elapsed / max(1, elapsed + 600))
                 current_progress = int(base_progress + (max_scanner_progress - base_progress) * progress_ratio)
                 elapsed_mins = elapsed // 60
-                remaining_mins = max(0, (max_wait - elapsed) // 60)
                 
                 await self._update_scan_progress(
                     scan_id,
                     progress=current_progress,
-                    stage=f"Running {scanner_type.upper()} scan ({elapsed_mins}m elapsed, ~{remaining_mins}m remaining)"
+                    stage=f"Running {scanner_type.upper()} scan ({elapsed_mins}m elapsed)"
                 )
                 
                 await asyncio.sleep(wait_interval)
                 elapsed += wait_interval
             
-            if timed_out:
-                logger.error(
-                    "%s scan exceeded max wait of %s seconds; stopping task",
-                    scanner_type,
-                    max_wait
-                )
-                try:
-                    await scanner.stop_scan(scan_task_id)
-                    await scanner.cleanup_scan(scan_task_id)
-                except Exception:
-                    logger.debug("Failed to stop timed out %s scan", scanner_type, exc_info=True)
-                await self._update_scan_progress(
-                    scan_id,
-                    stage=f"{scanner_type.upper()} scan timed out",
-                    progress=60
-                )
-                return []
-            
             # Get scan results
-            try:
-                results_timeout = max(30, min(max_wait or 120, 300))
-                result = await asyncio.wait_for(
-                    scanner.get_scan_results(scan_task_id),
-                    timeout=results_timeout
-                )
-            except asyncio.TimeoutError:
-                logger.error("%s scan results retrieval timed out", scanner_type)
-                try:
-                    await scanner.stop_scan(scan_task_id)
-                except Exception:
-                    logger.debug("Failed to stop %s after results timeout", scanner_type, exc_info=True)
-                return []
+            result = await scanner.get_scan_results(scan_task_id)
             vulnerabilities = result.vulnerabilities if result and hasattr(result, 'vulnerabilities') else []
             enriched_vulnerabilities: List[Dict[str, Any]] = []
             for vuln in vulnerabilities or []:

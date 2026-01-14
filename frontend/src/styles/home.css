@@ -1576,7 +1576,7 @@
 }
 
 .card-purple::before {
-  background: var(--color-block-blue);
+  background: var(--color-block-green);
 }
 
 .feature-number {

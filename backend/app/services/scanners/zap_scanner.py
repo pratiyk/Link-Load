@@ -153,13 +153,11 @@ class OWASPZAPScanner(BaseScanner):
             
             logger.info(f"[ZAP] Starting scan for {config.target_url} (deep_scan={deep_scan}, ajax_spider={use_ajax_spider})")
             
-            # Configure scan duration limit from config (default 4 hours for thorough scanning)
-            max_duration_mins = max(1, config.max_scan_duration // 60) if config.max_scan_duration else 240
+            # Allow ZAP to run until completion without forcing a duration cap
             try:
-                zap_client.ascan.set_option_max_scan_duration_in_mins(max_duration_mins)
-                logger.info(f"[ZAP] Thorough scan mode: max duration set to {max_duration_mins} minutes")
+                zap_client.ascan.set_option_max_scan_duration_in_mins(0)
             except Exception as e:
-                logger.debug(f"[ZAP] Could not set max scan duration: {e}")
+                logger.debug(f"[ZAP] Could not unset scan duration limit: {e}")
             
             # Spider the target
             spider_scan_id = zap_client.spider.scan(

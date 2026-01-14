@@ -36,7 +36,7 @@ class NiktoScannerConfig(BaseModel):
     binary_path: str = "nikto.pl"  # Path to nikto.pl script
     plugins: str = "@@ALL"  # All plugins by default
     tuning: str = "123456789abc"  # All tuning options for complete scan (all test types)
-    timeout: int = 30  # Request timeout in seconds (increased for thorough checks)
+    timeout: int = 0  # No enforced request timeout
     useragent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     evasion: str = "1234567"  # All evasion techniques for complete scan
 
@@ -150,7 +150,6 @@ class NiktoScanner(BaseScanner):
                 '-Format', 'csv',  # Output format
                 '-output', results_file,  # Output file
                 '-Plugins', self.config.plugins,  # Plugins to run (all plugins)
-                '-timeout', str(self.config.timeout),  # Request timeout
                 '-useragent', self.config.useragent,  # User agent
                 '-Tuning', self.config.tuning,  # All tuning options for complete scan
                 '-evasion', self.config.evasion,  # All evasion techniques

@@ -28,7 +28,7 @@ class NucleiScannerConfig(BaseModel):
     templates_dir: str = ""
     rate_limit: int = 150
     bulk_size: int = 25
-    timeout: int = 10
+    timeout: int = 0
     retries: int = 1
     debug: bool = False
     use_docker: bool = False  # Use Docker sidecar container
@@ -139,26 +139,18 @@ class NucleiScanner(BaseScanner):
                 if templates_dir:
                     templates_arg = ['-templates', templates_dir]
 
-            # Get the max scan duration from config (in seconds, default 4 hours)
-            max_scan_duration = getattr(config, 'max_scan_duration', 14400)  # Default 4 hours
-            if max_scan_duration <= 0:
-                max_scan_duration = 14400
-            
-            # Use generous timeouts for thorough scanning
-            # Prioritize finding ALL vulnerabilities over speed
-            dast_timeout = 60  # 60 second timeout per request for thorough testing
+            # Prioritize finding ALL vulnerabilities over speed, no enforced time cap
             rate_limit = 50  # Lower rate for more thorough and reliable scanning
-            
-            logger.info(f"[Nuclei] Thorough scan mode: {max_scan_duration}s max, {dast_timeout}s per-request timeout, {rate_limit}/s rate")
-            
+
+            logger.info(f"[Nuclei] Thorough scan mode: no max duration, {rate_limit}/s rate")
+
             nuclei_args = [
                 '-u', config.target_url,
                 '-jsonl',
                 '-o', results_file,
                 '-rate-limit', str(rate_limit),
                 '-bulk-size', str(self.config.bulk_size),
-                '-timeout', str(dast_timeout),  # Per-request timeout
-                '-retries', '0',  # No retries to save time
+                '-retries', '0',  # Avoid retries; let scan run fully
                 '-nc',  # No color
                 '-stats',  # Show stats
                 '-stats-interval', '30',  # Stats every 30 seconds
@@ -176,24 +168,9 @@ class NucleiScanner(BaseScanner):
                 # Standard/Quick scan: Focus on high-impact templates for faster completion
                 nuclei_args.extend(['-severity', 'critical,high,medium,low,info'])
                 
-                # For quick scans (15 min or less), use focused template directories
-                if max_scan_duration <= 900:
-                    # Use misconfiguration templates (security headers, common issues) + exposures
-                    # These are fast and reliable for finding real issues
-                    nuclei_args.extend([
-                        '-t', '/root/nuclei-templates/http/misconfiguration/',
-                        '-t', '/root/nuclei-templates/http/exposures/',
-                        '-t', '/root/nuclei-templates/http/vulnerabilities/',
-                    ])
-                    logger.info(f"[Nuclei] Quick scan mode - using focused template directories (misconfiguration, exposures, vulnerabilities)")
-                elif max_scan_duration <= 1800:
-                    # Standard scan: broader coverage with tags
-                    nuclei_args.extend(['-tags', 'cve,sqli,xss,rce,lfi,ssrf,exposure,misconfig,tech'])
-                    logger.info(f"[Nuclei] Standard scan mode - using broad template tags")
-                else:
-                    # Deep scan without deep_scan flag (longer duration)
-                    nuclei_args.append('-dast')
-                    logger.info(f"[Nuclei] Extended scan mode - DAST enabled")
+                # Extended scan: allow templates to run to completion
+                nuclei_args.append('-dast')
+                logger.info(f"[Nuclei] Extended scan mode - DAST enabled with no duration cap")
 
             # Optional debug output
             if self.config.debug:
@@ -322,37 +299,29 @@ class NucleiScanner(BaseScanner):
             # Ensure process has fully exited before reading the file
             proc = scan_info['process']
             scan_cfg = scan_info.get('config', {})
-            max_duration = int(scan_cfg.get('max_scan_duration') or 0)
-            wait_timeout = max_duration if max_duration > 0 else self.config.timeout + 120
             stdout_bytes: bytes = b""
             stderr_bytes: bytes = b""
-            timeout_triggered = False
-
             try:
                 if is_windows:
                     # Windows Popen - use communicate in thread pool
                     def wait_for_process():
-                        stdout, stderr = proc.communicate(timeout=wait_timeout)
+                        stdout, stderr = proc.communicate()
                         return stdout, stderr
                     
-                    stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                        asyncio.get_event_loop().run_in_executor(
-                            self.executor,
-                            wait_for_process
-                        ),
-                        timeout=wait_timeout + 5
+                    stdout_bytes, stderr_bytes = await asyncio.get_event_loop().run_in_executor(
+                        self.executor,
+                        wait_for_process
                     )
                 else:
                     # Linux/Mac asyncio subprocess
-                    stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=wait_timeout)
-            except (asyncio.TimeoutError, subprocess.TimeoutExpired):
-                timeout_triggered = True
-                if is_windows:
-                    proc.kill()
-                    stdout_bytes, stderr_bytes = proc.communicate()
-                else:
+                    stdout_bytes, stderr_bytes = await proc.communicate()
+            except Exception:
+                if not is_windows:
                     proc.kill()
                     stdout_bytes, stderr_bytes = await proc.communicate()
+                else:
+                    proc.kill()
+                    stdout_bytes, stderr_bytes = proc.communicate()
 
             # Small delay to let nuclei flush file buffers on Windows
             if not os.path.exists(results_file):
@@ -501,7 +470,7 @@ class NucleiScanner(BaseScanner):
                     'stdout_lines_parsed': parsed_count,
                     'stderr_tail': scan_info.get('stderr_tail'),
                     'return_code': proc.returncode,
-                    'timeout_triggered': timeout_triggered
+                    'timeout_triggered': False
                 }
             )
 
