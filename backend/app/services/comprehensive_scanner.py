@@ -569,7 +569,7 @@ class ComprehensiveScanner:
                 deep_scan=deep_scan,
                 include_low_risk=include_low_risk,
                 ajax_spider=deep_scan,  # Enable AJAX spider for deep scans
-                max_scan_duration=None
+                max_scan_duration=86400  # 24 hours - effectively unlimited for practical purposes
             )
             
             logger.info(
