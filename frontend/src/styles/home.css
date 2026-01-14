@@ -474,8 +474,12 @@
   padding: calc(var(--spacing-0) * 1.6) var(--spacing-2);
   background: var(--color-block-green);
   border: 3px solid var(--color-black);
+  font-family: var(--font-heading);
   font-size: var(--font-size-xs);
+  font-weight: 600;
   letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-black);
 }
 
 .scan-input {
@@ -483,6 +487,7 @@
   border: 3px solid var(--color-black);
   border-radius: 0;
   background: #fffdf4;
+  font-family: var(--font-body);
   font-size: var(--font-size-md);
   letter-spacing: 0.02em;
 }

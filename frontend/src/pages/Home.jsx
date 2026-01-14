@@ -442,7 +442,7 @@ const Home = () => {
                       <span className="progress-stage">{currentStage}</span>
                     </div>
                     <div className="scan-mode-indicator">
-                      Mode: {scanModes[scanMode]?.label || 'Standard'} | Max: {scanModes[scanMode]?.timeout || 30} min
+                      Mode: {scanModes[scanMode]?.label || 'Standard'}
                     </div>
                   </div>
                 ) : (
