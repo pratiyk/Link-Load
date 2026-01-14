@@ -12,7 +12,7 @@ class ScannerConfig(BaseModel):
     deep_scan: bool = Field(default=False, description="Enable deep/thorough scanning mode")
     include_low_risk: bool = Field(default=True, description="Include low risk findings")
     auth_config: Optional[Dict[str, Any]] = Field(default=None, description="Authentication configuration")
-    max_scan_duration: int = Field(default=3600, description="Maximum scan duration in seconds")
+    max_scan_duration: int = Field(default=14400, description="Maximum scan duration in seconds (4 hours for thorough scanning)")
     risk_threshold: float = Field(default=0.0, description="Minimum risk threshold for reporting")
 
 class ScannerError(Exception):

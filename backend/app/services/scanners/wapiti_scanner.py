@@ -157,10 +157,10 @@ class WapitiScanner(BaseScanner):
             if scan_timeout is None or scan_timeout <= 0:
                 scan_timeout = self.config.max_scan_time
             else:
-                # max_scan_duration is in seconds, ensure it's reasonable (at least 60s, max 3600s)
-                scan_timeout = max(60, min(scan_timeout, 3600))
+                # max_scan_duration is in seconds, use at least 60s (no upper limit for thorough scanning)
+                scan_timeout = max(60, scan_timeout)
             
-            logger.info(f"[Wapiti] Using scan timeout: {scan_timeout}s")
+            logger.info(f"[Wapiti] Using scan timeout: {scan_timeout}s (no upper limit for thorough scanning)")
             
             # Build wapiti command arguments (without binary path for Docker)
             wapiti_args = [

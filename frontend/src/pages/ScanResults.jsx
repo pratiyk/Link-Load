@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import scannerService from '../services/scannerService';
 import mitreService from '../services/mitreService';
+import { generateScanResultsPDF } from '../utils/pdfGenerator';
 // Helper: Build a keyword regex from a technique's name/description
 function buildTechniqueRegex(technique) {
   // Use name, description, and platforms for pattern matching
@@ -122,11 +123,38 @@ const ScanResults = () => {
   const [summaryError, setSummaryError] = useState(null);
   const [summaryCached, setSummaryCached] = useState(false);
   const [summaryFetchToken, setSummaryFetchToken] = useState(0);
+  const [pdfGenerating, setPdfGenerating] = useState(false);
 
   // MITRE techniques state
   const [mitreTechniques, setMitreTechniques] = useState([]);
   const [mitreLoading, setMitreLoading] = useState(false);
   const [mitreError, setMitreError] = useState(null);
+
+  // PDF Download Handler
+  const handleDownloadPDF = async () => {
+    setPdfGenerating(true);
+    try {
+      console.log('Starting PDF generation...');
+      const result = await generateScanResultsPDF(
+        scanId,
+        results?.target_url,
+        results
+      );
+
+      if (result.success) {
+        console.log('PDF generated successfully:', result.filename);
+        // Success - PDF will be auto-downloaded by browser
+      } else {
+        console.error('PDF generation failed:', result.error);
+        alert(`Failed to generate PDF: ${result.error || 'Unknown error'}. Please try again.`);
+      }
+    } catch (error) {
+      console.error('PDF download error:', error);
+      alert(`An error occurred while generating the PDF: ${error.message || 'Unknown error'}`);
+    } finally {
+      setPdfGenerating(false);
+    }
+  };
 
   // Fetch MITRE techniques on mount
   useEffect(() => {
@@ -634,6 +662,23 @@ const ScanResults = () => {
         const data = await scannerService.getScanResults(scanId);
         console.log('[DATA] Received scan results:', data);
         console.log('[DATA] Vulnerabilities count:', data?.vulnerabilities?.length || 0);
+
+        // Log severity distribution from raw API data
+        if (data?.vulnerabilities?.length > 0) {
+          const severityBreakdown = data.vulnerabilities.reduce((acc, v) => {
+            const sev = (v.severity || 'missing').toLowerCase();
+            acc[sev] = (acc[sev] || 0) + 1;
+            return acc;
+          }, {});
+          console.log('[DATA] Severity breakdown from API:', severityBreakdown);
+          console.log('[DATA] First 3 vulnerabilities sample:', data.vulnerabilities.slice(0, 3).map(v => ({
+            title: v.title || v.name,
+            severity: v.severity,
+            cvss_score: v.cvss_score,
+            scanner_source: v.scanner_source
+          })));
+        }
+
         console.log('[DATA] Risk assessment:', data?.risk_assessment);
         console.log('[DATA] MITRE mapping count:', data?.mitre_mapping?.length || 0);
         console.log('[DATA] AI analysis count:', data?.ai_analysis?.length || 0);
@@ -788,6 +833,17 @@ const ScanResults = () => {
   const renderVulnerabilitySection = () => {
     const vulns = results.vulnerabilities || [];
     console.log('[RENDER] Rendering vulnerability section with', vulns.length, 'vulnerabilities');
+
+    // Log severity distribution at render time
+    if (vulns.length > 0) {
+      const renderSeverityBreakdown = vulns.reduce((acc, v) => {
+        const sev = (v.severity || 'missing').toLowerCase();
+        acc[sev] = (acc[sev] || 0) + 1;
+        return acc;
+      }, {});
+      console.log('[RENDER] Severity breakdown at render:', renderSeverityBreakdown);
+      console.log('[RENDER] vulnerabilityStats counts:', vulnerabilityStats.counts);
+    }
 
     // Random color rotation for visual variety
     const colorMap = ['cyan', 'coral', 'green', 'pink', 'yellow'];
@@ -2186,9 +2242,9 @@ const ScanResults = () => {
     const scanTypes = results?.scan_types || [];
 
     const modeConfig = {
-      quick: { label: 'QUICK', color: '#6DD4D9', scanners: 'Nuclei' },
-      standard: { label: 'STANDARD', color: '#FFD93D', scanners: 'Nuclei + Wapiti' },
-      deep: { label: 'DEEP', color: '#FF6B6B', scanners: 'OWASP ZAP + Nuclei + Wapiti' }
+      quick: { label: 'QUICK', color: '#6DD4D9', scanners: 'Nuclei + Nikto' },
+      standard: { label: 'STANDARD', color: '#FFD93D', scanners: 'Nuclei + Wapiti + Nikto' },
+      deep: { label: 'DEEP', color: '#FF6B6B', scanners: 'OWASP ZAP + Nuclei + Wapiti + Nikto' }
     };
 
     const config = modeConfig[mode] || modeConfig.standard;
@@ -2197,6 +2253,9 @@ const ScanResults = () => {
     if (scanTypes.length > 0) {
       config.scanners = scanTypes.map(s => {
         if (s === 'owasp') return 'OWASP ZAP';
+        if (s === 'nikto') return 'Nikto';
+        if (s === 'nuclei') return 'Nuclei';
+        if (s === 'wapiti') return 'Wapiti';
         return s.charAt(0).toUpperCase() + s.slice(1);
       }).join(' + ');
     }
@@ -2233,7 +2292,17 @@ const ScanResults = () => {
         <header className="results-header">
           <div className="header-content">
             <h1>Scan Results</h1>
-            <Link to="/" className="back-button"> Return to Base</Link>
+            <div className="header-actions">
+              <button
+                onClick={handleDownloadPDF}
+                disabled={pdfGenerating}
+                className="download-pdf-button"
+                title="Export scan results as mission report"
+              >
+                {pdfGenerating ? 'Exporting Intel...' : 'Export Mission Report'}
+              </button>
+              <Link to="/" className="back-button"> Return to Base</Link>
+            </div>
           </div>
           <div className="scan-info">
             <div className="scan-info-item">

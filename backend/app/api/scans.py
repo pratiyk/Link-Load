@@ -35,7 +35,7 @@ class ScanOptions(BaseModel):
     enable_mitre_mapping: bool = True
     include_low_risk: bool = False
     deep_scan: bool = False
-    timeout_minutes: int = 30
+    timeout_minutes: int = 240  # Increased to 4 hours for thorough scanning
     business_context: Optional[str] = None
     compliance_frameworks: Optional[List[str]] = None
 

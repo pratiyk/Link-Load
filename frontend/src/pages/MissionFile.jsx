@@ -8,7 +8,7 @@ const capabilityHighlights = [
     {
         id: 'vectors',
         title: 'Multi-Vector Scanning Array',
-        description: 'OWASP ZAP, Nuclei, and Wapiti run in parallel formation to cut recon time, blending DAST, template signatures, and black-box fuzzing.',
+        description: 'OWASP ZAP, Nuclei, Wapiti, and Nikto run in parallel formation to cut recon time, blending DAST, template signatures, black-box fuzzing, and web server hardening checks.',
         badge: 'Recon Stack',
         color: 'coral'
     },
@@ -83,6 +83,12 @@ const scannerCards = [
         name: 'Wapiti',
         description: 'Black-box fuzzing, injection sweeps, and file handling probes without source access.',
         status: 'Ready'
+    },
+    {
+        callSign: 'Unit 04',
+        name: 'Nikto',
+        description: 'Comprehensive web server scanner testing 6700+ dangerous files, misconfigurations, and outdated software.',
+        status: 'Ready'
     }
 ];
 
@@ -121,8 +127,8 @@ const missionStats = [
     },
     {
         label: 'Scanner Stack',
-        value: 'ZAP · Nuclei · Wapiti',
-        detail: 'Concurrent volleys compress recon windows.'
+        value: 'ZAP · Nuclei · Wapiti · Nikto',
+        detail: 'Four-unit concurrent formation compresses recon windows.'
     },
     {
         label: 'Intel Core',

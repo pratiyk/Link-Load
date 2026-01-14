@@ -1571,6 +1571,14 @@
   background: var(--color-block-coral);
 }
 
+.card-purple {
+  background: #B19CD9;
+}
+
+.card-purple::before {
+  background: var(--color-block-blue);
+}
+
 .feature-number {
   font-family: var(--font-heading);
   font-size: var(--font-size-3xl);

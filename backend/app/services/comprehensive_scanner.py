@@ -208,10 +208,66 @@ class ComprehensiveScanner:
         except Exception as e:
             logger.warning(f"[WARN] Wapiti scanner not available: {e}")
         
+        # Try to initialize Nikto
+        try:
+            import os
+            import sys
+            import subprocess
+            from app.services.scanners.nikto_scanner import NiktoScanner, NiktoScannerConfig
+            
+            # Check if running in Docker mode
+            nikto_use_docker = os.getenv("NIKTO_USE_DOCKER", "").lower() in ("true", "1", "yes")
+            nikto_container = os.getenv("NIKTO_CONTAINER", "linkload-nikto")
+            
+            if nikto_use_docker:
+                # Docker mode: Test via docker exec
+                try:
+                    result = subprocess.run(
+                        ['docker', 'exec', nikto_container, 'perl', '/opt/nikto/program/nikto.pl', '-Version'],
+                        capture_output=True,
+                        text=True,
+                        timeout=30
+                    )
+                    if result.returncode == 0:
+                        nikto_config = NiktoScannerConfig()
+                        nikto_scanner = NiktoScanner(nikto_config)
+                        available_scanners["nikto"] = nikto_scanner
+                        logger.info(f"[OK] Nikto scanner initialized (Docker container: {nikto_container})")
+                    else:
+                        logger.warning(f"[WARN] Nikto Docker container not available: {result.stderr}")
+                except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+                    logger.warning(f"[WARN] Nikto Docker container not accessible: {e}")
+            else:
+                # Local binary mode (requires Perl and Nikto installed)
+                nikto_binary = settings.NIKTO_BINARY_PATH if hasattr(settings, 'NIKTO_BINARY_PATH') else "nikto.pl"
+                
+                nikto_config = NiktoScannerConfig(
+                    binary_path=nikto_binary
+                )
+                
+                nikto_scanner = NiktoScanner(nikto_config)
+                # Test if Nikto is available
+                try:
+                    result = subprocess.run(
+                        ['perl', nikto_binary, '-Version'],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    if result.returncode == 0:
+                        available_scanners["nikto"] = nikto_scanner
+                        logger.info("[OK] Nikto scanner initialized (binary)")
+                    else:
+                        logger.warning(f"[WARN] Nikto binary found but not working")
+                except (FileNotFoundError, subprocess.TimeoutExpired):
+                    logger.warning("[WARN] Nikto not available (Perl or nikto.pl not found)")
+        except Exception as e:
+            logger.warning(f"[WARN] Nikto scanner not available: {e}")
+        
         self.scanners = available_scanners
         
         if not self.scanners:
-            logger.warning("[WARN] No scanners available! Install at least one: ZAP, Nuclei, or Wapiti")
+            logger.warning("[WARN] No scanners available! Install at least one: ZAP, Nuclei, Wapiti, or Nikto")
         else:
             logger.info(f"[OK] Initialized {len(self.scanners)} scanner(s): {', '.join(self.scanners.keys())}")
 

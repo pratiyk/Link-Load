@@ -14,7 +14,7 @@ from fpdf import FPDF  # fpdf2 package
 import tempfile
 
 # Import scanner implementations directly to avoid circular imports through app.services
-from app.services.scanners import zap_scanner, nuclei_scanner, wapiti_scanner
+from app.services.scanners import zap_scanner, nuclei_scanner, wapiti_scanner, nikto_scanner
 from app.database.supabase_client import supabase
 from app.models.scan_models import ScanRequest, ScanResult, Vulnerability, ScanProgress, ScanStatus, ScanSummary
 from app.core.config import settings
@@ -27,6 +27,7 @@ class OWASPOrchestrator:
         self.zap = zap_scanner.ZAPScanner()
         self.nuclei = nuclei_scanner.NucleiScanner()
         self.wapiti = wapiti_scanner.WapitiScanner()
+        self.nikto = nikto_scanner.NiktoScanner()
         self.lock = threading.Lock()  # For synchronous access
         self.async_lock = asyncio.Lock()  # For async contexts
         self.subscribers = defaultdict(list)
@@ -167,6 +168,16 @@ class OWASPOrchestrator:
                 tasks.append(self.run_scanner(
                     "Wapiti", 
                     self.wapiti.scan, 
+                    str(req.target_url), 
+                    progress,
+                    req
+                ))
+            
+            if "nikto" in req.scan_types:
+                scanner_count += 1
+                tasks.append(self.run_scanner(
+                    "Nikto", 
+                    self.nikto.scan, 
                     str(req.target_url), 
                     progress,
                     req

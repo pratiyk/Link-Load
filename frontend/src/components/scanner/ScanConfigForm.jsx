@@ -21,7 +21,8 @@ const ScanConfigForm = ({ onSubmit }) => {
     const scanTypes = [
         { value: 'zap', label: 'OWASP ZAP' },
         { value: 'nuclei', label: 'Nuclei' },
-        { value: 'wapiti', label: 'Wapiti' }
+        { value: 'wapiti', label: 'Wapiti' },
+        { value: 'nikto', label: 'Nikto' }
     ];
 
     const scanDepths = [
@@ -37,7 +38,7 @@ const ScanConfigForm = ({ onSubmit }) => {
                     Target URL
                 </label>
                 <Input
-                    {...register('target_url', { 
+                    {...register('target_url', {
                         required: 'Target URL is required',
                         pattern: {
                             value: /^https?:\/\/.+/,

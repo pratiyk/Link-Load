@@ -7,6 +7,7 @@ from app.services.scanners.base_scanner import BaseScanner
 from app.services.scanners.zap_scanner import ZAPScanner
 from app.services.scanners.nuclei_scanner import NucleiScanner
 from app.services.scanners.wapiti_scanner import WapitiScanner
+from app.services.scanners.nikto_scanner import NiktoScanner
 from app.database import get_db_context
 from app.api.ws_manager import progress_manager
 from sqlalchemy import text
@@ -21,7 +22,8 @@ class ScannerOrchestrator:
         self.scanners: Dict[str, BaseScanner] = {
             "zap": ZAPScanner(),
             "nuclei": NucleiScanner(),
-            "wapiti": WapitiScanner()
+            "wapiti": WapitiScanner(),
+            "nikto": NiktoScanner()
         }
         self.active_scans: Dict[str, Dict[str, Any]] = {}
     

@@ -47,6 +47,12 @@
   border-bottom: 3px solid var(--color-black, #000);
 }
 
+.header-actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
 .results-header h1 {
   font-family: var(--font-heading, 'VT323', monospace);
   font-size: 2.5rem;
@@ -55,6 +61,35 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+.download-pdf-button {
+  font-family: var(--font-heading, 'VT323', monospace);
+  background: #4CAF91;
+  color: var(--color-black, #000);
+  border: 3px solid var(--color-black, #000);
+  padding: 0.75rem 1.5rem;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  transition: all 0.2s ease;
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.2);
+  text-decoration: none;
+  display: inline-block;
+}
+
+.download-pdf-button:hover:not(:disabled) {
+  transform: translate(-2px, -2px);
+  box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.25);
+  background: #5ed6a8;
+}
+
+.download-pdf-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: #999;
 }
 
 .back-button {

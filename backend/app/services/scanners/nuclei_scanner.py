@@ -139,24 +139,17 @@ class NucleiScanner(BaseScanner):
                 if templates_dir:
                     templates_arg = ['-templates', templates_dir]
 
-            # Get the max scan duration from config (in seconds)
-            max_scan_duration = getattr(config, 'max_scan_duration', 1800)  # Default 30 min
+            # Get the max scan duration from config (in seconds, default 4 hours)
+            max_scan_duration = getattr(config, 'max_scan_duration', 14400)  # Default 4 hours
             if max_scan_duration <= 0:
-                max_scan_duration = 1800
+                max_scan_duration = 14400
             
-            # Determine timeout per request - scale based on scan duration
-            # For shorter scans, use shorter per-request timeouts
-            if max_scan_duration <= 900:  # 15 min or less (Quick scan)
-                dast_timeout = 15
-                rate_limit = 200  # Higher rate for faster completion
-            elif max_scan_duration <= 1800:  # 30 min or less (Standard scan)
-                dast_timeout = 20
-                rate_limit = 150
-            else:  # Deep scan
-                dast_timeout = 30
-                rate_limit = 100  # Lower rate but more thorough
+            # Use generous timeouts for thorough scanning
+            # Prioritize finding ALL vulnerabilities over speed
+            dast_timeout = 60  # 60 second timeout per request for thorough testing
+            rate_limit = 50  # Lower rate for more thorough and reliable scanning
             
-            logger.info(f"[Nuclei] Scan duration: {max_scan_duration}s, per-request timeout: {dast_timeout}s, rate: {rate_limit}/s")
+            logger.info(f"[Nuclei] Thorough scan mode: {max_scan_duration}s max, {dast_timeout}s per-request timeout, {rate_limit}/s rate")
             
             nuclei_args = [
                 '-u', config.target_url,
@@ -395,15 +388,39 @@ class NucleiScanner(BaseScanner):
                         template_id = finding.get('template-id') or finding.get('templateID')
                         title = info.get('name') or template_id
                         
-                        # Normalize severity - Nuclei sometimes returns None or invalid values
+                        # Normalize and enhance severity classification
                         raw_severity = info.get('severity', 'medium')
                         if raw_severity and isinstance(raw_severity, str):
                             severity = raw_severity.lower()
                             # Validate against known severity levels
                             if severity not in ['critical', 'high', 'medium', 'low', 'info']:
-                                severity = 'medium'
+                                # Try to infer severity from CVSS score if available
+                                cvss = classification.get('cvss-score') or classification.get('cvss_score') or 0.0
+                                try:
+                                    cvss_float = float(cvss)
+                                    if cvss_float >= 9.0:
+                                        severity = 'critical'
+                                    elif cvss_float >= 7.0:
+                                        severity = 'high'
+                                    elif cvss_float >= 4.0:
+                                        severity = 'medium'
+                                    elif cvss_float > 0:
+                                        severity = 'low'
+                                    else:
+                                        severity = 'info'
+                                except (ValueError, TypeError):
+                                    severity = 'medium'
                         else:
                             severity = 'medium'
+                        
+                        # Additional severity enhancement based on vulnerability type
+                        title_lower = (title or '').lower()
+                        if any(keyword in title_lower for keyword in ['rce', 'remote code', 'sql injection', 'sqli', 'authentication bypass', 'command injection']):
+                            if severity in ['medium', 'low', 'info']:
+                                severity = 'high'  # Upgrade serious vulnerabilities
+                        elif any(keyword in title_lower for keyword in ['xss', 'cross-site', 'csrf', 'ssrf', 'lfi', 'file inclusion']):
+                            if severity == 'info':
+                                severity = 'medium'  # Upgrade common web vulns from info
                         
                         vuln = {
                             'vuln_id': template_id,

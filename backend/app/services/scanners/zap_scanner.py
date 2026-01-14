@@ -27,6 +27,50 @@ class OWASPZAPScanner(BaseScanner):
         self.zap = None
         self.active_scans: Dict[str, Dict[str, Any]] = {}
         self._initialized = False
+    
+    @staticmethod
+    def _map_zap_risk_to_severity(risk: str) -> str:
+        """Map ZAP risk levels to our severity levels.
+        
+        ZAP uses: High, Medium, Low, Informational
+        We use: critical, high, medium, low, info
+        """
+        mapping = {
+            'High': 'high',
+            'Medium': 'medium',
+            'Low': 'low',
+            'Informational': 'info'
+        }
+        return mapping.get(risk, 'info')
+    
+    @staticmethod
+    def _calculate_cvss_from_risk(risk: str, confidence: str) -> float:
+        """Estimate CVSS score from ZAP risk and confidence levels.
+        
+        Args:
+            risk: ZAP risk level (High, Medium, Low, Informational)
+            confidence: ZAP confidence level (High, Medium, Low)
+            
+        Returns:
+            Estimated CVSS score (0.0-10.0)
+        """
+        base_scores = {
+            'High': 8.5,
+            'Medium': 5.5,
+            'Low': 3.0,
+            'Informational': 0.5
+        }
+        
+        confidence_multipliers = {
+            'High': 1.0,
+            'Medium': 0.85,
+            'Low': 0.7
+        }
+        
+        base = base_scores.get(risk, 0.5)
+        multiplier = confidence_multipliers.get(confidence, 0.7)
+        
+        return round(base * multiplier, 1)
 
     async def initialize(self) -> bool:
         if ZAPv2 is None:
@@ -109,11 +153,11 @@ class OWASPZAPScanner(BaseScanner):
             
             logger.info(f"[ZAP] Starting scan for {config.target_url} (deep_scan={deep_scan}, ajax_spider={use_ajax_spider})")
             
-            # Configure scan duration limit from config
-            max_duration_mins = max(1, config.max_scan_duration // 60) if config.max_scan_duration else 30
+            # Configure scan duration limit from config (default 4 hours for thorough scanning)
+            max_duration_mins = max(1, config.max_scan_duration // 60) if config.max_scan_duration else 240
             try:
                 zap_client.ascan.set_option_max_scan_duration_in_mins(max_duration_mins)
-                logger.info(f"[ZAP] Set max scan duration to {max_duration_mins} minutes")
+                logger.info(f"[ZAP] Thorough scan mode: max duration set to {max_duration_mins} minutes")
             except Exception as e:
                 logger.debug(f"[ZAP] Could not set max scan duration: {e}")
             
@@ -210,20 +254,31 @@ class OWASPZAPScanner(BaseScanner):
             # Get alerts
             alerts = zap_client.core.alerts()
             
-            # Format vulnerabilities
+            # Format vulnerabilities with proper severity mapping
             vulnerabilities = []
             for alert in alerts:
+                risk = alert.get('risk', 'Informational')
+                confidence = alert.get('confidence', 'Medium')
+                
                 vuln = {
                     'name': alert.get('name'),
-                    'risk': alert.get('risk'),
-                    'confidence': alert.get('confidence'), 
+                    'title': alert.get('name'),
+                    'description': alert.get('description', ''),
+                    'risk': risk,  # Keep original ZAP risk level
+                    'severity': self._map_zap_risk_to_severity(risk),  # Map to our severity levels
+                    'cvss_score': self._calculate_cvss_from_risk(risk, confidence),  # Calculate CVSS
+                    'confidence': confidence,
                     'url': alert.get('url'),
+                    'location': alert.get('url'),
                     'param': alert.get('param'),
+                    'parameter': alert.get('param'),
                     'evidence': alert.get('evidence'),
                     'solution': alert.get('solution'),
-                    'references': alert.get('reference', '').split('\n'),
+                    'recommendation': alert.get('solution'),
+                    'references': alert.get('reference', '').split('\n') if alert.get('reference') else [],
                     'cwe_id': alert.get('cweid'),
-                    'wasc_id': alert.get('wascid')
+                    'wasc_id': alert.get('wascid'),
+                    'scanner_source': 'zap'
                 }
                 vulnerabilities.append(vuln)
 

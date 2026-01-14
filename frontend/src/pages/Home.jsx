@@ -48,10 +48,9 @@ const Home = () => {
   const scanModes = {
     quick: {
       label: 'Quick',
-      duration: '5-15 min',
-      description: 'Fast Nuclei scan with focused high-impact templates',
-      scanners: ['nuclei'],
-      timeout: 15,
+      duration: '~10-20 min',
+      description: 'Fast scan with Nuclei and Nikto for rapid vulnerability detection',
+      scanners: ['nuclei', 'nikto'],
       deep_scan: false,  // Quick mode uses focused template tags
       include_low_risk: true,
       features: [
@@ -63,6 +62,7 @@ const Home = () => {
         { name: 'XSS Detection', enabled: true, description: 'Cross-site scripting' },
         { name: 'SSRF Detection', enabled: true, description: 'Server-side request forgery' },
         { name: 'RCE Detection', enabled: true, description: 'Remote code execution' },
+        { name: 'Server Misconfig', enabled: true, description: 'Web server security issues' },
         { name: 'AI Analysis', enabled: true, description: 'AI-powered insights' },
         { name: 'MITRE Mapping', enabled: true, description: 'ATT&CK technique mapping' }
       ],
@@ -70,10 +70,9 @@ const Home = () => {
     },
     standard: {
       label: 'Standard',
-      duration: '15-30 min',
-      description: 'Comprehensive scan with Nuclei DAST and Wapiti',
-      scanners: ['nuclei', 'wapiti'],
-      timeout: 30,
+      duration: '~20-40 min',
+      description: 'Comprehensive scan with Nuclei DAST, Wapiti, and Nikto',
+      scanners: ['nuclei', 'wapiti', 'nikto'],
       deep_scan: true,  // Enable deep scan for DAST mode
       include_low_risk: true,
       features: [
@@ -86,6 +85,8 @@ const Home = () => {
         { name: 'XSS Detection', enabled: true, description: 'Cross-site scripting' },
         { name: 'CSRF Detection', enabled: true, description: 'Cross-site request forgery' },
         { name: 'SSRF Detection', enabled: true, description: 'Server-side request forgery' },
+        { name: 'Server Misconfig', enabled: true, description: 'Web server security issues' },
+        { name: 'Outdated Software', enabled: true, description: 'Version detection & CVEs' },
         { name: 'AI Analysis', enabled: true, description: 'AI-powered insights' },
         { name: 'MITRE Mapping', enabled: true, description: 'ATT&CK technique mapping' }
       ],
@@ -93,10 +94,9 @@ const Home = () => {
     },
     deep: {
       label: 'Deep',
-      duration: '30-60 min',
-      description: 'Maximum coverage with ZAP, Nuclei DAST, and Wapiti',
-      scanners: ['owasp', 'nuclei', 'wapiti'],
-      timeout: 60,
+      duration: '~45-90 min',
+      description: 'Maximum coverage with ZAP, Nuclei DAST, Wapiti, and Nikto',
+      scanners: ['owasp', 'nuclei', 'wapiti', 'nikto'],
       deep_scan: true,
       include_low_risk: true,
       features: [
@@ -115,6 +115,10 @@ const Home = () => {
         { name: 'XXE Detection', enabled: true, description: 'XML external entity attacks' },
         { name: 'Command Injection', enabled: true, description: 'OS command injection' },
         { name: 'File Inclusion', enabled: true, description: 'LFI/RFI vulnerabilities' },
+        { name: 'Server Misconfig', enabled: true, description: 'Web server security issues' },
+        { name: 'Outdated Software', enabled: true, description: 'Version detection & CVEs' },
+        { name: 'SSL/TLS Issues', enabled: true, description: 'Certificate & cipher checks' },
+        { name: 'Default Files', enabled: true, description: 'Dangerous default content' },
         { name: 'AI Analysis', enabled: true, description: 'AI-powered insights' },
         { name: 'MITRE Mapping', enabled: true, description: 'ATT&CK technique mapping' }
       ],
@@ -508,7 +512,8 @@ const Home = () => {
                             <span key={scanner} className={`scanner-tag scanner-${scanner}`}>
                               {scanner === 'owasp' ? 'OWASP ZAP' :
                                 scanner === 'nuclei' ? 'Nuclei' :
-                                  scanner === 'wapiti' ? 'Wapiti' : scanner}
+                                  scanner === 'wapiti' ? 'Wapiti' :
+                                    scanner === 'nikto' ? 'Nikto' : scanner}
                             </span>
                           ))}
                         </div>
@@ -684,22 +689,29 @@ const Home = () => {
               <div className="feature-badge">Active</div>
             </div>
 
-            <div className="feature-card card-yellow">
+            <div className="feature-card card-purple">
               <div className="feature-number">04</div>
+              <h3>Nikto Scanner</h3>
+              <p>Comprehensive web server scanner testing for 6700+ dangerous files and misconfigurations</p>
+              <div className="feature-badge">Active</div>
+            </div>
+
+            <div className="feature-card card-yellow">
+              <div className="feature-number">05</div>
               <h3>AI Analysis</h3>
               <p>LLM-powered vulnerability analysis providing intelligent insights and remediation strategies</p>
               <div className="feature-badge">AI</div>
             </div>
 
             <div className="feature-card card-pink">
-              <div className="feature-number">05</div>
+              <div className="feature-number">06</div>
               <h3>MITRE ATT&CK</h3>
               <p>Automated mapping of vulnerabilities to adversary tactics, techniques, and procedures</p>
               <div className="feature-badge">Intel</div>
             </div>
 
             <div className="feature-card card-coral">
-              <div className="feature-number">06</div>
+              <div className="feature-number">07</div>
               <h3>Risk Assessment</h3>
               <p>Comprehensive risk scoring with business context and compliance framework alignment</p>
               <div className="feature-badge">Analytics</div>

@@ -1,3 +1,5 @@
+name: linkload
+
 services:
   frontend:
     build:
@@ -18,33 +20,6 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
-  postgres:
-    image: postgres:15
-    container_name: linkload-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: IHDxhSkHrUUGQeC0
-      POSTGRES_DB: postgres
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - linkload-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
   owasp-zap:
     image: ghcr.io/zaproxy/zaproxy:stable
     container_name: linkload-zap
@@ -132,10 +107,38 @@ services:
         reservations:
           cpus: '0.5'
           memory: 512M
+  nikto:
+    build:
+      context: ./docker/nikto
+      dockerfile: Dockerfile
+    image: linkload-nikto:latest
+    container_name: linkload-nikto
+    volumes:
+      - nikto_results:/results
+      - ./reports:/app/reports
+      - scanner_shared:/shared
+    networks:
+      - linkload-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "perl", "/opt/nikto/program/nikto.pl", "-Version"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    image: linkload-backend:latest
     container_name: linkload-backend
     env_file:
       - ./backend/.env
@@ -173,6 +176,10 @@ services:
       WAPITI_PATH: wapiti
       WAPITI_BINARY_PATH: wapiti
       WAPITI_USE_DOCKER: "true"
+      NIKTO_CONTAINER: linkload-nikto
+      NIKTO_PATH: nikto.pl
+      NIKTO_BINARY_PATH: /opt/nikto/program/nikto.pl
+      NIKTO_USE_DOCKER: "true"
       SCAN_TIMEOUT: ${SCAN_TIMEOUT:-600}
       API_PREFIX: /api/v1
       API_TITLE: Link&Load API
@@ -208,13 +215,13 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      postgres:
-        condition: service_healthy
       owasp-zap:
         condition: service_healthy
       nuclei:
         condition: service_healthy
       wapiti:
+        condition: service_healthy
+      nikto:
         condition: service_healthy
     volumes:
       - ./backend:/app/backend
@@ -250,13 +257,13 @@ services:
       - production
 
 volumes:
-  postgres_data:
-    driver: local
   nuclei_templates:
     driver: local
   nuclei_results:
     driver: local
   wapiti_results:
+    driver: local
+  nikto_results:
     driver: local
   scanner_shared:
     driver: local
@@ -278,7 +285,6 @@ networks:
 # View logs:
 #   docker-compose logs -f backend
 #   docker-compose logs -f frontend
-#   docker-compose logs -f postgres
 #
 # Clean up:
 #   docker-compose down -v

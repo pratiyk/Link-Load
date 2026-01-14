@@ -9,6 +9,7 @@ class ScanType(str, Enum):
     ZAP_ACTIVE     = "zap_active"
     NUCLEI         = "nuclei"
     WAPITI         = "wapiti"
+    NIKTO          = "nikto"
     COMPREHENSIVE  = "comprehensive"
 
 class ScanStatus(str, Enum):
