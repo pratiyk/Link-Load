@@ -391,6 +391,9 @@ class ComprehensiveScanner:
                 len(all_vulnerabilities),
                 scanner_counts
             )
+            
+            # Track when scanners completed for progress tracking
+            scan_start_time = datetime.now(timezone.utc)
 
             # Normalize vulnerability data for consistent field names
             normalized_vulns: List[Dict[str, Any]] = []
@@ -488,6 +491,11 @@ class ComprehensiveScanner:
 
             # Enrich vulnerabilities with NVD data if CVEs are present
             try:
+                await self._update_scan_progress(
+                    scan_id,
+                    progress=75,
+                    stage="Enriching with NVD data"
+                )
                 from app.services.threat_intelligence.unified_intel_service import unified_threat_intel
                 normalized_vulns = await unified_threat_intel.enrich_vulnerabilities_with_nvd(normalized_vulns)
                 logger.info(f"[INTEL] Enriched vulnerabilities with NVD data")
@@ -496,6 +504,11 @@ class ComprehensiveScanner:
 
             # Enrich vulnerabilities with Vulners exploit data
             try:
+                await self._update_scan_progress(
+                    scan_id,
+                    progress=78,
+                    stage="Enriching with Vulners data"
+                )
                 from app.services.threat_intelligence.unified_intel_service import unified_threat_intel
                 normalized_vulns, vulners_summary = await self._enrich_with_vulners(
                     unified_threat_intel, normalized_vulns
@@ -513,19 +526,23 @@ class ComprehensiveScanner:
             # Perform AI analysis
             await self._perform_ai_analysis(scan_id, normalized_vulns, options)
 
-
             # Only perform MITRE mapping and risk assessment for new scans
             scan_record = supabase.fetch_scan(scan_id)
             if not scan_record or not scan_record.get('status') or scan_record.get('status') == 'in_progress':
                 await self._perform_mitre_mapping(scan_id, normalized_vulns)
                 await self._calculate_risk_assessment(scan_id, normalized_vulns, threat_intel)
 
+            # Calculate total elapsed time from scan start
+            total_elapsed = int((datetime.now(timezone.utc) - scan_start_time).total_seconds())
+            total_mins = total_elapsed // 60
+            total_secs = total_elapsed % 60
+            
             # Update scan to completed
             await self._update_scan_progress(
                 scan_id,
                 status="completed",
                 progress=100,
-                stage="Completed"
+                stage=f"Completed in {total_mins}m {total_secs}s"
             )
 
             logger.info(f"Scan {scan_id} completed successfully")
@@ -583,15 +600,15 @@ class ComprehensiveScanner:
             
             # Wait for scan to complete (poll status)
             wait_interval = 10 if deep_scan else 5  # Longer intervals for deep scans
-            elapsed = 0
+            scan_start_time = datetime.now(timezone.utc)
             
             # Calculate base progress for this scanner (distribute across scanner types)
             scanner_list = list(self.scanners.keys())
             scanner_index = scanner_list.index(scanner_type) if scanner_type in scanner_list else 0
             total_scanners = max(1, len(scanner_list))
-            # Progress range: 20-80% is for scanning (each scanner gets an equal slice)
-            base_progress = 20 + (scanner_index * 60 // total_scanners)
-            max_scanner_progress = 20 + ((scanner_index + 1) * 60 // total_scanners)
+            # Progress range: 20-75% is for scanning (each scanner gets an equal slice)
+            base_progress = 20 + (scanner_index * 55 // total_scanners)
+            max_scanner_progress = 20 + ((scanner_index + 1) * 55 // total_scanners)
 
             while True:
                 status = await scanner.get_scan_status(scan_task_id)
@@ -603,20 +620,25 @@ class ComprehensiveScanner:
                     logger.error(f"{scanner_type} scan failed: {status}")
                     return []
                 
-                # Calculate and send incremental progress update
-                # Without a hard timeout, use elapsed time to show forward motion only
-                progress_ratio = min(0.95, elapsed / max(1, elapsed + 600))
-                current_progress = int(base_progress + (max_scanner_progress - base_progress) * progress_ratio)
+                # Calculate elapsed time in seconds
+                elapsed = int((datetime.now(timezone.utc) - scan_start_time).total_seconds())
                 elapsed_mins = elapsed // 60
+                elapsed_secs = elapsed % 60
+                
+                # Calculate progress with smooth progression based on elapsed time
+                # Use logarithmic scaling for gradual increase without plateau
+                import math
+                # Map elapsed time to progress ratio: 0s->0%, 300s->50%, 900s->90%, continues increasing
+                progress_ratio = min(0.99, math.log(elapsed + 1) / math.log(1000))
+                current_progress = int(base_progress + (max_scanner_progress - base_progress) * progress_ratio)
                 
                 await self._update_scan_progress(
                     scan_id,
                     progress=current_progress,
-                    stage=f"Running {scanner_type.upper()} scan ({elapsed_mins}m elapsed)"
+                    stage=f"Running {scanner_type.upper()} scan ({elapsed_mins}m {elapsed_secs}s elapsed)"
                 )
                 
                 await asyncio.sleep(wait_interval)
-                elapsed += wait_interval
             
             # Get scan results
             result = await scanner.get_scan_results(scan_task_id)

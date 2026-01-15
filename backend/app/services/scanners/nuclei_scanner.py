@@ -116,11 +116,23 @@ class NucleiScanner(BaseScanner):
                 output_dir = f"/shared/nuclei_results_{scan_id}"
                 local_output_dir = f"/shared/nuclei_results_{scan_id}"
                 results_file = f"{output_dir}/results.jsonl"
+                # Create directory in Nuclei container BEFORE running scan
+                mkdir_result = await asyncio.get_event_loop().run_in_executor(
+                    self.executor,
+                    lambda: subprocess.run(
+                        ['docker', 'exec', self.docker_container, 'mkdir', '-p', output_dir],
+                        capture_output=True,
+                        text=True,
+                        timeout=10
+                    )
+                )
+                if mkdir_result.returncode != 0:
+                    logger.warning(f"Failed to create output dir in Nuclei container: {mkdir_result.stderr}")
             else:
                 output_dir = os.path.abspath(os.path.join(os.getcwd(), f"nuclei_results_{scan_id}"))
                 local_output_dir = output_dir
                 results_file = os.path.abspath(os.path.join(output_dir, "results.jsonl"))
-            os.makedirs(local_output_dir, exist_ok=True)
+                os.makedirs(local_output_dir, exist_ok=True)
             
             # Build nuclei command arguments
             # Prefer an explicit templates directory when available
