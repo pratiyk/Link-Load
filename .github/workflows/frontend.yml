@@ -13,7 +13,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}-frontend
+  IMAGE_NAME: ${{ format('{0}-frontend', github.repository) }}
 
 jobs:
   # === Code Quality ===
@@ -148,7 +148,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ lower(env.IMAGE_NAME) }}
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
@@ -162,8 +162,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ lower(env.IMAGE_NAME) }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ lower(env.IMAGE_NAME) }}:buildcache,mode=max
 
   # === Lighthouse CI ===
   lighthouse:

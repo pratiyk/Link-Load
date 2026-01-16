@@ -8,8 +8,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  BACKEND_IMAGE_NAME: ${{ github.repository }}-backend
-  FRONTEND_IMAGE_NAME: ${{ github.repository }}-frontend
+  BACKEND_IMAGE_NAME: ${{ format('{0}-backend', github.repository) }}
+  FRONTEND_IMAGE_NAME: ${{ format('{0}-frontend', github.repository) }}
 
 jobs:
   # === Build Production Images ===
@@ -43,7 +43,7 @@ jobs:
         id: backend-meta
         uses: docker/metadata-action@v4
         with:
-          images: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ lower(env.BACKEND_IMAGE_NAME) }}
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
@@ -57,15 +57,15 @@ jobs:
           push: true
           tags: ${{ steps.backend-meta.outputs.tags }}
           labels: ${{ steps.backend-meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:buildcache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:buildcache,mode=max
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ lower(env.BACKEND_IMAGE_NAME) }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ lower(env.BACKEND_IMAGE_NAME) }}:buildcache,mode=max
       
       # Frontend
       - name: Extract frontend metadata
         id: frontend-meta
         uses: docker/metadata-action@v4
         with:
-          images: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ lower(env.FRONTEND_IMAGE_NAME) }}
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
@@ -79,8 +79,8 @@ jobs:
           push: true
           tags: ${{ steps.frontend-meta.outputs.tags }}
           labels: ${{ steps.frontend-meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:buildcache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:buildcache,mode=max
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ lower(env.FRONTEND_IMAGE_NAME) }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ lower(env.FRONTEND_IMAGE_NAME) }}:buildcache,mode=max
 
   # === Deploy to Staging ===
   deploy-staging:
