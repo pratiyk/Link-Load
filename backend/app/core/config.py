@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     ENABLE_DOCS: bool = True
     CORS_ORIGINS: str = "http://localhost:3000"
+    FRONTEND_URL: str = Field(default="http://localhost:3000", description="Frontend application URL")
     
     # Security
     SECRET_KEY: str = Field(..., description="Secret key for JWT tokens")

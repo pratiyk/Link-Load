@@ -2,6 +2,7 @@
 Authentication API endpoints
 """
 import logging
+import secrets
 from datetime import timedelta
 from typing import Optional
 
@@ -13,7 +14,8 @@ from app.database import get_db
 from app.database.supabase_client import supabase
 from app.models.user import (
     User, RevokedToken, UserCreate, UserLogin, UserResponse,
-    TokenResponse, TokenRefresh, UserWithTokens, UserUpdate, PasswordChange
+    TokenResponse, TokenRefresh, UserWithTokens, UserUpdate, PasswordChange,
+    ForgotPasswordRequest, ResetPasswordRequest
 )
 from app.core.security import SecurityManager, get_current_user_id
 from app.core.exceptions import (
@@ -411,3 +413,114 @@ async def change_password(
         logger.error(f"Failed to change password: {e}")
         db.rollback()
         raise DatabaseException("Failed to change password")
+
+
+@router.post("/forgot-password", status_code=status.HTTP_200_OK)
+@limiter.limit(RATE_LIMITS["auth_forgot_password"] if "auth_forgot_password" in RATE_LIMITS else "5/hour")
+async def forgot_password(
+    request: Request,
+    forgot_data: ForgotPasswordRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Request password reset
+    
+    - Validates email exists
+    - Generates reset token
+    - Sends reset email (simulated for now)
+    - Returns success message (doesn't reveal if email exists for security)
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    try:
+        email = forgot_data.email.strip().lower()
+        
+        # Find user by email
+        user = db.query(User).filter(User.email == email).first()
+        
+        # Always return success to prevent email enumeration
+        if not user:
+            logger.info(f"Password reset requested for non-existent email: {email}")
+            return {"message": "If an account with that email exists, a password reset link has been sent."}
+        
+        # Generate secure reset token
+        reset_token = secrets.token_urlsafe(32)
+        
+        # Set token and expiration (1 hour)
+        user.reset_token = reset_token  # type: ignore
+        user.reset_token_expires = utc_now() + timedelta(hours=1)  # type: ignore
+        db.commit()
+        
+        # TODO: Send email with reset link
+        # For now, just log it (in production, use email service)
+        reset_link = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
+        logger.info(f"Password reset requested for: {email}")
+        logger.info(f"Reset link (dev only): {reset_link}")
+        
+        # In production, you would send an email here:
+        # await send_password_reset_email(user.email, reset_link)
+        
+        return {"message": "If an account with that email exists, a password reset link has been sent."}
+        
+    except Exception as e:
+        logger.error(f"Failed to process password reset request: {e}")
+        db.rollback()
+        # Still return success to prevent information leakage
+        return {"message": "If an account with that email exists, a password reset link has been sent."}
+
+
+@router.post("/reset-password", status_code=status.HTTP_200_OK)
+@limiter.limit(RATE_LIMITS["auth_reset_password"] if "auth_reset_password" in RATE_LIMITS else "10/hour")
+async def reset_password(
+    request: Request,
+    reset_data: ResetPasswordRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Reset password using token
+    
+    - Validates reset token
+    - Checks token expiration
+    - Updates password
+    - Clears reset token
+    """
+    try:
+        # Find user by reset token
+        user = db.query(User).filter(User.reset_token == reset_data.token).first()
+        
+        if not user:
+            raise AuthenticationException("Invalid or expired reset token")
+        
+        # Check if token has expired
+        if not user.reset_token_expires or user.reset_token_expires < utc_now():  # type: ignore
+            # Clear expired token
+            user.reset_token = None  # type: ignore
+            user.reset_token_expires = None  # type: ignore
+            db.commit()
+            raise AuthenticationException("Reset token has expired. Please request a new password reset.")
+        
+        # Hash and update new password
+        user.hashed_password = security_manager.hash_password(reset_data.new_password)  # type: ignore
+        
+        # Clear reset token
+        user.reset_token = None  # type: ignore
+        user.reset_token_expires = None  # type: ignore
+        
+        # Reset failed login attempts
+        user.failed_login_attempts = 0  # type: ignore
+        user.locked_until = None  # type: ignore
+        
+        user.updated_at = utc_now()  # type: ignore
+        db.commit()
+        
+        logger.info(f"Password reset successfully for user: {user.email}")
+        
+        return {"message": "Password has been reset successfully. You can now log in with your new password."}
+        
+    except AuthenticationException:
+        raise
+    except ValidationException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to reset password: {e}")
+        db.rollback()
+        raise DatabaseException("Failed to reset password")

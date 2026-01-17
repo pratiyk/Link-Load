@@ -31,6 +31,8 @@ class User(Base):
     locked_until = Column(DateTime(timezone=True), nullable=True)
     api_key = Column(String, unique=True, nullable=True)
     preferences = Column(Text, nullable=True)  # JSON string
+    reset_token = Column(String, nullable=True)
+    reset_token_expires = Column(DateTime(timezone=True), nullable=True)
 
 
 class RevokedToken(Base):
@@ -177,3 +179,30 @@ class UserWithTokens(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     expires_in: int
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Model for forgot password request"""
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    """Model for reset password request"""
+    token: str
+    new_password: str = Field(..., min_length=12, max_length=100)
+
+    @field_validator('new_password')
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        """Validate password meets security requirements"""
+        if len(v) < 12:
+            raise ValueError('Password must be at least 12 characters long')
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('Password must contain at least one uppercase letter')
+        if not re.search(r'[a-z]', v):
+            raise ValueError('Password must contain at least one lowercase letter')
+        if not re.search(r'[0-9]', v):
+            raise ValueError('Password must contain at least one digit')
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', v):
+            raise ValueError('Password must contain at least one special character')
+        return v

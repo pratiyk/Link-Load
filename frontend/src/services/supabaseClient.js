@@ -4,12 +4,10 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
 
-if (typeof window !== 'undefined') {
-    // Debug: Print Supabase env values at runtime
+// Security: Don't log sensitive credentials
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
     // eslint-disable-next-line no-console
-    console.log('[DEBUG] Supabase URL:', supabaseUrl);
-    // eslint-disable-next-line no-console
-    console.log('[DEBUG] Supabase Anon Key:', supabaseAnonKey);
+    console.log('[DEBUG] Supabase configured:', isSupabaseConfigured);
 }
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);

@@ -22,17 +22,19 @@
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     
     <!-- Content Security Policy (Fallback for browsers/servers that don't set headers) -->
+    <!-- Note: CSP should be set via HTTP headers in production for better security -->
     <meta http-equiv="Content-Security-Policy" 
           content="default-src 'self'; 
-                   script-src 'self' 'unsafe-inline' 'unsafe-eval'; 
+                   script-src 'self' 'unsafe-inline'; 
                    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; 
                    img-src 'self' data: https:; 
                    font-src 'self' data: https://fonts.gstatic.com; 
-                   connect-src 'self' ws: wss: http://localhost:* https: https://hpowvsuennnaqbqdbuet.supabase.co; 
+                   connect-src 'self' ws: wss: http://localhost:* https:; 
                    frame-ancestors 'none';
                    form-action 'self';
                    base-uri 'self';
-                   object-src 'none';" />
+                   object-src 'none';
+                   upgrade-insecure-requests;" />
     
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <!--

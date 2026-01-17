@@ -91,5 +91,28 @@ export const authApi = {
     } catch (error) {
       throw error.response?.data?.detail || 'Password change failed';
     }
+  },
+
+  forgotPassword: async (email) => {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/v1/auth/forgot-password`, {
+        email
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.detail || 'Failed to send reset email';
+    }
+  },
+
+  resetPassword: async (token, newPassword) => {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/v1/auth/reset-password`, {
+        token,
+        new_password: newPassword
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.detail || 'Password reset failed';
+    }
   }
 };

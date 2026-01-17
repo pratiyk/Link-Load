@@ -150,6 +150,12 @@ const Login = () => {
                   />
                 </div>
 
+                <div className="login-forgot-link">
+                  <Link to="/forgot-password" className="login-forgot-link__text">
+                    Forgot password?
+                  </Link>
+                </div>
+
                 <button
                   type="submit"
                   className="login-submit"

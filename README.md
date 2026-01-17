@@ -1940,20 +1940,6 @@ taskkill /PID <pid> /F          # Windows
 kill -9 <pid>                   # Linux/Mac
 ```
 
-### Common Issues
-
-| Issue | Resolution |
-|-------|------------|
-| CORS errors | Verify CORS_ORIGINS in backend .env includes frontend URL |
-| JWT expired | Re-authenticate via login endpoint |
-| Scanner timeout | Increase SCAN_TIMEOUT in .env (default: 600 seconds) |
-| Database locked | Restart postgres: `docker-compose restart postgres` |
-| Out of memory | Increase Docker memory (ZAP needs 4GB+) |
-| LLM fallback mode | Set GROQ_API_KEY or OPENAI_API_KEY in backend/.env |
-| Nuclei no results | Ensure severity filter includes 'info' level |
-| Container unhealthy | Check logs: `docker-compose logs <service>` |
-| Build cache issues | Run: `docker builder prune -af` |
-
 ### Contact
 
 For operational support, feature requests, or vulnerability reports:
@@ -1985,47 +1971,6 @@ Unauthorized scanning of systems you do not own or have permission to test is il
 ## CREDITS
 
 Prateek Shrivastava ([@pratiyk](https://github.com/pratiyk))
-
-**Core Technologies:**
-- OWASP Foundation - ZAP Scanner
-- ProjectDiscovery - Nuclei Scanner
-- Wapiti Project - Wapiti Scanner
-- OpenAI / Anthropic / Groq - AI Analysis
-
----
-
-```
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║    LINK&LOAD - TACTICAL CYBER RECONNAISSANCE & ATTACK SURFACE MANAGEMENT    ║
-║                                                                              ║
-║    Version: 2.0.0-ROADMAP                                                    ║
-║    Phase 1 Status: OPERATIONAL (Web Application Security)                   ║
-║    Phase 2-10 Status: TACTICAL PLANNING (API, Code, Cloud, Mobile)          ║
-║    Last Updated: January 2026                                                ║
-║                                                                              ║
-║    Current Capabilities:                                                     ║
-║    [+] Multi-Scanner Web Vulnerability Detection (ZAP, Nuclei, Wapiti)      ║
-║    [+] AI-Powered Analysis (Groq, OpenAI, Claude)                           ║
-║    [+] MITRE ATT&CK Mapping & Risk Scoring                                  ║
-║    [+] Real-Time Intelligence via WebSocket                                 ║
-║    [+] Docker Production Deployment                                         ║
-║                                                                              ║
-║    Future Operations (2026-2028):                                           ║
-║    [ ] API Security Scanning (OpenAPI, GraphQL, REST)                       ║
-║    [ ] Source Code Analysis (SAST with Semgrep)                             ║
-║    [ ] Cloud Security Posture (AWS, Azure, GCP)                             ║
-║    [ ] Container & Kubernetes Security (Trivy)                              ║
-║    [ ] IaC Security (Terraform, CloudFormation)                             ║
-║    [ ] Continuous 24/7 Monitoring & Alerting                                ║
-║    [ ] Enterprise Compliance Automation                                     ║
-║    [ ] Mobile Application Security (iOS/Android)                            ║
-║                                                                              ║
-║    "From Web Security to Complete Attack Surface Management"                ║
-║    "AI-Powered. Open-Source. Military-Grade."                               ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-```
 
 ---
 
@@ -2067,7 +2012,7 @@ Prateek Shrivastava ([@pratiyk](https://github.com/pratiyk))
 - Compete with Qualys, Tenable, Snyk, Wiz on unified platform approach
 - Differentiation: AI-first, 70% cost reduction, developer-centric UX
 
-### Version 1.1.0 (December 2025)
+
 
 **Docker Containerization Improvements:**
 - Multi-stage Docker builds for optimized image sizes
@@ -2103,13 +2048,3 @@ Prateek Shrivastava ([@pratiyk](https://github.com/pratiyk))
 - Responsive tactical dashboard interface
 - Real-time scan progress via WebSocket
 
-### Version 1.0.0 (November 2025)
-
-- Initial release
-- Multi-scanner integration (OWASP ZAP, Nuclei, Wapiti)
-- AI-powered vulnerability analysis
-- MITRE ATT&CK mapping
-- Risk scoring algorithm
-- JWT authentication
-- Domain verification system
-- React frontend with TailwindCSS
